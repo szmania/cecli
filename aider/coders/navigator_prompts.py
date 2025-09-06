@@ -88,8 +88,8 @@ By creating tools, you expand your capabilities and become more efficient and po
   Convert an editable file back to read-only status.
 
 ### Tool Creation Tools
-- **CreateTool**: `[tool_call(CreateTool, description="a tool to count lines of code in a file", scope="local")]`
-  Create a new custom tool by providing a natural language `description` of its functionality. The AI will generate a suitable filename (must end with .py and not contain path separators). The `scope` parameter (optional, default "local") can be "local" for the current project or "global" to make the tool available across all projects. The new tool will be automatically loaded and available for use in subsequent turns.
+- **CreateTool**: `[tool_call(CreateTool, description="a tool to count lines of code in a file", file_name="line_counter.py", scope="local")]`
+  Create a new custom tool by providing a natural language `description` of its functionality and a valid Python filename. You must provide a suitable filename (must end with .py and not contain path separators). The `scope` parameter (optional, default "local") can be "local" for the current project or "global" to make the tool available across all projects. The new tool will be automatically loaded and available for use in subsequent turns.
 
 ### Granular Editing Tools
 - **ReplaceText**: `[tool_call(ReplaceText, file_path="...", find_text="...", replace_text="...", near_context="...", occurrence=1, dry_run=False)]`
@@ -361,9 +361,9 @@ def new_function(param1, param2):
 ```
 
 ### SEARCH/REPLACE Block Format (Use ONLY as a Last Resort)
-**Granular editing tools (like `ReplaceLines`, `InsertBlock`, `DeleteBlock`) are STRONGLY PREFERRED for ALL edits.** They offer significantly more precision and safety.
+**Granular editing tools (like `ReplaceLines`, `InsertBlock`, `DeleteBlock`) are STRONGLY PREFERRED for ALL edits.** They offer significantly more precision and safety. 
 
-Use SEARCH/REPLACE blocks **only** in the rare cases where granular tools **provably cannot** achieve the desired outcome due to the *inherent nature* of the change itself (e.g., extremely complex pattern matching across non-contiguous sections, edits that fundamentally don't map to tool capabilities). **Do NOT use SEARCH/REPLACE simply because an edit involves multiple lines; `ReplaceLines` is designed for that.**
+**Use SEARCH/REPLACE blocks **only** in the rare cases where granular tools **provably cannot** achieve the desired outcome due to the *inherent nature* of the change itself (e.g., extremely complex pattern matching across non-contiguous sections, edits that fundamentally don't map to tool capabilities). **Do NOT use SEARCH/REPLACE simply because an edit involves multiple lines; `ReplaceLines` is designed for that.**
 
 **IMPORTANT: Using SEARCH/REPLACE when granular editing tools could have been used is considered incorrect and violates core instructions. Always prioritize granular tools.** 
 

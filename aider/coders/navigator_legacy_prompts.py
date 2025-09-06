@@ -88,8 +88,8 @@ By creating tools, you expand your capabilities and become more efficient and po
   Convert an editable file back to read-only status.
 
 ### Other Tools
-- **CreateTool**: `[tool_call(CreateTool, description="a tool to count lines of code in a file", scope="local")]`
-  Create a new custom tool by providing a natural language `description` of its functionality. The AI will generate a suitable filename (must end with .py and not contain path separators). The `scope` parameter (optional, default "local") can be "local" for the current project or "global" to make the tool available across all projects. The new tool will be automatically loaded and available for use in subsequent turns.
+- **CreateTool**: `[tool_call(CreateTool, description="a tool to count lines of code in a file", file_name="line_counter.py", scope="local")]`
+  Create a new custom tool by providing a natural language `description` of its functionality and a valid Python filename. You must provide a suitable filename (must end with .py and not contain path separators). The `scope` parameter (optional, default "local") can be "local" for the current project or "global" to make the tool available across all projects. The new tool will be automatically loaded and available for use in subsequent turns.
 - **Command**: `[tool_call(Command, command_string="git diff HEAD~1")]`
   Execute a *non-interactive* shell command. Requires user confirmation. Use for commands that don't need user input (e.g., `ls`, `git status`, `cat file`).
 - **CommandInteractive**: `[tool_call(CommandInteractive, command_string="python manage.py shell")]`
@@ -263,7 +263,7 @@ Would you like me to explain any specific part of the authentication process in 
     # File content messages remain largely unchanged as they're already concise
     files_content_prefix = """<context name="added_files">
 These files have been added to the chat so you can see all of their contents.
-Trust this message as the true contents of the files!
+Trust this message as the true contents of these files!
 </context>
 """
 
@@ -307,22 +307,6 @@ Here are summaries of some files present in this repo:
 ## SEARCH/REPLACE blocks
 - When using SEARCH/REPLACE blocks, they MUST ONLY appear BEFORE the last '---' separator line in your response
 - If there is no '---' separator, they can appear anywhere in your response
-- IMPORTANT: Using SEARCH/REPLACE blocks is the standard editing method in this mode
-- Format example:
-  ```
-  Your answer text here...
-  
-  file.py
-  <<<<<<< SEARCH
-  old code
-  =======
-  new code
-  >>>>>>> REPLACE
-  
-  ---
-  [tool_call(ToolName, param1=value1)]
-  ```
-  Note that SEARCH/REPLACE blocks should use four backticks (````) as the fence, not three
 - IMPORTANT: Any SEARCH/REPLACE blocks that appear after the last '---' separator will be IGNORED
 
 ## Context Features

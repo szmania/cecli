@@ -407,7 +407,7 @@ class NavigatorCoder(Coder):
                 "type": "function",
                 "function": {
                     "name": "CreateTool",
-                    "description": "Create a new custom tool by providing a description. The AI will generate a suitable filename. The new tool will be automatically loaded and available for use.",
+                    "description": "Create a new custom tool by providing a description and a valid Python filename. The new tool will be automatically loaded and available for use.",
                     "parameters": {
                         "type": "object",
                         "properties": {
@@ -415,13 +415,17 @@ class NavigatorCoder(Coder):
                                 "type": "string",
                                 "description": "A natural language description of the tool to be created. This will be used to generate the tool's Python code.",
                             },
+                            "file_name": {
+                                "type": "string",
+                                "description": "The desired filename for the new tool (e.g., 'my_new_tool.py'). Must end with .py and not contain path separators.",
+                            },
                             "scope": {
                                 "type": "string",
                                 "description": "The scope for the new tool. Can be 'local' (default) for the current project or 'global' for all projects.",
                                 "enum": ["local", "global"],
                             },
                         },
-                        "required": ["description"],
+                        "required": ["description", "file_name"],
                     },
                 },
             },
@@ -1310,7 +1314,7 @@ class NavigatorCoder(Coder):
 
                     if definition_tags:
                         result += f"### {rel_fname}\n"
-                        # Simple list format for now, could be enhanced later (e.e.g., indentation for scope)
+                        # Simple list format for now, could be enhanced later (e.g., indentation for scope)
                         for tag in definition_tags:
                             # Display line number if available
                             line_info = f", line {tag.line + 1}" if tag.line >= 0 else ""
