@@ -2321,8 +2321,3 @@ def parse_quoted_filenames(args):
 def get_help_md():
     md = Commands(None, None).get_help_md()
     print(md)
-
-
-if __name__ == "__main__":
-    status = main()
-    sys.exit(status)

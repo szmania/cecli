@@ -2628,11 +2628,11 @@ class NavigatorCoder(Coder):
             for edit in edits:
                 path = edit[0]
                 if path in seen_paths:
-                    allowed = seen_paths[path]
+                    allowed = seen[path]
                 else:
                     # Use the base Coder's permission check method
                     allowed = self.allowed_to_edit(path)
-                    seen_paths[path] = allowed
+                    seen[path] = allowed
                 if allowed:
                     prepared_edits.append(edit)
 
@@ -3030,7 +3030,7 @@ Just reply with fixed versions of the {blocks} above that failed to match.
                     staged_added = []
                     staged_modified = []
                     staged_deleted = []
-unstaged_modified = []
+                    unstaged_modified = []
                     unstaged_deleted = []
                     untracked = []
 
