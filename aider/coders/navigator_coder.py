@@ -2628,11 +2628,11 @@ class NavigatorCoder(Coder):
             for edit in edits:
                 path = edit[0]
                 if path in seen_paths:
-                    allowed = seen[path]
+                    allowed = seen_paths[path]
                 else:
                     # Use the base Coder's permission check method
                     allowed = self.allowed_to_edit(path)
-                    seen[path] = allowed
+                    seen_paths[path] = allowed
                 if allowed:
                     prepared_edits.append(edit)
 
