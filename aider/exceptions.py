@@ -34,6 +34,7 @@ EXCEPTIONS = [
         "The API provider has refused the request due to a safety policy about the content.",
     ),
     ExInfo("ContextWindowExceededError", False, None),  # special case handled in base_coder
+    ExInfo("ImageFetchError", True, "The API cannot fetch an image"),
     ExInfo("InternalServerError", True, "The API provider's servers are down or overloaded."),
     ExInfo("InvalidRequestError", True, None),
     ExInfo("JSONSchemaValidationError", True, None),
