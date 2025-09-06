@@ -719,6 +719,23 @@ class NavigatorCoder(Coder):
         except Exception as e:
             raise ValueError(f"Unexpected error during tool definition validation: {e}")
 
+    def _get_global_tools_dir(self):
+        """
+        Returns the resolved path to the global tools directory (~/.aider.tools).
+        """
+        return (Path.home() / ".aider.tools").resolve()
+
+    def _get_local_tools_dir(self):
+        """
+        Returns the resolved path to the local project tools directory (.aider.tools).
+        If a git repository is present, it's relative to the repo root.
+        Otherwise, it's relative to the current working directory.
+        """
+        if self.repo and self.repo.root:
+            return (Path(self.repo.root) / ".aider.tools").resolve()
+        else:
+            return (Path.cwd() / ".aider.tools").resolve()
+
     def tool_add_from_path(self, file_path: str):
         from aider.tools.base_tool import BaseAiderTool
 
@@ -772,7 +789,7 @@ class NavigatorCoder(Coder):
             # Determine scope
             scope = "unknown"
             p_file_path = Path(file_path).resolve()
-            home_tools_dir = (Path.home() / ".aider.tools").resolve()
+            home_tools_dir = self._get_global_tools_dir()
 
             try:
                 if p_file_path.is_relative_to(home_tools_dir):
@@ -781,11 +798,7 @@ class NavigatorCoder(Coder):
                 pass
 
             if scope == "unknown":
-                project_tools_dir = None
-                if self.repo and self.repo.root:
-                    project_tools_dir = (Path(self.repo.root) / ".aider.tools").resolve()
-                else:
-                    project_tools_dir = (Path.cwd() / ".aider.tools").resolve()
+                project_tools_dir = self._get_local_tools_dir()
 
                 try:
                     if p_file_path.is_relative_to(project_tools_dir):
@@ -907,10 +920,8 @@ class NavigatorCoder(Coder):
         if original_abs_path.suffix != ".py":
             raise ValueError(f"Not a Python tool file: {original_rel_path}")
 
-        global_tools_dir = (Path.home() / ".aider.tools").resolve()
-        local_tools_dir = (
-            Path(self.repo.root) / ".aider.tools" if self.repo else Path.cwd() / ".aider.tools"
-        ).resolve()
+        global_tools_dir = self._get_global_tools_dir()
+        local_tools_dir = self._get_local_tools_dir()
 
         is_global = False
         is_local = False
@@ -2724,7 +2735,7 @@ Just reply with fixed versions of the {blocks} above that failed to match.
                 if self.auto_lint:
                     lint_errors = self.lint_edited(edited_files)
                     self.auto_commit(edited_files, context="Ran the linter")
-                    if lint_errors and not self.reflected_message: # Reflect only if no edit errors
+                    if lint_errors and not self.reflected_message: # Reflect only if edits failed
                         ok = self.io.confirm_ask("Attempt to fix lint errors?")
                         if ok:
                             self.reflected_message = lint_errors
@@ -3019,7 +3030,7 @@ Just reply with fixed versions of the {blocks} above that failed to match.
                     staged_added = []
                     staged_modified = []
                     staged_deleted = []
-                    unstaged_modified = []
+unstaged_modified = []
                     unstaged_deleted = []
                     untracked = []
 

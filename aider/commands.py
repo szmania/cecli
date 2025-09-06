@@ -2107,14 +2107,10 @@ class Commands:
 
         # Define target_dir_description
         if scope == "global":
-            tools_dir = Path.home() / ".aider.tools"
+            tools_dir = self.coder._get_global_tools_dir()
             target_dir_description = "the global tools directory (`~/.aider.tools`)"
         else:
-            tools_dir = (
-                Path(self.coder.repo.root) / ".aider.tools"
-                if self.coder.repo
-                else Path.cwd() / ".aider.tools"
-            )
+            tools_dir = self.coder._get_local_tools_dir()
             target_dir_description = "the local project tools directory (`.aider.tools`)"
 
         user_message = (
@@ -2324,11 +2320,6 @@ def parse_quoted_filenames(args):
 
 def get_help_md():
     md = Commands(None, None).get_help_md()
-    return md
-
-
-def main():
-    md = get_help_md()
     print(md)
 
 
