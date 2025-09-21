@@ -2279,7 +2279,14 @@ class Commands:
             "1. On the first line, provide a single, valid Python filename for this tool (e.g.,"
             " `my_tool.py`). The filename must end with .py and not contain any path separators"
             " (`/` or `\\`).\n"
-            "2. On all subsequent lines, provide the complete Python code for the tool.\n\n"
+            "2. On the following lines, provide the complete Python code for the tool.\n"
+            "3. After the Python code, if the tool has any PyPI package dependencies, include a"
+            " fenced code block for `requirements.txt` like this:\n\n"
+            "```requirements.txt\n"
+            "package1\n"
+            "package2==1.2.3\n"
+            "```\n\n"
+            "If there are no dependencies, omit the `requirements.txt` block.\n\n"
             f"The tool will be saved in {target_dir_description}.\n\n"
             f"Tool Description:\n{description}"
         )
@@ -2290,16 +2297,27 @@ class Commands:
             self.io.tool_error("The model did not generate any code for the tool.")
             return
 
-        lines = tool_code_response.strip().split('\n')
-        tool_filename_from_model = lines[0].strip()
-        tool_filename = os.path.basename(tool_filename_from_model)  # Extract just the filename
-        tool_code = '\n'.join(lines[1:])
+        # Find requirements
+        requirements_content = ""
+        req_match = re.search(r"```requirements\.txt\n(.*?)\n```", tool_code_response, re.DOTALL)
+        if req_match:
+            requirements_content = req_match.group(1).strip()
+            # Remove the requirements block from the response to isolate code and filename
+            tool_code_response = (
+                tool_code_response[: req_match.start()] + tool_code_response[req_match.end() :]
+            )
 
+        lines = tool_code_response.strip().split("\n")
+        tool_filename_from_model = lines[0].strip()
+        tool_code = "\n".join(lines[1:])
+
+        tool_filename = os.path.basename(tool_filename_from_model)  # Extract just the filename
         tool_code = strip_fenced_code(tool_code).strip()
 
         if not tool_filename.endswith(".py"):
             self.io.tool_warning(
-                f"Model provided an invalid filename '{tool_filename_from_model}'. Using 'new_tool.py'."
+                f"Model provided an invalid filename '{tool_filename_from_model}'. Using"
+                " 'new_tool.py'."
             )
             tool_filename = "new_tool.py"
 
@@ -2330,13 +2348,52 @@ class Commands:
             self.io.tool_error(f"Error saving tool: {e}")
             return
 
+        # Handle requirements.txt
+        if requirements_content:
+            requirements_path = tools_dir / "requirements.txt"
+            try:
+                existing_reqs = set()
+                if requirements_path.exists():
+                    with open(requirements_path, "r", encoding=self.io.encoding) as f:
+                        for line in f:
+                            line = line.strip()
+                            if line and not line.startswith("#"):
+                                existing_reqs.add(line)
+
+                new_reqs = set(
+                    req
+                    for req in requirements_content.splitlines()
+                    if req.strip() and not req.strip().startswith("#")
+                )
+
+                all_reqs = sorted(list(existing_reqs | new_reqs))
+
+                if all_reqs:
+                    with open(requirements_path, "w", encoding=self.io.encoding) as f:
+                        f.write("\n".join(all_reqs) + "\n")
+                    self.io.tool_output(f"Updated {requirements_path}")
+
+                    # Ask to install requirements
+                    install_question = (
+                        f"Do you want to install the requirements from {requirements_path}?"
+                    )
+                    install_command = f'pip install -r "{requirements_path}"'
+                    if self.io.confirm_ask(
+                        install_question, subject=install_command, explicit_yes_required=True
+                    ):
+                        self.cmd_run(install_command)
+
+            except IOError as e:
+                self.io.tool_error(f"Error updating requirements.txt: {e}")
+
         # Add to chat for review
         self.io.tool_output("Adding the new tool to the chat for your review.")
         self.cmd_add(f'"{str(tool_path)}"')
 
         # Ask to load
         if self.io.confirm_ask(f"Load the new tool from {tool_path}?"):
-            self.cmd_tools_load(f'"{str(tool_path)}"')
+            self.cmd_tools_load(f'"{str(tool_path)}"
+)
 
     def cmd_tools(self, args):
         "List all available standard and custom tools"
