@@ -2201,6 +2201,17 @@ class Commands:
         quoted_paths = [self.quote_fname(p) for p in relative_paths]
         return sorted(quoted_paths)
 
+    def _get_global_tools_dir(self):
+        """Returns the path to the global tools directory."""
+        return Path.home() / ".aider.tools"
+
+    def _get_local_tools_dir(self):
+        """Returns the path to the local tools directory."""
+        if self.coder.repo and self.coder.repo.root:
+            return Path(self.coder.repo.root) / ".aider.tools"
+        # Fallback for when not in a repo
+        return Path(self.coder.root) / ".aider.tools"
+
     def cmd_tools_create(self, args):
         "Create a new tool with AI assistance"
 
@@ -2247,10 +2258,10 @@ class Commands:
 
         # Define target_dir_description
         if scope == "global":
-            tools_dir = self.coder._get_global_tools_dir()
+            tools_dir = self._get_global_tools_dir()
             target_dir_description = "the global tools directory (`~/.aider.tools`)"
         else:
-            tools_dir = self.coder._get_local_tools_dir()
+            tools_dir = self._get_local_tools_dir()
             target_dir_description = "the local project tools directory (`.aider.tools`)"
 
         user_message = (
