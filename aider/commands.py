@@ -2392,8 +2392,7 @@ class Commands:
 
         # Ask to load
         if self.io.confirm_ask(f"Load the new tool from {tool_path}?"):
-            self.cmd_tools_load(f'"{str(tool_path)}"
-)
+            self.cmd_tools_load(f'"{str(tool_path)}"')
 
     def cmd_tools(self, args):
         "List all available standard and custom tools"
