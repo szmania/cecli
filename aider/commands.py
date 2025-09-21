@@ -2280,13 +2280,6 @@ class Commands:
             " `my_tool.py`). The filename must end with .py and not contain any path separators"
             " (`/` or `\\`).\n"
             "2. On all subsequent lines, provide the complete Python code for the tool.\n\n"
-            "The tool's code MUST follow these requirements:\n"
-            "- It must import `BaseAiderTool` from `aider.tools.base_tool`.\n"
-            "- It must contain a single class that inherits from `BaseAiderTool`.\n"
-            "- The class must implement the `__init__`, `get_tool_definition`, and `run` methods.\n"
-            "- The `__init__` method must call `super().__init__(coder, **kwargs)`.\n"
-            "- The tool code should not contain any example usage code outside of the class"
-            " definition (e.g. `if __name__ == '__main__':`).\n\n"
             f"The tool will be saved in {target_dir_description}.\n\n"
             f"Tool Description:\n{description}"
         )

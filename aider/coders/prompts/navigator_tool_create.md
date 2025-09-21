@@ -54,6 +54,8 @@ When implementing a tool, you must:
 1. Create a class that inherits from `BaseAiderTool`
 2. Implement the `get_tool_definition()` method to return a JSON schema
 3. Implement the `run()` method to execute the tool's functionality
+4. If you implement `__init__`, it must call `super().__init__(coder, **kwargs)`.
+5. The tool code should not contain any example usage code outside of the class definition (e.g. `if __name__ == '__main__':`).
 
 Here is a complete example of a tool implementation:
 
@@ -65,6 +67,9 @@ class ExampleTool(BaseAiderTool):
     """
     An example tool that reads a file and returns its contents.
     """
+
+    def __init__(self, coder, **kwargs):
+        super().__init__(coder, **kwargs)
 
     def get_tool_definition(self):
         return {{
