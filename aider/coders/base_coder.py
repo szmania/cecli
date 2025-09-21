@@ -694,6 +694,17 @@ class Coder:
         for lang, cmd in lint_cmds.items():
             self.linter.set_linter(lang, cmd)
 
+    def _get_global_tools_dir(self):
+        """Returns the path to the global tools directory."""
+        return Path.home() / ".aider.tools"
+
+    def _get_local_tools_dir(self):
+        """Returns the path to the local tools directory."""
+        if self.repo and self.repo.root:
+            return Path(self.repo.root) / ".aider.tools"
+        # Fallback for when not in a repo
+        return Path(self.root) / ".aider.tools"
+
     def show_announcements(self):
         bold = True
         for line in self.get_announcements():
