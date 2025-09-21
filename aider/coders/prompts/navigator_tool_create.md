@@ -115,4 +115,3 @@ Important guidelines:
 6. Use `self.coder.io.tool_error()` for error messages
 7. Save the tool file to .aider.tools/ directory by default
 8. For cross-project tools, consider saving to ~/.aider.tools/ (global tools directory)
-9. To write the new tool's code into a file, you **must** use a file editing tool. For a new or empty file, use the `InsertBlock` tool with the `position` parameter. For example: `InsertBlock(file_path='.aider.tools/my_tool.py', content='<the full python code>', position='top')`
