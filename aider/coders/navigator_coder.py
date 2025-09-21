@@ -32,7 +32,8 @@ from aider.tools.base_tool import BaseAiderTool
 # Import run_cmd for potentially interactive execution and run_cmd_subprocess for guaranteed non-interactive
 from aider.tools.command import _execute_command
 from aider.tools.command_interactive import _execute_command_interactive
-from aider.tools.create_tool import CreateTool # Added import for CreateTool
+from aider.tools.create_tool import CreateTool
+from aider.tools.dependency_installer import DependencyInstaller
 from aider.tools.delete_block import _execute_delete_block
 from aider.tools.delete_line import _execute_delete_line
 from aider.tools.delete_lines import _execute_delete_lines
