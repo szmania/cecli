@@ -2282,7 +2282,7 @@ class Commands:
 
         lines = tool_code_response.strip().split('\n')
         tool_filename_from_model = lines[0].strip()
-        tool_filename = Path(tool_filename_from_model).name # Extract just the filename
+        tool_filename = os.path.basename(tool_filename_from_model)  # Extract just the filename
         tool_code = '\n'.join(lines[1:])
 
         tool_code = strip_fenced_code(tool_code).strip()
