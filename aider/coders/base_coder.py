@@ -106,7 +106,7 @@ class Coder:
     num_reflections = 0
     max_reflections = 3
     num_tool_calls = 0
-    max_tool_calls = 25
+    max_tool_calls = 100
     edit_format = None
     yield_stream = False
     temperature = None
