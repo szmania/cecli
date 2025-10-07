@@ -320,6 +320,7 @@ class InputOutput:
             self.notifications_command = self.get_default_notification_command()
         else:
             self.notifications_command = notifications_command
+        self.markdown_stream = None
 
         no_color = os.environ.get("NO_COLOR")
         if no_color is not None and no_color != "":
@@ -1059,6 +1060,11 @@ class InputOutput:
             message = Text(message)
         color = ensure_hash_prefix(color) if color else None
         style = dict(style=color) if self.pretty and color else dict()
+
+        if self.markdown_stream:
+            self.markdown_stream.print_above(message, **style)
+            return
+
         try:
             self.console.print(message, **style)
         except UnicodeEncodeError:
@@ -1077,7 +1083,7 @@ class InputOutput:
 
     def tool_output(self, *messages, log_only=False, bold=False):
         if messages:
-            hist = " ".join(messages)
+            hist = " ".join(map(str, messages))
             hist = f"{hist.strip()}"
             self.append_chat_history(hist, linebreak=True, blockquote=True)
 
@@ -1089,10 +1095,16 @@ class InputOutput:
         if self.pretty:
             if self.tool_output_color:
                 style["color"] = ensure_hash_prefix(self.tool_output_color)
-            style["reverse"] = bold
+            if bold:
+                style["reverse"] = True
 
-        style = RichStyle(**style)
-        self.console.print(*messages, style=style)
+        rich_style = RichStyle(**style)
+
+        if self.markdown_stream:
+            self.markdown_stream.print_above(*messages, style=rich_style)
+            return
+
+        self.console.print(*messages, style=rich_style)
 
     def get_assistant_mdstream(self):
         mdargs = dict(

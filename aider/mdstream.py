@@ -119,6 +119,17 @@ class MarkdownStream:
         self.live = None
         self._live_started = False
 
+    def _start_live(self):
+        if self._live_started:
+            return
+        self.live = Live(Text(""), refresh_per_second=1.0 / self.min_delay)
+        self.live.start()
+        self._live_started = True
+
+    def print_above(self, *args, **kwargs):
+        self._start_live()
+        self.live.console.print(*args, **kwargs)
+
     def _render_markdown_to_lines(self, text):
         """Render markdown text to a list of lines.
 
@@ -163,11 +174,7 @@ class MarkdownStream:
         Markdown going to the console works better in terminal scrollback buffers.
         The live window doesn't play nice with terminal scrollback.
         """
-        # On the first call, stop the spinner and start the Live renderer
-        if not getattr(self, "_live_started", False):
-            self.live = Live(Text(""), refresh_per_second=1.0 / self.min_delay)
-            self.live.start()
-            self._live_started = True
+        self._start_live()
 
         now = time.time()
         # Throttle updates to maintain smooth rendering
@@ -196,18 +203,15 @@ class MarkdownStream:
             num_printed = len(self.printed)
             show = num_lines - num_printed
 
-            # Skip if no new lines to show above live window
-            if show <= 0:
-                return
+            if show > 0:
+                # Get the new lines and display them
+                show_lines = lines[num_printed:num_lines]
+                show_text = "".join(show_lines)
+                show_text = Text.from_ansi(show_text)
+                self.live.console.print(show_text)  # to the console above the live area
 
-            # Get the new lines and display them
-            show = lines[num_printed:num_lines]
-            show = "".join(show)
-            show = Text.from_ansi(show)
-            self.live.console.print(show)  # to the console above the live area
-
-            # Update our record of printed lines
-            self.printed = lines[:num_lines]
+                # Update our record of printed lines
+                self.printed = lines[:num_lines]
 
         # Handle final update cleanup
         if final:

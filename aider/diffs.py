@@ -40,7 +40,7 @@ def assert_newlines(lines):
         assert line and line[-1] == "\n", line
 
 
-def diff_partial_update(lines_orig, lines_updated, final=False, fname=None):
+def diff_partial_update(lines_orig, lines_updated, final=False, fname=None, io=None):
     """
     Given only the first part of an updated file, show the diff while
     ignoring the block of "deleted" lines that are past the end of the
@@ -68,12 +68,15 @@ def diff_partial_update(lines_orig, lines_updated, final=False, fname=None):
     else:
         pct = 50
     bar = create_progress_bar(pct)
-    bar = f" {last_non_deleted:3d} / {num_orig_lines:3d} lines [{bar}] {pct:3.0f}%\n"
+    bar_text = f" {last_non_deleted:3d} / {num_orig_lines:3d} lines [{bar}] {pct:3.0f}%\n"
 
     lines_orig = lines_orig[:last_non_deleted]
 
     if not final:
-        lines_updated = lines_updated[:-1] + [bar]
+        if io:
+            io.tool_output(bar_text.strip())
+        else:
+            lines_updated = lines_updated[:-1] + [bar_text]
 
     diff = difflib.unified_diff(lines_orig, lines_updated, n=5)
 

@@ -1769,6 +1769,7 @@ class Coder:
             self.waiting_spinner.start()
             if self.stream:
                 self.mdstream = self.io.get_assistant_mdstream()
+                self.io.markdown_stream = self.mdstream
             else:
                 self.mdstream = None
         else:
@@ -1850,6 +1851,7 @@ class Coder:
             if self.mdstream:
                 self.live_incremental_response(True)
                 self.mdstream = None
+                self.io.markdown_stream = None
 
             # Ensure any waiting spinner is stopped
             self._stop_waiting_spinner()
