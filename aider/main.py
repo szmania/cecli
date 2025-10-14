@@ -33,7 +33,7 @@ from aider.llm import litellm  # noqa: F401; properly init litellm on launch
 from aider.mcp import load_mcp_servers
 from aider.models import ModelSettings
 from aider.onboarding import offer_openrouter_oauth, select_default_model
-from aider.repo import ANY_GIT_ERROR, GitRepo
+from aider.repo import ANY_GIT_ERROR
 from aider.report import report_uncaught_exceptions
 from aider.versioncheck import check_version, install_from_main_branch, install_upgrade
 from aider.watch import FileWatcher
@@ -612,6 +612,8 @@ def main(argv=None, input=None, output=None, force_git_root=None, return_coder=F
         # Set verify_ssl on the model_info_manager
         models.model_info_manager.set_verify_ssl(False)
 
+    models.set_litellm_reinit_timestamp()
+
     if args.timeout:
         models.request_timeout = args.timeout
 
@@ -913,6 +915,7 @@ def main(argv=None, input=None, output=None, force_git_root=None, return_coder=F
         verbose=args.verbose,
         retry_timeout=args.retry_timeout,
         retry_backoff_factor=args.retry_backoff_factor,
+        verify_ssl=args.verify_ssl,
     )
 
     # Check if deprecated remove_reasoning is set

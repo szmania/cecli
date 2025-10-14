@@ -22,6 +22,42 @@ from aider.openrouter import OpenRouterModelManager
 from aider.sendchat import ensure_alternating_roles, sanity_check_messages
 from aider.utils import check_pip_install_extra
 
+# Global state for client session management
+_last_litellm_reinit = 0
+_litellm_reinit_ttl = 60 * 60  # 1 hour in seconds
+
+def set_litellm_reinit_timestamp():
+    """
+    Sets the timestamp for the last litellm client re-initialization.
+    """
+    global _last_litellm_reinit
+    _last_litellm_reinit = time.time()
+
+def reinit_litellm_client_if_needed(verify_ssl=True):
+    """
+    Re-initializes the litellm httpx client sessions if they have been idle
+    for more than _litellm_reinit_ttl seconds. This avoids issues with
+    stale connections in long-running aider sessions.
+    """
+    global _last_litellm_reinit
+    now = time.time()
+
+    if (now - _last_litellm_reinit) > _litellm_reinit_ttl:
+        try:
+            import httpx
+            from aider.llm import litellm
+
+            litellm._load_litellm()
+
+            # Create new sessions, which will be garbage collected on next assignment
+            litellm._lazy_module.client_session = httpx.Client(verify=verify_ssl)
+            litellm._lazy_module.aclient_session = httpx.AsyncClient(verify=verify_ssl)
+
+            _last_litellm_reinit = now
+        except Exception:
+            # On failure, reset timer to avoid repeated failed attempts
+            _last_litellm_reinit = now
+
 RETRY_TIMEOUT = 60
 
 request_timeout = 600
@@ -318,6 +354,7 @@ class Model(ModelSettings):
         retry_timeout=RETRY_TIMEOUT,
         retry_backoff_factor=2.0,
         retry_on_unavailable=False,
+        verify_ssl=True,
     ):
         # Map any alias to its canonical name
         model = MODEL_ALIASES.get(model, model)
@@ -327,6 +364,7 @@ class Model(ModelSettings):
         self.retry_timeout = retry_timeout
         self.retry_backoff_factor = retry_backoff_factor
         self.retry_on_unavailable = retry_on_unavailable
+        self.verify_ssl = verify_ssl
 
         self.max_chat_history_tokens = 1024
         self.weak_model = None
@@ -599,6 +637,7 @@ class Model(ModelSettings):
             retry_timeout=self.retry_timeout,
             retry_backoff_factor=self.retry_backoff_factor,
             retry_on_unavailable=self.retry_on_unavailable,
+            verify_ssl=self.verify_ssl,
         )
         return self.weak_model
 
@@ -621,6 +660,7 @@ class Model(ModelSettings):
                 retry_timeout=self.retry_timeout,
                 retry_backoff_factor=self.retry_backoff_factor,
                 retry_on_unavailable=self.retry_on_unavailable,
+                verify_ssl=self.verify_ssl,
             )
 
         if not self.editor_edit_format:
@@ -922,6 +962,8 @@ class Model(ModelSettings):
     def send_completion(
         self, messages, functions, stream, temperature=None, tools=None, max_tokens=None
     ):
+        reinit_litellm_client_if_needed(self.verify_ssl)
+
         if os.environ.get("AIDER_SANITY_CHECK_TURNS"):
             sanity_check_messages(messages)
 
