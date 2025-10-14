@@ -33,7 +33,7 @@ from aider.llm import litellm  # noqa: F401; properly init litellm on launch
 from aider.mcp import load_mcp_servers
 from aider.models import ModelSettings
 from aider.onboarding import offer_openrouter_oauth, select_default_model
-from aider.repo import ANY_GIT_ERROR
+from aider.repo import ANY_GIT_ERROR, GitRepo
 from aider.report import report_uncaught_exceptions
 from aider.versioncheck import check_version, install_from_main_branch, install_upgrade
 from aider.watch import FileWatcher
