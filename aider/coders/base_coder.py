@@ -2782,6 +2782,10 @@ class Coder:
             return
 
         if not completion.choices:
+            self.io.tool_error(str(completion))
+            return
+
+        if not completion.choices:
             raise EmptyLLMResponseError(f"Empty LLM response: {completion}")
 
         # Check for empty response from LLM
@@ -3249,7 +3253,7 @@ class Coder:
             return
 
         if not Path(full_path).exists():
-            if not self.io.confirm_ask("Create new file?", subject=path):
+            if not await self.io.confirm_ask("Create new file?", subject=path):
                 self.io.tool_output(f"Skipping edits to {path}")
                 return
 
