@@ -3007,4 +3007,5 @@ class Coder:
 
         # Only send new content that hasn't been streamed yet
         if len(show_resp) >= self._streaming_buffer_length:
-            new_content = show_resp[self._streaming_buffer_length :]Model API Response Error. Please retry the previous request
+            new_content = show_resp[self._streaming_buffer_length :]
+            return new_content
