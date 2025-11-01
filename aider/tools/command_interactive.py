@@ -79,3 +79,6 @@ class CommandInteractive(BaseAiderTool):
 
 def _execute_command_interactive(coder, command_string):
     return CommandInteractive(coder).run(command_string=command_string)
+
+
+command_interactive_schema = CommandInteractive(None).get_tool_definition()

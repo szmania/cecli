@@ -93,3 +93,6 @@ class Command(BaseAiderTool):
 
 def _execute_command(coder, command_string):
     return Command(coder).run(command_string=command_string)
+
+
+command_schema = Command(None).get_tool_definition()
