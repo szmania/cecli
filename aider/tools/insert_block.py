@@ -252,6 +252,7 @@ class InsertBlock(BaseAiderTool):
                 metadata,
                 change_id,
             )
+            self.coder.files_edited_by_tools.add(rel_path)
 
             # 9. Format and return result
             if position:

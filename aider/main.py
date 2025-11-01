@@ -1,3 +1,4 @@
+import asyncio
 import glob
 import json
 import os
@@ -100,7 +101,7 @@ def make_new_repo(git_root, io):
     return repo
 
 
-def setup_git(git_root, io):
+async def setup_git(git_root, io):
     if git is None:
         return
 
@@ -121,7 +122,7 @@ def setup_git(git_root, io):
             "You should probably run aider in your project's directory, not your home dir."
         )
         return
-    elif cwd and io.confirm_ask(
+    elif cwd and await io.confirm_ask(
         "No git repo found, create one to track aider's changes (recommended)?"
     ):
         git_root = str(cwd.resolve())
@@ -154,7 +155,7 @@ def setup_git(git_root, io):
     return repo.working_tree_dir
 
 
-def check_gitignore(git_root, io, ask=True):
+async def check_gitignore(git_root, io, ask=True):
     if not git_root:
         return
 
@@ -190,7 +191,7 @@ def check_gitignore(git_root, io, ask=True):
 
     if ask:
         io.tool_output("You can skip this check with --no-gitignore")
-        if not io.confirm_ask(f"Add {', '.join(patterns_to_add)} to .gitignore (recommended)?"):
+        if not await io.confirm_ask(f"Add {', '.join(patterns_to_add)} to .gitignore (recommended)?"):
             return
 
     content += "\n".join(patterns_to_add) + "\n"
@@ -469,7 +470,7 @@ def expand_glob_patterns(patterns, root="."):
     return expanded_files
 
 
-def discover_and_load_tools(coder, git_root, args):
+async def discover_and_load_tools(coder, git_root, args):
     from aider.coders.navigator_coder import NavigatorCoder
 
     # Only proceed if the current coder is a NavigatorCoder
@@ -508,7 +509,7 @@ def discover_and_load_tools(coder, git_root, args):
     if not tool_dirs:
         if coder.verbose:
             coder.io.tool_output("No tool directories configured or found.")
-        coder.did_discover_tools = True # Mark as discovered even if empty
+        coder.did_discover_tools = True  # Mark as discovered even if empty
         return
 
     discovered_tools = []
@@ -536,7 +537,7 @@ def discover_and_load_tools(coder, git_root, args):
     if not discovered_tools:
         if coder.verbose:
             coder.io.tool_output("No custom tools found in scanned directories.")
-        coder.did_discover_tools = True # Mark as discovered even if empty
+        coder.did_discover_tools = True  # Mark as discovered even if empty
         return
 
     coder.io.tool_output("Discovered custom tools:")
@@ -548,16 +549,21 @@ def discover_and_load_tools(coder, git_root, args):
     )
     question = "Load these tools?"
 
-    if coder.io.confirm_ask(question, default="y", subject=warning_message):
+    if await coder.io.confirm_ask(question, default="y", subject=warning_message):
         for tool_path in discovered_tools:
             try:
                 coder.tool_add_from_path(str(tool_path))
             except Exception as e:
                 coder.io.tool_error(f"Failed to load tool {tool_path}: {e}")
 
-    coder.did_discover_tools = True # Mark as discovered after processing
+    coder.did_discover_tools = True  # Mark as discovered after processing
+
 
 def main(argv=None, input=None, output=None, force_git_root=None, return_coder=False):
+    return asyncio.run(main_async(argv, input, output, force_git_root, return_coder))
+
+
+async def main_async(argv=None, input=None, output=None, force_git_root=None, return_coder=False):
     report_uncaught_exceptions()
 
     if argv is None:
@@ -617,6 +623,9 @@ def main(argv=None, input=None, output=None, force_git_root=None, return_coder=F
         parser.prog = "aider"
         print(shtab.complete(parser, shell=args.shell_completions))
         sys.exit(0)
+
+    if git is None:
+        args.git = False
 
     if args.analytics_disable:
         analytics = Analytics(permanently_disable=True)
@@ -754,7 +763,7 @@ def main(argv=None, input=None, output=None, force_git_root=None, return_coder=F
                 " personal info."
             )
             io.tool_output(f"For more info: {urls.analytics}")
-            disable = not io.confirm_ask(
+            disable = not await io.confirm_ask(
                 "Allow collection of anonymous analytics to help improve aider?"
             )
 
@@ -831,7 +840,7 @@ def main(argv=None, input=None, output=None, force_git_root=None, return_coder=F
         right_repo_root = guessed_wrong_repo(io, git_root, fnames, git_dname)
         if right_repo_root:
             analytics.event("exit", reason="Recursing with correct repo")
-            return main(argv, input, output, right_repo_root, return_coder=return_coder)
+            return await main_async(argv, input, output, right_repo_root, return_coder=return_coder)
 
     if args.just_check_update:
         update_available = check_version(io, just_check=True, verbose=args.verbose)
@@ -852,9 +861,9 @@ def main(argv=None, input=None, output=None, force_git_root=None, return_coder=F
         check_version(io, verbose=args.verbose)
 
     if args.git:
-        git_root = setup_git(git_root, io)
+        git_root = await setup_git(git_root, io)
         if args.gitignore:
-            check_gitignore(git_root, io)
+            await check_gitignore(git_root, io)
 
     if args.verbose:
         show = format_settings(parser, args)
@@ -888,7 +897,7 @@ def main(argv=None, input=None, output=None, force_git_root=None, return_coder=F
             alias, model = parts
             models.MODEL_ALIASES[alias.strip()] = model.strip()
 
-    selected_model_name = select_default_model(args, io, analytics)
+    selected_model_name = await select_default_model(args, io, analytics)
     if not selected_model_name:
         # Error message and analytics event are handled within select_default_model
         # It might have already offered OAuth if no model/keys were found.
@@ -903,7 +912,7 @@ def main(argv=None, input=None, output=None, force_git_root=None, return_coder=F
             " found."
         )
         # Attempt OAuth flow because the specific model needs it
-        if offer_openrouter_oauth(io, analytics):
+        if await offer_openrouter_oauth(io, analytics):
             # OAuth succeeded, the key should now be in os.environ.
             # Check if the key is now present after the flow.
             if os.environ.get("OPENROUTER_API_KEY"):
@@ -926,7 +935,7 @@ def main(argv=None, input=None, output=None, force_git_root=None, return_coder=F
             io.tool_error(
                 f"Unable to proceed without an OpenRouter API key for model '{args.model}'."
             )
-            io.offer_url(urls.models_and_keys, "Open documentation URL for more info?")
+            await io.offer_url(urls.models_and_keys, "Open documentation URL for more info?")
             analytics.event(
                 "exit",
                 reason="OpenRouter key missing for specified model and OAuth failed/declined",
@@ -1011,7 +1020,7 @@ def main(argv=None, input=None, output=None, force_git_root=None, return_coder=F
             io.tool_output("You can skip this check with --no-show-model-warnings")
 
             try:
-                io.offer_url(urls.model_warnings, "Open documentation url for more info?")
+                await io.offer_url(urls.model_warnings, "Open documentation url for more info?")
                 io.tool_output()
             except KeyboardInterrupt:
                 analytics.event("exit", reason="Keyboard interrupt during model warnings")
@@ -1100,7 +1109,7 @@ def main(argv=None, input=None, output=None, force_git_root=None, return_coder=F
         if not mcp_servers:
             mcp_servers = []
 
-        coder = Coder.create(
+        coder = await Coder.create(
             main_model=main_model,
             edit_format=args.edit_format,
             io=io,
@@ -1146,7 +1155,7 @@ def main(argv=None, input=None, output=None, force_git_root=None, return_coder=F
         )
     except UnknownEditFormat as err:
         io.tool_error(str(err))
-        io.offer_url(urls.edit_formats, "Open documentation about edit formats?")
+        await io.offer_url(urls.edit_formats, "Open documentation about edit formats?")
         analytics.event("exit", reason="Unknown edit format")
         return 1
     except ValueError as err:
@@ -1154,7 +1163,7 @@ def main(argv=None, input=None, output=None, force_git_root=None, return_coder=F
         analytics.event("exit", reason="ValueError during coder creation")
         return 1
 
-    discover_and_load_tools(coder, git_root, args) # Call discovery after new coder is created
+    await discover_and_load_tools(coder, git_root, args)  # Call discovery after new coder is created
 
     if return_coder:
         analytics.event("exit", reason="Returning coder object")
@@ -1192,22 +1201,22 @@ def main(argv=None, input=None, output=None, force_git_root=None, return_coder=F
         return
 
     if args.lint:
-        coder.commands.cmd_lint(fnames=fnames)
+        await coder.commands.cmd_lint(fnames=fnames)
 
     if args.test:
         if not args.test_cmd:
             io.tool_error("No --test-cmd provided.")
             analytics.event("exit", reason="No test command provided")
             return 1
-        coder.commands.cmd_test(args.test_cmd)
+        await coder.commands.cmd_test(args.test_cmd)
         if io.placeholder:
-            coder.run(io.placeholder)
+            await coder.run(io.placeholder)
 
     if args.commit:
         if args.dry_run:
             io.tool_output("Dry run enabled, skipping commit.")
         else:
-            coder.commands.cmd_commit()
+            await coder.commands.cmd_commit()
 
     if args.lint or args.test or args.commit:
         analytics.event("exit", reason="Completed lint/test/commit")
@@ -1229,7 +1238,7 @@ def main(argv=None, input=None, output=None, force_git_root=None, return_coder=F
         # For testing #2879
         # from aider.coders.base_coder import all_fences
         # coder.fence = all_fences[1]
-        coder.apply_updates()
+        await coder.apply_updates()
         analytics.event("exit", reason="Applied updates")
         return
 
@@ -1243,7 +1252,7 @@ def main(argv=None, input=None, output=None, force_git_root=None, return_coder=F
         webbrowser.open(urls.release_notes)
     elif args.show_release_notes is None and is_first_run:
         io.tool_output()
-        io.offer_url(
+        await io.offer_url(
             urls.release_notes,
             "Would you like to see what's new in this version?",
             allow_never=False,
@@ -1262,14 +1271,14 @@ def main(argv=None, input=None, output=None, force_git_root=None, return_coder=F
         io.tool_warning("Cost estimates may be inaccurate when using streaming and caching.")
 
     if args.load:
-        commands.cmd_load(args.load)
+        await commands.cmd_load(args.load)
 
     if args.message:
         io.add_to_input_history(args.message)
         io.tool_output()
         try:
-            coder.run(with_message=args.message)
-        except SwitchCoder:
+            await coder.run(with_message=args.message)
+        except (SwitchCoder, KeyboardInterrupt):
             pass
         analytics.event("exit", reason="Completed --message")
         return
@@ -1278,7 +1287,7 @@ def main(argv=None, input=None, output=None, force_git_root=None, return_coder=F
         try:
             message_from_file = io.read_text(args.message_file)
             io.tool_output()
-            coder.run(with_message=message_from_file)
+            await coder.run(with_message=message_from_file)
         except FileNotFoundError:
             io.tool_error(f"Message file not found: {args.message_file}")
             analytics.event("exit", reason="Message file not found")
@@ -1300,7 +1309,7 @@ def main(argv=None, input=None, output=None, force_git_root=None, return_coder=F
     while True:
         try:
             coder.ok_to_warm_cache = bool(args.cache_keepalive_pings)
-            coder.run()
+            await coder.run()
             analytics.event("exit", reason="Completed main CLI coder.run")
             return
         except SwitchCoder as switch:
@@ -1318,11 +1327,11 @@ def main(argv=None, input=None, output=None, force_git_root=None, return_coder=F
             # Disable cache warming for the new coder
             kwargs["num_cache_warming_pings"] = 0
 
-            coder = Coder.create(**kwargs)
-            discover_and_load_tools(coder, git_root, args) # Call discovery after new coder is created
+            coder = await Coder.create(**kwargs)
+            await discover_and_load_tools(coder, git_root, args)  # Call discovery after new coder is created
 
-            if switch.kwargs.get("show_announcements") is not False:
-                coder.show_announcements()
+            if switch.kwargs.get("show_announcements") is False:
+                coder.suppress_announcements_for_next_prompt = True
 
 
 def is_first_run_of_new_version(io, verbose=False):

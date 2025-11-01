@@ -25,7 +25,7 @@ class MakeReadonly(BaseAiderTool):
             },
         }
 
-    def run(self, file_path):
+    async def run(self, file_path):
         """
         Convert an editable file to a read-only file.
 
@@ -54,7 +54,3 @@ class MakeReadonly(BaseAiderTool):
         except Exception as e:
             self.coder.io.tool_error(f"Error making file read-only: {str(e)}")
             return f"Error: {str(e)}"
-
-
-def _execute_make_readonly(coder, file_path):
-    return MakeReadonly(coder).run(file_path=file_path)

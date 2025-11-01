@@ -110,12 +110,12 @@ class DeleteLines(BaseAiderTool):
 
             if original_content == new_content:
                 self.coder.io.tool_warning(
-                    "No changes made: deleting lines"
-                    f" {start_line_int}-{end_line_int} would not change file"
+                    f"No changes made: deleting lines {start_line_int}-{end_line_int} would not change"
+                    " file"
                 )
                 return (
-                    "Warning: No changes made (deleting lines"
-                    f" {start_line_int}-{end_line_int} would not change file)"
+                    f"Warning: No changes made (deleting lines {start_line_int}-{end_line_int} would"
+                    " not change file)"
                 )
 
             # Generate diff snippet
@@ -153,7 +153,7 @@ class DeleteLines(BaseAiderTool):
                 change_id,
             )
 
-            self.coder.aider_edited_files.add(rel_path)
+            self.coder.files_edited_by_tools.add(rel_path)
             num_deleted = end_idx - start_idx + 1
             # Format and return result
             success_message = (

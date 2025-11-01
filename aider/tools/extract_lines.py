@@ -312,8 +312,8 @@ class ExtractLines(BaseAiderTool):
                 self.coder.io.tool_error(f"Error tracking target change for ExtractLines: {track_e}")
 
             # --- Update Context ---
-            self.coder.aider_edited_files.add(rel_source_path)
-            self.coder.aider_edited_files.add(rel_target_path)
+            self.coder.files_edited_by_tools.add(rel_source_path)
+            self.coder.files_edited_by_tools.add(rel_target_path)
             if not target_exists:
                 # Add the newly created file to editable context
                 self.coder.abs_fnames.add(abs_target_path)

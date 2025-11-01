@@ -27,7 +27,7 @@ class MakeEditable(BaseAiderTool):
             },
         }
 
-    def run(self, file_path):
+    async def run(self, file_path):
         """
         Convert a read-only file to an editable file.
 
@@ -55,7 +55,7 @@ class MakeEditable(BaseAiderTool):
                 was_read_only = True
             else:
                 # File is not in context, ask for permission to add it as editable
-                if not self.coder.io.confirm_ask(
+                if not await self.coder.io.confirm_ask(
                     "Allow adding new file to chat to make it editable?",
                     subject=file_path,
                 ):
@@ -81,5 +81,5 @@ class MakeEditable(BaseAiderTool):
             return f"Error: {str(e)}"
 
 
-def _execute_make_editable(coder, file_path):
-    return MakeEditable(coder).run(file_path=file_path)
+async def _execute_make_editable(coder, file_path):
+    return await MakeEditable(coder).run(file_path=file_path)

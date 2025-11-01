@@ -17,17 +17,17 @@ class Ls(BaseAiderTool):
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "dir_path": {
+                        "directory": {
                             "type": "string",
                             "description": "The path to the directory to list.",
                         },
                     },
-                    "required": ["dir_path"],
+                    "required": ["directory"],
                 },
             },
         }
 
-    def run(self, dir_path):
+    def run(self, directory):
         """
         List files in directory and optionally add some to context.
 
@@ -36,17 +36,17 @@ class Ls(BaseAiderTool):
         """
         try:
             # Make the path relative to root if it's absolute
-            if dir_path.startswith("/"):
-                rel_dir = os.path.relpath(dir_path, self.coder.root)
+            if directory.startswith("/"):
+                rel_dir = os.path.relpath(directory, self.coder.root)
             else:
-                rel_dir = dir_path
+                rel_dir = directory
 
             # Get absolute path
             abs_dir = self.coder.abs_root_path(rel_dir)
 
             # Check if path exists
             if not os.path.exists(abs_dir):
-                self.coder.io.tool_output(f"⚠️ Directory '{dir_path}' not found")
+                self.coder.io.tool_output(f"⚠️ Directory '{directory}' not found")
                 return "Directory not found"
 
             # Get directory contents
@@ -62,18 +62,23 @@ class Ls(BaseAiderTool):
                 contents = [rel_dir]
 
             if contents:
-                self.coder.io.tool_output(f"📋 Listed {len(contents)} file(s) in '{dir_path}'")
+                self.coder.io.tool_output(f"📋 Listed {len(contents)} file(s) in '{directory}'")
                 if len(contents) > 10:
                     return f"Found {len(contents)} files: {', '.join(contents[:10])}..."
                 else:
                     return f"Found {len(contents)} files: {', '.join(contents)}"
             else:
-                self.coder.io.tool_output(f"📋 No files found in '{dir_path}'")
+                self.coder.io.tool_output(f"📋 No files found in '{directory}'")
                 return "No files found in directory"
         except Exception as e:
             self.coder.io.tool_error(f"Error in ls: {str(e)}")
             return f"Error: {str(e)}"
 
 
-def execute_ls(coder, dir_path):
-    return Ls(coder).run(dir_path=dir_path)
+def execute_ls(coder, dir_path=None, directory=None):
+    # Handle both positional and keyword arguments for backward compatibility
+    if directory is None and dir_path is not None:
+        directory = dir_path
+    elif directory is None:
+        return "Error: Missing directory parameter"
+    return Ls(coder).run(directory=directory)

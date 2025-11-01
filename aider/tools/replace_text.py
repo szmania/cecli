@@ -177,6 +177,8 @@ class ReplaceText(BaseAiderTool):
                 change_id,
             )
 
+            self.coder.aider_edited_files.add(rel_path)
+
             # 8. Format and return result
             success_message = f"Replaced {occurrence_str} in {file_path}"
             return format_tool_result(

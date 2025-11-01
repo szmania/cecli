@@ -1,5 +1,5 @@
 from .base_tool import BaseAiderTool
-from aider.run_cmd import run_cmd, run_cmd_subprocess
+from aider.run_cmd import run_cmd_subprocess
 
 
 class Command(BaseAiderTool):

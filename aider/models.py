@@ -1,3 +1,4 @@
+import asyncio
 import difflib
 import hashlib
 import importlib.resources
@@ -26,12 +27,14 @@ from aider.utils import check_pip_install_extra
 _last_litellm_reinit = 0
 _litellm_reinit_ttl = 60 * 60  # 1 hour in seconds
 
+
 def set_litellm_reinit_timestamp():
     """
     Sets the timestamp for the last litellm client re-initialization.
     """
     global _last_litellm_reinit
     _last_litellm_reinit = time.time()
+
 
 def reinit_litellm_client_if_needed(verify_ssl=True):
     """
@@ -57,6 +60,7 @@ def reinit_litellm_client_if_needed(verify_ssl=True):
         except Exception:
             # On failure, reset timer to avoid repeated failed attempts
             _last_litellm_reinit = now
+
 
 RETRY_TIMEOUT = 60
 
@@ -959,7 +963,7 @@ class Model(ModelSettings):
     def is_ollama(self):
         return self.name.startswith("ollama/") or self.name.startswith("ollama_chat/")
 
-    def send_completion(
+    async def send_completion(
         self, messages, functions, stream, temperature=None, tools=None, max_tokens=None
     ):
         reinit_litellm_client_if_needed(self.verify_ssl)
@@ -969,6 +973,17 @@ class Model(ModelSettings):
 
         if self.is_deepseek_r1():
             messages = ensure_alternating_roles(messages)
+
+        if self.verbose:
+            for message in messages:
+                msg_role = message.get("role")
+                msg_content = message.get("content") if message.get("content") else ""
+                msg_trunc = ""
+
+                if message.get("content"):
+                    msg_trunc = message.get("content")[:30]
+
+                print(f"{msg_role} ({len(msg_content)}): {msg_trunc}")
 
         kwargs = dict(model=self.name, stream=stream)
 
@@ -1037,20 +1052,22 @@ class Model(ModelSettings):
                 }
 
         try:
-            res = litellm.completion(**kwargs)
+            res = await litellm.acompletion(**kwargs)
         except Exception as err:
-            res = "Model API Response Error. Please retry the previous request"
+            print(f"LiteLLM API Error: {str(err)}")
+            res = self.model_error_response()
 
             if self.verbose:
                 print(f"LiteLLM API Error: {str(err)}")
+                raise
 
         return hash_object, res
 
-    def simple_send_with_retries(self, messages, max_tokens=None):
+    async def simple_send_with_retries(self, messages, max_tokens=None):
         from aider.exceptions import LiteLLMExceptions
 
         litellm_ex = LiteLLMExceptions()
-        if "deepseek-reasoner" in self.name:
+        if self.is_deepseek_r1():
             messages = ensure_alternating_roles(messages)
         retry_delay = 0.125
 
@@ -1059,7 +1076,7 @@ class Model(ModelSettings):
 
         while True:
             try:
-                _hash, response = self.send_completion(
+                _hash, response = await self.send_completion(
                     messages=messages,
                     functions=None,
                     stream=False,
@@ -1097,10 +1114,26 @@ class Model(ModelSettings):
                 if not should_retry:
                     return None
                 print(f"Retrying in {retry_delay:.1f} seconds...")
-                time.sleep(retry_delay)
+                await asyncio.sleep(retry_delay)
                 continue
             except AttributeError:
                 return None
+
+    async def model_error_response(self):
+        for i in range(1):
+            await asyncio.sleep(0.1)
+            yield litellm.ModelResponse(
+                choices=[
+                    litellm.Choices(
+                        finish_reason="stop",
+                        index=0,
+                        message=litellm.Message(
+                            content="Model API Response Error. Please retry the previous request"
+                        ),  # Provide an empty message object
+                    )
+                ],
+                model=self.name,
+            )
 
 
 def register_models(model_settings_fnames):

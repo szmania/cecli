@@ -6,38 +6,41 @@ import locale
 import os
 import platform
 import re
+import shutil
+import sys
 import time
 import traceback
-
-# Add necessary imports if not already present
-from collections import defaultdict
+from collections import Counter, defaultdict
 from datetime import datetime
 from pathlib import Path
+
 import importlib.util
 import inspect
-import sys
-import shutil
-
-import jsonschema # Added import for jsonschema
+import jsonschema
 from litellm import experimental_mcp_client
 
 from aider import urls, utils
-
-# Import the change tracker
 from aider.change_tracker import ChangeTracker
 from aider.mcp.server import LocalServer
 from aider.repo import ANY_GIT_ERROR
 from aider.tools.base_tool import BaseAiderTool
-
-# Import run_cmd for potentially interactive execution and run_cmd_subprocess for guaranteed non-interactive
 from aider.tools.command import _execute_command
 from aider.tools.command_interactive import _execute_command_interactive
 from aider.tools.create_tool import CreateTool
-from aider.tools.dependency_installer import DependencyInstaller
 from aider.tools.delete_block import _execute_delete_block
 from aider.tools.delete_line import _execute_delete_line
 from aider.tools.delete_lines import _execute_delete_lines
 from aider.tools.extract_lines import _execute_extract_lines
+from aider.tools.git import (
+    _execute_git_diff,
+    _execute_git_log,
+    _execute_git_show,
+    _execute_git_status,
+    git_diff_schema,
+    git_log_schema,
+    git_show_schema,
+    git_status_schema,
+)
 from aider.tools.grep import _execute_grep
 from aider.tools.indent_lines import _execute_indent_lines
 from aider.tools.insert_block import _execute_insert_block
@@ -52,9 +55,8 @@ from aider.tools.replace_lines import _execute_replace_lines
 from aider.tools.replace_text import _execute_replace_text
 from aider.tools.show_numbered_context import execute_show_numbered_context
 from aider.tools.undo_change import _execute_undo_change
+from aider.tools.update_todo_list import _execute_update_todo_list, update_todo_list_schema
 from aider.tools.view import execute_view
-
-# Import tool functions
 from aider.tools.view_files_at_glob import execute_view_files_at_glob
 from aider.tools.view_files_matching import execute_view_files_matching
 from aider.tools.view_files_with_symbol import _execute_view_files_with_symbol
@@ -87,6 +89,29 @@ class NavigatorCoder(Coder):
 
         # Dictionary to track recently removed files
         self.recently_removed = {}
+
+        # Tool usage history
+        self.tool_usage_history = []
+        self.tool_usage_retries = 10
+        self.read_tools = {
+            "viewfilesatglob",
+            "viewfilesmatching",
+            "ls",
+            "viewfileswithsymbol",
+            "grep",
+            "listchanges",
+            "extractlines",
+            "shownumberedcontext",
+        }
+        self.write_tools = {
+            "command",
+            "commandinteractive",
+            "insertblock",
+            "replaceblock",
+            "replaceall",
+            "replacetext",
+            "undochange",
+        }
 
         # Configuration parameters
         self.max_tool_calls = 100  # Maximum number of tool calls per response
@@ -681,9 +706,24 @@ class NavigatorCoder(Coder):
             },
         ]
 
+        other_tools = [
+            update_todo_list_schema,
+        ]
+
+        git_tools = [
+            git_diff_schema,
+            git_log_schema,
+            git_show_schema,
+            git_status_schema,
+        ]
+
+        all_tools = navigation_tools + other_tools
         if self.use_granular_editing:
-            return navigation_tools + editing_tools
-        return navigation_tools
+            all_tools += editing_tools
+        if self.repo:
+            all_tools += git_tools
+
+        return all_tools
 
     def validate_tool_definition(self, tool_definition):
         """
@@ -699,7 +739,7 @@ class NavigatorCoder(Coder):
                     "properties": {
                         "name": {"type": "string", "pattern": r"^[a-zA-Z0-9_]{1,64}$"},
                         "description": {"type": "string"},
-                        "parameters": {"type": "object"}, # Will be validated separately as a JSON schema
+                        "parameters": {"type": "object"},  # Will be validated separately as a JSON schema
                     },
                     "required": ["name", "description", "parameters"],
                     "additionalProperties": False,
@@ -774,11 +814,15 @@ class NavigatorCoder(Coder):
 
             tool_class = None
             for name, obj in inspect.getmembers(module):
-                if inspect.isclass(obj) and issubclass(obj, BaseAiderTool) and obj is not BaseAiderTool:
+                if (
+                    inspect.isclass(obj)
+                    and issubclass(obj, BaseAiderTool)
+                    and obj is not BaseAiderTool
+                ):
                     tool_class = obj
                     break
 
-            if tool_class == None:
+            if tool_class is None:
                 raise ValueError(f"No class inheriting from BaseAiderTool found in {file_path}")
 
             # Instantiate the tool
@@ -825,7 +869,9 @@ class NavigatorCoder(Coder):
                 # Get the current list of tools for 'local_tools'
                 _, current_local_tools = self.mcp_tools[local_tools_entry_index]
                 # Remove any existing tool with the same name
-                updated_tools = [t for t in current_local_tools if t["function"]["name"] != tool_name]
+                updated_tools = [
+                    t for t in current_local_tools if t["function"]["name"] != tool_name
+                ]
                 # Add the new/updated tool definition
                 updated_tools.append(tool_definition)
                 self.mcp_tools[local_tools_entry_index] = ("local_tools", updated_tools)
@@ -839,16 +885,18 @@ class NavigatorCoder(Coder):
 
             # Store tool metadata
             self.custom_tools[tool_name] = {
-                'path': file_path,
-                'description': tool_description,
-                'scope': scope,
+                "path": file_path,
+                "description": tool_description,
+                "scope": scope,
             }
 
-            self.io.tool_output(f"Successfully loaded tool: {tool_name} from {self.get_rel_fname(file_path)}")
+            self.io.tool_output(
+                f"Successfully loaded tool: {tool_name} from {self.get_rel_fname(file_path)}"
+            )
 
         except Exception as e:
             rel_file_path = self.get_rel_fname(file_path)
-            self.tool_file_to_reload_after_fix = rel_file_path # Flag the file for potential reload
+            self.tool_file_to_reload_after_fix = rel_file_path  # Flag the file for potential reload
             self.io.tool_error(f"Error loading tool from {rel_file_path}: {e}")
 
             # Ask for confirmation before attempting to fix
@@ -881,7 +929,7 @@ class NavigatorCoder(Coder):
 
         tools_to_remove = []
         for tool_name, tool_info in self.custom_tools.items():
-            if Path(tool_info['path']).resolve() == abs_file_path:
+            if Path(tool_info["path"]).resolve() == abs_file_path:
                 tools_to_remove.append(tool_name)
 
         if not tools_to_remove:
@@ -905,7 +953,9 @@ class NavigatorCoder(Coder):
 
             if local_tools_entry_index != -1:
                 _, current_local_tools = self.mcp_tools[local_tools_entry_index]
-                updated_tools = [t for t in current_local_tools if t["function"]["name"] != tool_name]
+                updated_tools = [
+                    t for t in current_local_tools if t["function"]["name"] != tool_name
+                ]
                 self.mcp_tools[local_tools_entry_index] = ("local_tools", updated_tools)
 
             self.io.tool_output(f"Unloaded tool: {tool_name} from {rel_file_path}")
@@ -977,7 +1027,9 @@ class NavigatorCoder(Coder):
             shutil.move(original_abs_path, destination_path)
             self.io.tool_output(f"File moved to: {destination_rel_path}")
         except Exception as e:
-            raise IOError(f"Failed to move file from {original_rel_path} to {destination_rel_path}: {e}")
+            raise IOError(
+                f"Failed to move file from {original_rel_path} to {destination_rel_path}: {e}"
+            )
 
         # 3. Load the tool from the new path
         self.tool_add_from_path(str(destination_path))
@@ -1008,77 +1060,67 @@ class NavigatorCoder(Coder):
                     parsed_args_list.append({})  # For tool calls with no arguments
 
                 all_results_content = []
-                norm_tool_name = tool_name.lower()
+                tasks = []
+
+                tool_functions = {
+                    "viewfilesatglob": execute_view_files_at_glob,
+                    "viewfilesmatching": execute_view_files_matching,
+                    "ls": execute_ls,
+                    "view": execute_view,
+                    "remove": _execute_remove,
+                    "makeeditable": _execute_make_editable,
+                    "makereadonly": _execute_make_readonly,
+                    "viewfileswithsymbol": _execute_view_files_with_symbol,
+                    "command": _execute_command,
+                    "commandinteractive": _execute_command_interactive,
+                    "grep": _execute_grep,
+                    "replacetext": _execute_replace_text,
+                    "replaceall": _execute_replace_all,
+                    "insertblock": _execute_insert_block,
+                    "deleteblock": _execute_delete_block,
+                    "replaceline": _execute_replace_line,
+                    "replacelines": _execute_replace_lines,
+                    "indentlines": _execute_indent_lines,
+                    "deleteline": _execute_delete_line,
+                    "deletelines": _execute_delete_lines,
+                    "undochange": _execute_undo_change,
+                    "listchanges": _execute_list_changes,
+                    "extractlines": _execute_extract_lines,
+                    "shownumberedcontext": execute_show_numbered_context,
+                    "updatetodolist": _execute_update_todo_list,
+                    "git_diff": _execute_git_diff,
+                    "git_log": _execute_git_log,
+                    "git_show": _execute_git_show,
+                    "git_status": _execute_git_status,
+                }
 
                 for params in parsed_args_list:
-                    single_result = ""
-                    # Dispatch to the correct tool execution function
-                    if norm_tool_name == "viewfilesatglob":
-                        single_result = execute_view_files_at_glob(self, **params)
-                    elif norm_tool_name == "viewfilesmatching":
-                        single_result = execute_view_files_matching(self, **params)
-                    elif norm_tool_name == "ls":
-                        single_result = execute_ls(self, **params)
-                    elif norm_tool_name == "view":
-                        single_result = execute_view(self, **params)
-                    elif norm_tool_name == "remove":
-                        single_result = _execute_remove(self, **params)
-                    elif norm_tool_name == "makeeditable":
-                        single_result = _execute_make_editable(self, **params)
-                    elif norm_tool_name == "makereadonly":
-                        single_result = _execute_make_readonly(self, **params)
-                    elif norm_tool_name == "viewfileswithsymbol":
-                        single_result = _execute_view_files_with_symbol(self, **params)
-                    elif norm_tool_name == "command":
-                        single_result = _execute_command(self, **params)
-                    elif norm_tool_name == "commandinteractive":
-                        single_result = _execute_command_interactive(self, **params)
-                    elif norm_tool_name == "grep":
-                        single_result = _execute_grep(self, **params)
-                    elif norm_tool_name == "createtool":
-                        tool_instance = CreateTool(self)
-                        single_result = tool_instance.run(**params)
-                    elif norm_tool_name == "replacetext":
-                        single_result = _execute_replace_text(self, **params)
-                    elif norm_tool_name == "replaceall":
-                        single_result = _execute_replace_all(self, **params)
-                    elif norm_tool_name == "insertblock":
-                        single_result = _execute_insert_block(self, **params)
-                    elif norm_tool_name == "deleteblock":
-                        single_result = _execute_delete_block(self, **params)
-                    elif norm_tool_name == "replaceline":
-                        single_result = _execute_replace_line(self, **params)
-                    elif norm_tool_name == "replacelines":
-                        single_result = _execute_replace_lines(self, **params)
-                    elif norm_tool_name == "indentlines":
-                        single_result = _execute_indent_lines(self, **params)
-                    elif norm_tool_name == "deleteline":
-                        single_result = _execute_delete_line(self, **params)
-                    elif norm_tool_name == "deletelines":
-                        single_result = _execute_delete_lines(self, **params)
-                    elif norm_tool_name == "undochange":
-                        single_result = _execute_undo_change(self, **params)
-                    elif norm_tool_name == "listchanges":
-                        single_result = _execute_list_changes(self, **params)
-                    elif norm_tool_name == "extractlines":
-                        single_result = _execute_extract_lines(self, **params)
-                    elif norm_tool_name == "shownumberedcontext":
-                        single_result = execute_show_numbered_context(self, **params)
-                    else:
-                        if hasattr(self, "local_tool_instances") and tool_name in self.local_tool_instances:
-                            tool_instance = self.local_tool_instances[tool_name]
-                            try:
-                                single_result = tool_instance.run(**params)
-                            except Exception as e:
-                                single_result = f"Error executing custom tool {tool_name}: {e}"
-                                self.io.tool_error(
-                                    "Error during custom tool"
-                                    f" {tool_name} execution: {e}\n{traceback.format_exc()}"
-                                )
-                        else:
-                            single_result = f"Error: Unknown local tool name '{tool_name}'"
+                    norm_tool_name = tool_name.lower()
 
-                    all_results_content.append(str(single_result))
+                    if norm_tool_name == "createtool":
+                        tool_instance = CreateTool(self)
+                        tasks.append(asyncio.to_thread(tool_instance.run, **params))
+                        continue
+
+                    func = tool_functions.get(norm_tool_name)
+
+                    if func:
+                        if asyncio.iscoroutinefunction(func):
+                            tasks.append(func(self, **params))
+                        else:
+                            tasks.append(asyncio.to_thread(func, self, **params))
+                    elif (
+                        hasattr(self, "local_tool_instances")
+                        and tool_name in self.local_tool_instances
+                    ):
+                        tool_instance = self.local_tool_instances[tool_name]
+                        tasks.append(tool_instance.run(**params))
+                    else:
+                        all_results_content.append(f"Error: Unknown local tool name '{tool_name}'")
+
+                if tasks:
+                    task_results = await asyncio.gather(*tasks)
+                    all_results_content.extend(str(res) for res in task_results)
 
                 result_message = "\n\n".join(all_results_content)
 
@@ -1098,57 +1140,51 @@ class NavigatorCoder(Coder):
             )
         return tool_responses
 
-    def _execute_mcp_tool(self, server, tool_name, params):
+    async def _execute_mcp_tool(self, server, tool_name, params):
         """Helper to execute a single MCP tool call, created from legacy format."""
+        # Construct a ToolCall object-like structure to be compatible with mcp_client
+        function_dict = {"name": tool_name, "arguments": json.dumps(params)}
+        tool_call_dict = {
+            "id": f"mcp-tool-call-{time.time()}",
+            "function": function_dict,
+            "type": "function",
+        }
+        try:
+            session = await server.connect()
+            call_result = await experimental_mcp_client.call_openai_tool(
+                session=session,
+                openai_tool=tool_call_dict,
+            )
 
-        # This is a simplified, synchronous wrapper around async logic
-        # It's duplicating logic from BaseCoder for legacy tool support.
-        async def _exec_async():
-            # Construct a ToolCall object-like structure to be compatible with mcp_client
-            function_dict = {"name": tool_name, "arguments": json.dumps(params)}
-            tool_call_dict = {
-                "id": f"mcp-tool-call-{time.time()}",
-                "function": function_dict,
-                "type": "function",
-            }
-            try:
-                session = await server.connect()
-                call_result = await experimental_mcp_client.call_openai_tool(
-                    session=session,
-                    openai_tool=tool_call_dict,
-                )
+            content_parts = []
+            if call_result.content:
+                for item in call_result.content:
+                    if hasattr(item, "resource"):  # EmbeddedResource
+                        resource = item.resource
+                        if hasattr(resource, "text"):  # TextResourceContents
+                            content_parts.append(resource.text)
+                        elif hasattr(resource, "blob"):  # BlobResourceContents
+                            try:
+                                decoded_blob = base64.b64decode(resource.blob).decode("utf-8")
+                                content_parts.append(decoded_blob)
+                            except (UnicodeDecodeError, TypeError):
+                                name = getattr(resource, "name", "unnamed")
+                                mime_type = getattr(resource, "mimeType", "unknown mime type")
+                                content_parts.append(
+                                    f"[embedded binary resource: {name} ({mime_type})]"
+                                )
+                    elif hasattr(item, "text"):  # TextContent
+                        content_parts.append(item.text)
 
-                content_parts = []
-                if call_result.content:
-                    for item in call_result.content:
-                        if hasattr(item, "resource"):  # EmbeddedResource
-                            resource = item.resource
-                            if hasattr(resource, "text"):  # TextResourceContents
-                                content_parts.append(resource.text)
-                            elif hasattr(resource, "blob"):  # BlobResourceContents
-                                try:
-                                    decoded_blob = base64.b64decode(resource.blob).decode("utf-8")
-                                    content_parts.append(decoded_blob)
-                                except (UnicodeDecodeError, TypeError):
-                                    name = getattr(resource, "name", "unnamed")
-                                    mime_type = getattr(resource, "mimeType", "unknown mime type")
-                                    content_parts.append(
-                                        f"[embedded binary resource: {name} ({mime_type})]"
-                                    )
-                        elif hasattr(item, "text"):  # TextContent
-                            content_parts.append(item.text)
+            return "".join(content_parts)
 
-                return "".join(content_parts)
-
-            except Exception as e:
-                self.io.tool_warning(
-                    f"Executing {tool_name} on {server.name} failed: \n  Error: {e}\n"
-                )
-                return f"Error executing tool call {tool_name}: {e}"
-            finally:
-                await server.disconnect()
-
-        return asyncio.run(_exec_async())
+        except Exception as e:
+            self.io.tool_warning(
+                f"Executing {tool_name} on {server.name} failed: \n  Error: {e}\n"
+            )
+            return f"Error executing tool call {tool_name}: {e}"
+        finally:
+            await server.disconnect()
 
     def _calculate_context_block_tokens(self, force=False):
         """
@@ -1218,6 +1254,8 @@ class NavigatorCoder(Coder):
             content = self.get_context_symbol_outline()
         elif block_name == "context_summary":
             content = self.get_context_summary()
+        elif block_name == "todo_list":
+            content = self.get_todo_list()
 
         # Cache the result if it's not None
         if content is not None:
@@ -1362,6 +1400,7 @@ class NavigatorCoder(Coder):
         dir_structure = self.get_cached_context_block("directory_structure")
         git_status = self.get_cached_context_block("git_status")
         symbol_outline = self.get_cached_context_block("symbol_outline")
+        todo_list = self.get_cached_context_block("todo_list")
 
         # Context summary needs special handling because it depends on other blocks
         context_summary = self.get_context_summary()
@@ -1382,12 +1421,22 @@ class NavigatorCoder(Coder):
         # 2. Add dynamic blocks AFTER chat_files
         # These blocks change with the current files in context
         dynamic_blocks = []
+        if todo_list:
+            dynamic_blocks.append(todo_list)
         if context_summary:
             dynamic_blocks.append(context_summary)
         if symbol_outline:
             dynamic_blocks.append(symbol_outline)
         if git_status:
             dynamic_blocks.append(git_status)
+
+        # Add tool usage context if there are repetitive tools
+        if hasattr(self, "tool_usage_history") and self.tool_usage_history:
+            repetitive_tools = self._get_repetitive_tools()
+            if repetitive_tools:
+                tool_context = self._generate_tool_context(repetitive_tools)
+                if tool_context:
+                    dynamic_blocks.append(tool_context)
 
         if dynamic_blocks:
             dynamic_message = "\n\n".join(dynamic_blocks)
@@ -1522,7 +1571,10 @@ class NavigatorCoder(Coder):
             return None
 
         # If context_summary is already in the cache, return it
-        if hasattr(self, "context_blocks_cache") and "context_summary" in self.context_blocks_cache:
+        if (
+            hasattr(self, "context_blocks_cache")
+            and "context_summary" in self.context_blocks_cache
+        ):
             return self.context_blocks_cache["context_summary"]
 
         try:
@@ -1673,7 +1725,21 @@ class NavigatorCoder(Coder):
             self.io.tool_error(f"Error generating environment info: {str(e)}")
             return None
 
-    def reply_completed(self):
+    async def process_tool_calls(self, tool_call_response):
+        """
+        Track tool usage before calling the base implementation.
+        """
+
+        if self.partial_response_tool_calls:
+            for tool_call in self.partial_response_tool_calls:
+                self.tool_usage_history.append(tool_call.get("function", {}).get("name"))
+
+        if len(self.tool_usage_history) > self.tool_usage_retries:
+            self.tool_usage_history.pop(0)
+
+        return await super().process_tool_calls(tool_call_response)
+
+    async def reply_completed(self):
         """Process the completed response from the LLM.
 
         This is a key method that:
@@ -1699,7 +1765,7 @@ class NavigatorCoder(Coder):
             has_replace = ">>>>>>> REPLACE" in content
             if has_search and has_divider and has_replace:
                 self.io.tool_output("Detected edit blocks, applying changes...")
-                edited_files = self._apply_edits_from_response()
+                edited_files = await self._apply_edits_from_response()
                 if self.reflected_message:
                     return False  # Trigger reflection if edits failed
 
@@ -1715,14 +1781,20 @@ class NavigatorCoder(Coder):
         # Legacy tool call processing for use_granular_editing=False
         content = self.partial_response_content
         if not content or not content.strip():
+            if len(self.tool_usage_history) > self.tool_usage_retries:
+                self.tool_usage_history = []
             return True
         original_content = content  # Keep the original response
 
         # Process tool commands: returns content with tool calls removed, results, flag if any tool calls were found,
         # and the content before the last '---' line
-        processed_content, result_messages, tool_calls_found, content_before_last_separator = (
-            self._process_tool_commands(content)
-        )
+        (
+            processed_content,
+            result_messages,
+            tool_calls_found,
+            content_before_last_separator,
+            tool_names_this_turn,
+        ) = await self._process_tool_commands(content)
 
         # Since we are no longer suppressing, the partial_response_content IS the final content.
         # We might want to update it to the processed_content (without tool calls) if we don't
@@ -1750,7 +1822,7 @@ class NavigatorCoder(Coder):
 
         if edit_match:
             self.io.tool_output("Detected edit blocks, applying changes within Navigator...")
-            edited_files = self._apply_edits_from_response()
+            edited_files = await self._apply_edits_from_response()
             # If _apply_edits_from_response set a reflected_message (due to errors),
             # return False to trigger a reflection loop.
             if self.reflected_message:
@@ -1858,7 +1930,7 @@ class NavigatorCoder(Coder):
             if rel_file_path in self.aider_edited_files:
                 # The AI has just edited the tool file that previously failed to load.
                 # Prompt the user to reload it.
-                self.tool_file_to_reload_after_fix = None # Reset to prevent re-prompting
+                self.tool_file_to_reload_after_fix = None  # Reset to prevent re-prompting
                 abs_file_path = self.abs_root_path(rel_file_path)
 
                 if self.io.confirm_ask(
@@ -1872,7 +1944,7 @@ class NavigatorCoder(Coder):
 
         super().post_edit_actions()
 
-    def _process_tool_commands(self, content):
+    async def _process_tool_commands(self, content):
         """
         Process tool commands in the `[tool_call(name, param=value)]` format within the content.
 
@@ -1889,6 +1961,7 @@ class NavigatorCoder(Coder):
         tool_calls_found = False
         call_count = 0
         max_calls = self.max_tool_calls
+        tool_names = []
 
         # Check if there's a '---' separator and only process tool calls after the LAST one
         separator_marker = "---"
@@ -1897,7 +1970,7 @@ class NavigatorCoder(Coder):
         # If there's no separator, treat the entire content as before the separator
         if len(content_parts) == 1:
             # Return the original content with no tool calls processed, and the content itself as before_separator
-            return content, result_messages, False, content
+            return content, result_messages, False, content, tool_names
 
         # Take everything before the last separator (including intermediate separators)
         content_before_separator = separator_marker.join(content_parts[:-1])
@@ -1910,7 +1983,7 @@ class NavigatorCoder(Coder):
 
         # Support any [tool_...(...)] format
         tool_call_pattern = re.compile(r"\[tool_.*?\(", re.DOTALL)
-        end_marker = "]" # The parenthesis balancing finds the ')', we just need the final ']'
+        end_marker = "]"  # The parenthesis balancing finds the ')', we just need the final ']'
 
         while True:
             match = tool_call_pattern.search(content_after_separator, last_index)
@@ -1972,14 +2045,14 @@ class NavigatorCoder(Coder):
             expected_end_marker_start = end_paren_pos + 1
             actual_end_marker_start = -1
             end_marker_found = False
-            if end_paren_pos != -1: # Only search if we found a closing parenthesis
+            if end_paren_pos != -1:  # Only search if we found a closing parenthesis
                 for j in range(expected_end_marker_start, len(content_after_separator)):
                     if not content_after_separator[j].isspace():
                         actual_end_marker_start = j
                         # Check if the found character is the end marker ']'
                         if content_after_separator[actual_end_marker_start] == end_marker:
                             end_marker_found = True
-                        break # Stop searching after first non-whitespace char
+                        break  # Stop searching after first non-whitespace char
 
             if not end_marker_found:
                 # Try to extract the tool name for better error message
@@ -1988,7 +2061,7 @@ class NavigatorCoder(Coder):
                     # Look for the first comma after the tool call start
                     partial_content = content_after_separator[
                         scan_start_pos : scan_start_pos + 100
-                    ] # Limit to avoid huge strings
+                    ]  # Limit to avoid huge strings
                     comma_pos = partial_content.find(",")
                     if comma_pos > 0:
                         tool_name = partial_content[:comma_pos].strip()
@@ -2001,26 +2074,27 @@ class NavigatorCoder(Coder):
                         elif paren_pos > 0:
                             tool_name = partial_content[:paren_pos].strip()
                 except Exception:
-                    pass # Silently fail if we can't extract the name
+                    pass  # Silently fail if we can't extract the name
 
                 # Malformed call: couldn't find matching ')' or the subsequent ']'
                 self.io.tool_warning(
                     f"Malformed tool call for '{tool_name}'. Missing closing parenthesis or"
                     " bracket. Skipping."
-
                 )
                 # Append the start marker itself to processed_content so it's not lost
                 processed_content += start_marker
-                last_index = scan_start_pos # Continue searching after the marker
+                last_index = scan_start_pos  # Continue searching after the marker
                 continue
 
             # Found a potential tool call
             # Adjust full_match_str and last_index based on the actual end marker ']' position
             full_match_str = content_after_separator[
                 start_pos : actual_end_marker_start + 1
-            ] # End marker ']' is 1 char
+            ]  # End marker ']' is 1 char
             inner_content = content_after_separator[scan_start_pos:end_paren_pos].strip()
-            last_index = actual_end_marker_start + 1 # Move past the processed call (including ']')
+            last_index = (
+                actual_end_marker_start + 1
+            )  # Move past the processed call (including ']')
 
             call_count += 1
             if call_count > max_calls:
@@ -2028,7 +2102,7 @@ class NavigatorCoder(Coder):
                     f"Exceeded maximum tool calls ({max_calls}). Skipping remaining calls."
                 )
                 # Don't append the skipped call to processed_content
-                continue # Skip processing this call
+                continue  # Skip processing this call
 
             tool_calls_found = True
             tool_name = None
@@ -2047,7 +2121,9 @@ class NavigatorCoder(Coder):
 
                     is_string = (
                         potential_tool_name.startswith("'") and potential_tool_name.endswith("'")
-                    ) or (potential_tool_name.startswith('"') and potential_tool_name.endswith('"'))
+                    ) or (
+                        potential_tool_name.startswith('"') and potential_tool_name.endswith('"')
+                    )
 
                     if not potential_tool_name.isidentifier() and not is_string:
                         # It's not a valid identifier and not a string, so quote it.
@@ -2088,6 +2164,8 @@ class NavigatorCoder(Coder):
                 else:
                     raise ValueError("Tool name must be an identifier or a string literal")
 
+                tool_names.append(tool_name)
+
                 # Extract keyword arguments
                 for keyword in call_node.keywords:
                     key = keyword.arg
@@ -2104,7 +2182,7 @@ class NavigatorCoder(Coder):
                                 if hasattr(value_node, "end_lineno")
                                 else lineno
                             )
-                            if end_lineno > lineno: # It's a multiline string
+                            if end_lineno > lineno:  # It's a multiline string
                                 # Trim exactly one leading and one trailing newline if present
                                 if value.startswith("\n"):
                                     value = value[1:]
@@ -2112,7 +2190,7 @@ class NavigatorCoder(Coder):
                                     value = value[:-1]
                     elif isinstance(
                         value_node, ast.Name
-                    ): # Handle unquoted values like True/False/None or variables
+                    ):  # Handle unquoted values like True/False/None or variables
                         id_val = value_node.id.lower()
                         if id_val == "true":
                             value = True
@@ -2121,7 +2199,7 @@ class NavigatorCoder(Coder):
                         elif id_val == "none":
                             value = None
                         else:
-                            value = value_node.id # Keep as string if it's something else
+                            value = value_node.id  # Keep as string if it's something else
                     # Add more types if needed (e.g., ast.List, ast.Dict)
                     else:
                         # Attempt to reconstruct the source for complex types, or raise error
@@ -2129,7 +2207,7 @@ class NavigatorCoder(Coder):
                             # Note: ast.unparse requires Python 3.9+
                             # If using older Python, might need a different approach or limit supported types
                             value = ast.unparse(value_node)
-                        except AttributeError: # Handle case where ast.unparse is not available
+                        except AttributeError:  # Handle case where ast.unparse is not available
                             raise ValueError(
                                 f"Unsupported argument type for key '{key}': {type(value_node)}"
                             )
@@ -2154,8 +2232,8 @@ class NavigatorCoder(Coder):
                 self.io.tool_error(f"Failed to parse tool call: {full_match_str}\nError: {e}")
                 # Don't append the malformed call to processed_content
                 result_messages.append(f"[Result (Parse Error): {result_message}]")
-                continue # Skip execution
-            except Exception as e: # Catch any other unexpected parsing errors
+                continue  # Skip execution
+            except Exception as e:  # Catch any other unexpected parsing errors
                 result_message = f"Unexpected error parsing tool call '{inner_content}': {e}"
                 self.io.tool_error(
                     f"Unexpected error during parsing: {full_match_str}\nError:"
@@ -2170,410 +2248,120 @@ class NavigatorCoder(Coder):
                 norm_tool_name = tool_name.lower()
 
                 if norm_tool_name == "viewfilesatglob":
-                    pattern = params.get("pattern")
-                    if pattern is not None:
-                        # Call the imported function
-                        result_message = execute_view_files_at_glob(self, pattern)
-                    else:
-                        result_message = "Error: Missing 'pattern' parameter for ViewFilesAtGlob"
+                    result_message = await asyncio.to_thread(
+                        execute_view_files_at_glob, self, **params
+                    )
                 elif norm_tool_name == "viewfilesmatching":
-                    pattern = params.get("pattern")
-                    file_pattern = params.get("file_pattern") # Optional
-                    regex = params.get("regex", False) # Default to False if not provided
-                    if pattern is not None:
-                        result_message = execute_view_files_matching(
-                            self, pattern, file_pattern, regex
-                        )
-                    else:
-                        result_message = "Error: Missing 'pattern' parameter for ViewFilesMatching"
+                    result_message = await asyncio.to_thread(
+                        execute_view_files_matching, self, **params
+                    )
                 elif norm_tool_name == "ls":
-                    directory = params.get("directory")
-                    if directory is not None:
-                        result_message = execute_ls(self, directory)
-                    else:
-                        result_message = "Error: Missing 'directory' parameter for Ls"
+                    result_message = await asyncio.to_thread(execute_ls, self, **params)
                 elif norm_tool_name == "view":
-                    file_path = params.get("file_path")
-                    if file_path is not None:
-                        result_message = execute_view(self, file_path)
-                    else:
-                        result_message = "Error: Missing 'file_path' parameter for View"
+                    result_message = await asyncio.to_thread(execute_view, self, **params)
                 elif norm_tool_name == "remove":
-                    file_path = params.get("file_path")
-                    if file_path is not None:
-                        result_message = _execute_remove(self, file_path)
-                    else:
-                        result_message = "Error: Missing 'file_path' parameter for Remove"
+                    result_message = await asyncio.to_thread(_execute_remove, self, **params)
                 elif norm_tool_name == "makeeditable":
-                    file_path = params.get("file_path")
-                    if file_path is not None:
-                        result_message = _execute_make_editable(self, file_path)
-                    else:
-                        result_message = "Error: Missing 'file_path' parameter for MakeEditable"
+                    result_message = await asyncio.to_thread(
+                        _execute_make_editable, self, **params
+                    )
                 elif norm_tool_name == "makereadonly":
-                    file_path = params.get("file_path")
-                    if file_path is not None:
-                        result_message = _execute_make_readonly(self, file_path)
-                    else:
-                        result_message = "Error: Missing 'file_path' parameter for MakeReadonly"
+                    result_message = await asyncio.to_thread(
+                        _execute_make_readonly, self, **params
+                    )
                 elif norm_tool_name == "viewfileswithsymbol":
-                    symbol = params.get("symbol")
-                    if symbol is not None:
-                        # Call the imported function from the tools directory
-                        result_message = _execute_view_files_with_symbol(self, symbol)
-                    else:
-                        result_message = "Error: Missing 'symbol' parameter for ViewFilesWithSymbol"
-
-                # Command tools
+                    result_message = await asyncio.to_thread(
+                        _execute_view_files_with_symbol, self, **params
+                    )
                 elif norm_tool_name == "command":
-                    command_string = params.get("command_string")
-                    if command_string is not None:
-                        result_message = _execute_command(self, command_string)
-                    else:
-                        result_message = "Error: Missing 'command_string' parameter for Command"
+                    result_message = await _execute_command(self, **params)
                 elif norm_tool_name == "commandinteractive":
-                    command_string = params.get("command_string")
-                    if command_string is not None:
-                        result_message = _execute_command_interactive(self, command_string)
-                    else:
-                        result_message = (
-                            "Error: Missing 'command_string' parameter for CommandInteractive"
-                        )
-
-                # Grep tool
+                    result_message = await _execute_command_interactive(self, **params)
                 elif norm_tool_name == "grep":
-                    pattern = params.get("pattern")
-                    file_pattern = params.get("file_pattern", "*") # Default to all files
-                    directory = params.get("directory", ".") # Default to current directory
-                    use_regex = params.get("use_regex", False) # Default to literal search
-                    case_insensitive = params.get(
-                        "case_insensitive", False
-                    ) # Default to case-sensitive
-                    context_before = params.get("context_before", 5)
-                    context_after = params.get("context_after", 5)
-
-                    if pattern is not None:
-                        # Import the function if not already imported (it should be)
-                        from aider.tools.grep import _execute_grep
-
-                        result_message = _execute_grep(
-                            self,
-                            pattern,
-                            file_pattern,
-                            directory,
-                            use_regex,
-                            case_insensitive,
-                            context_before,
-                            context_after,
-                        )
-                    else:
-                        result_message = "Error: Missing required 'pattern' parameter for Grep"
-
+                    result_message = await asyncio.to_thread(_execute_grep, self, **params)
                 elif norm_tool_name == "createtool":
                     tool_instance = CreateTool(self)
-                    single_result = tool_instance.run(**params)
-                    result_message = single_result
-
-                # Granular editing tools
+                    result_message = await asyncio.to_thread(tool_instance.run, **params)
                 elif norm_tool_name == "replacetext":
-                    file_path = params.get("file_path")
-                    find_text = params.get("find_text")
-                    replace_text = params.get("replace_text")
-                    near_context = params.get("near_context")
-                    occurrence = params.get("occurrence", 1) # Default to first occurrence
-                    change_id = params.get("change_id")
-                    dry_run = params.get("dry_run", False) # Default to False
-
-                    if file_path is not None and find_text is not None and replace_text is not None:
-                        result_message = _execute_replace_text(
-                            self,
-                            file_path,
-                            find_text,
-                            replace_text,
-                            near_context,
-                            occurrence,
-                            change_id,
-                            dry_run,
-                        )
-                    else:
-                        result_message = (
-                            "Error: Missing required parameters for ReplaceText (file_path,"
-                            " find_text, replace_text)"
-                        )
-
+                    result_message = await asyncio.to_thread(
+                        _execute_replace_text, self, **params
+                    )
                 elif norm_tool_name == "replaceall":
-                    file_path = params.get("file_path")
-                    find_text = params.get("find_text")
-                    replace_text = params.get("replace_text")
-                    change_id = params.get("change_id")
-                    dry_run = params.get("dry_run", False) # Default to False
-
-                    if file_path is not None and find_text is not None and replace_text is not None:
-                        result_message = _execute_replace_all(
-                            self, file_path, find_text, replace_text, change_id, dry_run
-                        )
-                    else:
-                        result_message = (
-                            "Error: Missing required parameters for ReplaceAll (file_path,"
-                            " find_text, replace_text)"
-                        )
-
+                    result_message = await asyncio.to_thread(
+                        _execute_replace_all, self, **params
+                    )
                 elif norm_tool_name == "insertblock":
-                    file_path = params.get("file_path")
-                    content = params.get("content")
-                    after_pattern = params.get("after_pattern")
-                    before_pattern = params.get("before_pattern")
-                    occurrence = params.get("occurrence", 1) # Default 1
-                    change_id = params.get("change_id")
-                    dry_run = params.get("dry_run", False) # Default False
-                    position = params.get("position")
-                    auto_indent = params.get("auto_indent", True) # Default True
-                    use_regex = params.get("use_regex", False) # Default False
-
-                    if (
-                        file_path is not None
-                        and content is not None
-                        and (
-                            after_pattern is not None
-                            or before_pattern is not None
-                            or position is not None
-                        )
-                    ):
-                        result_message = _execute_insert_block(
-                            self,
-                            file_path,
-                            content,
-                            after_pattern,
-                            before_pattern,
-                            occurrence,
-                            change_id,
-                            dry_run,
-                            position,
-                            auto_indent,
-                            use_regex,
-                        )
-                    else:
-                        result_message = (
-                            "Error: Missing required parameters for InsertBlock (file_path,"
-                            " content, and either after_pattern or before_pattern)"
-                        )
-
+                    result_message = await asyncio.to_thread(
+                        _execute_insert_block, self, **params
+                    )
                 elif norm_tool_name == "deleteblock":
-                    file_path = params.get("file_path")
-                    start_pattern = params.get("start_pattern")
-                    end_pattern = params.get("end_pattern")
-                    line_count = params.get("line_count")
-                    near_context = params.get("near_context") # New
-                    occurrence = params.get("occurrence", 1) # New, default 1
-                    change_id = params.get("change_id")
-                    dry_run = params.get("dry_run", False) # New, default False
-
-                    if file_path is not None and start_pattern is not None:
-                        result_message = _execute_delete_block(
-                            self,
-                            file_path,
-                            start_pattern,
-                            end_pattern,
-                            line_count,
-                            near_context,
-                            occurrence,
-                            change_id,
-                            dry_run,
-                        )
-                    else:
-                        result_message = (
-                            "Error: Missing required parameters for DeleteBlock (file_path,"
-                            " start_pattern)"
-                        )
-
+                    result_message = await asyncio.to_thread(
+                        _execute_delete_block, self, **params
+                    )
                 elif norm_tool_name == "replaceline":
-                    file_path = params.get("file_path")
-                    line_number = params.get("line_number")
-                    new_content = params.get("new_content")
-                    change_id = params.get("change_id")
-                    dry_run = params.get("dry_run", False) # New, default False
-
-                    if (
-                        file_path is not None
-                        and line_number is not None
-                        and new_content is not None
-                    ):
-                        result_message = _execute_replace_line(
-                            self, file_path, line_number, new_content, change_id, dry_run
-                        )
-                    else:
-                        result_message = (
-                            "Error: Missing required parameters for ReplaceLine (file_path,"
-                            " line_number, new_content)"
-                        )
-
+                    result_message = await asyncio.to_thread(
+                        _execute_replace_line, self, **params
+                    )
                 elif norm_tool_name == "replacelines":
-                    file_path = params.get("file_path")
-                    start_line = params.get("start_line")
-                    end_line = params.get("end_line")
-                    new_content = params.get("new_content")
-                    change_id = params.get("change_id")
-                    dry_run = params.get("dry_run", False) # New, default False
-
-                    if (
-                        file_path is not None
-                        and start_line is not None
-                        and end_line is not None
-                        and new_content is not None
-                    ):
-                        result_message = _execute_replace_lines(
-                            self, file_path, start_line, end_line, new_content, change_id, dry_run
-                        )
-                    else:
-                        result_message = (
-                            "Error: Missing required parameters for ReplaceLines (file_path,"
-                            " start_line, end_line, new_content)"
-                        )
-
+                    result_message = await asyncio.to_thread(
+                        _execute_replace_lines, self, **params
+                    )
                 elif norm_tool_name == "indentlines":
-                    file_path = params.get("file_path")
-                    start_pattern = params.get("start_pattern")
-                    end_pattern = params.get("end_pattern")
-                    line_count = params.get("line_count")
-                    indent_levels = params.get("indent_levels", 1) # Default to indent 1 level
-                    near_context = params.get("near_context") # New
-                    occurrence = params.get("occurrence", 1) # New, default 1
-                    change_id = params.get("change_id")
-                    dry_run = params.get("dry_run", False) # New, default False
-
-                    if file_path is not None and start_pattern is not None:
-                        result_message = _execute_indent_lines(
-                            self,
-                            file_path,
-                            start_pattern,
-                            end_pattern,
-                            line_count,
-                            indent_levels,
-                            near_context,
-                            occurrence,
-                            change_id,
-                            dry_run,
-                        )
-                    else:
-                        result_message = (
-                            "Error: Missing required parameters for IndentLines (file_path,"
-                            " start_pattern)"
-                        )
-
+                    result_message = await asyncio.to_thread(
+                        _execute_indent_lines, self, **params
+                    )
                 elif norm_tool_name == "deleteline":
-                    file_path = params.get("file_path")
-                    line_number = params.get("line_number")
-                    change_id = params.get("change_id")
-                    dry_run = params.get("dry_run", False)
-
-                    if file_path is not None and line_number is not None:
-                        result_message = _execute_delete_line(
-                            self, file_path, line_number, change_id, dry_run
-                        )
-                    else:
-                        result_message = (
-                            "Error: Missing required parameters for DeleteLine (file_path,"
-                            " line_number)"
-                        )
-
+                    result_message = await asyncio.to_thread(
+                        _execute_delete_line, self, **params
+                    )
                 elif norm_tool_name == "deletelines":
-                    file_path = params.get("file_path")
-                    start_line = params.get("start_line")
-                    end_line = params.get("end_line")
-                    change_id = params.get("change_id")
-                    dry_run = params.get("dry_run", False)
-
-                    if file_path is not None and start_line is not None and end_line is not None:
-                        # Import the function if not already imported (it should be)
-                        from aider.tools.delete_lines import _execute_delete_lines
-                        result_message = _execute_delete_lines(
-                            self, file_path, start_line, end_line, change_id, dry_run
-                        )
-                    else:
-                        result_message = (
-                            "Error: Missing required parameters for DeleteLines (file_path,"
-                            " start_line, end_line)"
-                        )
-
+                    result_message = await asyncio.to_thread(
+                        _execute_delete_lines, self, **params
+                    )
                 elif norm_tool_name == "undochange":
-                    change_id = params.get("change_id")
-                    file_path = params.get("file_path")
-
-                    result_message = _execute_undo_change(self, change_id, file_path)
-
+                    result_message = await asyncio.to_thread(_execute_undo_change, self, **params)
                 elif norm_tool_name == "listchanges":
-                    file_path = params.get("file_path")
-                    limit = params.get("limit", 10)
-
-                    result_message = _execute_list_changes(self, file_path, limit)
-
+                    result_message = await asyncio.to_thread(
+                        _execute_list_changes, self, **params
+                    )
                 elif norm_tool_name == "extractlines":
-                    source_file_path = params.get("source_file_path")
-                    target_file_path = params.get("target_file_path")
-                    start_pattern = params.get("start_pattern")
-                    end_pattern = params.get("end_pattern")
-                    line_count = params.get("line_count")
-                    near_context = params.get("near_context")
-                    occurrence = params.get("occurrence", 1)
-                    dry_run = params.get("dry_run", False)
-
-                    if source_file_path and target_file_path and start_pattern:
-                        result_message = _execute_extract_lines(
-                            self,
-                            source_file_path,
-                            target_file_path,
-                            start_pattern,
-                            end_pattern,
-                            line_count,
-                            near_context,
-                            occurrence,
-                            dry_run,
-                        )
-                    else:
-                        result_message = (
-                            "Error: Missing required parameters for ExtractLines (source_file_path,"
-                            " target_file_path, start_pattern)"
-                        )
-
+                    result_message = await asyncio.to_thread(
+                        _execute_extract_lines, self, **params
+                    )
                 elif norm_tool_name == "shownumberedcontext":
-                    file_path = params.get("file_path")
-                    pattern = params.get("pattern")
-                    line_number = params.get("line_number")
-                    context_lines = params.get("context_lines", 3) # Default context
-
-                    if file_path is not None and (pattern is not None or line_number is not None):
-                        result_message = execute_show_numbered_context(
-                            self, file_path, pattern, line_number, context_lines
-                        )
-                    else:
-                        result_message = (
-                            "Error: Missing required parameters for ViewNumberedContext (file_path"
-                            " and either pattern or line_number)"
-                        )
-
-                elif hasattr(self, "local_tool_instances") and tool_name in self.local_tool_instances:
+                    result_message = await asyncio.to_thread(
+                        execute_show_numbered_context, self, **params
+                    )
+                elif norm_tool_name == "updatetodolist":
+                    result_message = await asyncio.to_thread(
+                        _execute_update_todo_list, self, **params
+                    )
+                elif (
+                    hasattr(self, "local_tool_instances")
+                    and tool_name in self.local_tool_instances
+                ):
                     tool_instance = self.local_tool_instances[tool_name]
                     try:
-                        result_message = tool_instance.run(**params)
+                        result_message = await tool_instance.run(**params)
                     except Exception as e:
                         result_message = f"Error executing custom tool {tool_name}: {e}"
                         self.io.tool_error(
                             "Error during custom tool"
                             f" {tool_name} execution: {e}\n{traceback.format_exc()}"
                         )
-
                 else:
                     result_message = f"Error: Unknown tool name '{tool_name}'"
                     if self.mcp_tools:
                         for server_name, server_tools in self.mcp_tools:
                             if any(
-                                t.get("function", {}).get("name") == tool_name for t in server_tools
+                                t.get("function", {}).get("name") == tool_name
+                                for t in server_tools
                             ):
                                 server = next(
                                     (s for s in self.mcp_servers if s.name == server_name), None
                                 )
                                 if server:
-                                    result_message = self._execute_mcp_tool(
+                                    result_message = await self._execute_mcp_tool(
                                         server, tool_name, params
                                     )
                                 else:
@@ -2599,12 +2387,124 @@ class NavigatorCoder(Coder):
         # Return the content with tool calls removed
         modified_content = processed_content
 
-        # Update internal counter
-        self.tool_call_count += call_count
+        return (
+            modified_content,
+            result_messages,
+            tool_calls_found,
+            content_before_separator,
+            tool_names,
+        )
 
-        return modified_content, result_messages, tool_calls_found, content_before_separator
+    def _get_repetitive_tools(self):
+        """
+        Identifies repetitive tool usage patterns from a flat list of tool calls.
 
-    def _apply_edits_from_response(self):
+        This method checks for the following patterns in order:
+        1. If the last tool used was a write tool, it assumes progress and returns no repetitive tools.
+        2. It checks for any read tool that has been used 2 or more times in the history.
+        3. If no tools are repeated, but all tools in the history are read tools,
+           it flags all of them as potentially repetitive.
+
+        It avoids flagging repetition if a "write" tool was used recently,
+        as that suggests progress is being made.
+        """
+        history_len = len(self.tool_usage_history)
+
+        # Not enough history to detect a pattern
+        if history_len < 2:
+            return set()
+
+        # If the last tool was a write tool, we're likely making progress.
+        if isinstance(self.tool_usage_history[-1], str):
+            last_tool_lower = self.tool_usage_history[-1].lower()
+
+            if last_tool_lower in self.write_tools:
+                self.tool_usage_history = []
+                return set()
+
+        # If all tools in history are read tools, return all of them
+        if all(tool.lower() in self.read_tools for tool in self.tool_usage_history):
+            return set(tool for tool in self.tool_usage_history)
+
+        # Check for any read tool used more than once
+        tool_counts = Counter(tool for tool in self.tool_usage_history)
+        repetitive_tools = {
+            tool
+            for tool, count in tool_counts.items()
+            if count >= 2 and tool.lower() in self.read_tools
+        }
+
+        if repetitive_tools:
+            return repetitive_tools
+
+        return set()
+
+    def _generate_tool_context(self, repetitive_tools):
+        """
+        Generate a context message for the LLM about recent tool usage.
+        """
+        if not self.tool_usage_history:
+            return ""
+
+        context_parts = ['<context name="tool_usage_history">']
+
+        # Add turn and tool call statistics
+        context_parts.append("## Turn and Tool Call Statistics")
+        context_parts.append(f"- Current turn: {self.num_reflections + 1}")
+        context_parts.append(f"- Tool calls this turn: {self.tool_call_count}")
+        context_parts.append(f"- Total tool calls in session: {self.num_tool_calls}")
+        context_parts.append("\n\n")
+
+        # Add recent tool usage history
+        context_parts.append("## Recent Tool Usage History")
+        if len(self.tool_usage_history) > 10:
+            recent_history = self.tool_usage_history[-10:]
+            context_parts.append("(Showing last 10 tools)")
+        else:
+            recent_history = self.tool_usage_history
+
+        for i, tool in enumerate(recent_history, 1):
+            context_parts.append(f"{i}. {tool}")
+        context_parts.append("\n\n")
+
+        if repetitive_tools:
+            context_parts.append(
+                "**Instruction:**\nYou have used the following tool(s) repeatedly:"
+            )
+
+            context_parts.append("### DO NOT USE THE FOLLOWING TOOLS/FUNCTIONS")
+
+            for tool in repetitive_tools:
+                context_parts.append(f"- `{tool}`")
+            context_parts.append(
+                "Your exploration appears to be stuck in a loop. Please try a different approach:"
+            )
+            context_parts.append("\n")
+            context_parts.append("**Suggestions for alternative approaches:**")
+            context_parts.append(
+                "- If you've been searching for files, try working with the files already in"
+                " context"
+            )
+            context_parts.append(
+                "- If you've been viewing files, try making actual edits to move forward"
+            )
+            context_parts.append("- Consider using different tools that you haven't used recently")
+            context_parts.append(
+                "- Focus on making concrete progress rather than gathering more information"
+            )
+            context_parts.append(
+                "- Use the files you've already discovered to implement the requested changes"
+            )
+            context_parts.append("\n")
+            context_parts.append(
+                "You most likely have enough context for a subset of the necessary changes."
+            )
+            context_parts.append("Please prioritize file editing over further exploration.")
+
+        context_parts.append("</context>")
+        return "\n".join(context_parts)
+
+    async def _apply_edits_from_response(self):
         """
         Parses and applies SEARCH/REPLACE edits found in self.partial_response_content.
         Returns a set of relative file paths that were successfully edited.
@@ -2628,7 +2528,7 @@ class NavigatorCoder(Coder):
             # 2. Prepare edits (check permissions, commit dirty files)
             prepared_edits = []
             seen_paths = dict()
-            self.need_commit_before_edits = set() # Reset before checking
+            self.need_commit_before_edits = set()  # Reset before checking
 
             for edit in edits:
                 path = edit[0]
@@ -2636,14 +2536,14 @@ class NavigatorCoder(Coder):
                     allowed = seen_paths[path]
                 else:
                     # Use the base Coder's permission check method
-                    allowed = self.allowed_to_edit(path)
+                    allowed = await self.allowed_to_edit(path)
                     seen_paths[path] = allowed
                 if allowed:
                     prepared_edits.append(edit)
 
             # Commit any dirty files identified by allowed_to_edit
-            self.dirty_commit()
-            self.need_commit_before_edits = set() # Clear after commit
+            await self.dirty_commit()
+            self.need_commit_before_edits = set()  # Clear after commit
 
             # 3. Apply edits (logic adapted from EditBlockCoder.apply_edits)
             failed = []
@@ -2680,7 +2580,7 @@ class NavigatorCoder(Coder):
                         self.io.tool_output(f"Applied edit to {path}")
                     else:
                         self.io.tool_output(f"Did not apply edit to {path} (--dry-run)")
-                    passed.append((path, original, updated)) # Store path relative to root
+                    passed.append((path, original, updated))  # Store path relative to root
                 else:
                     failed.append(edit)
 
@@ -2691,7 +2591,7 @@ class NavigatorCoder(Coder):
                 for edit in failed:
                     path, original, updated = edit
                     full_path = self.abs_root_path(path)
-                    content = self.io.read_text(full_path) # Read content again for context
+                    content = self.io.read_text(full_path)  # Read content again for context
 
                     error_message += f"""
 ## SearchReplaceNoExactMatch: This SEARCH block failed to exactly match lines in {path}
@@ -2729,32 +2629,36 @@ Just reply with fixed versions of the {blocks} above that failed to match.
                 # Set reflected_message to prompt LLM to fix the failed blocks
                 self.reflected_message = error_message
 
-            edited_files = set(edit[0] for edit in passed) # Use relative paths stored in passed
+            edited_files = set(edit[0] for edit in passed)  # Use relative paths stored in passed
 
             # 4. Post-edit actions (commit, lint, test, shell commands)
             if edited_files:
-                self.aider_edited_files.update(edited_files) # Track edited files
-                self.auto_commit(edited_files)
+                self.aider_edited_files.update(edited_files)  # Track edited files
+                await self.auto_commit(edited_files)
                 # We don't use saved_message here as we are not moving history back
 
                 if self.auto_lint:
                     lint_errors = self.lint_edited(edited_files)
-                    self.auto_commit(edited_files, context="Ran the linter")
-                    if lint_errors and not self.reflected_message: # Reflect only if edits failed
-                        ok = self.io.confirm_ask("Attempt to fix lint errors?")
+                    await self.auto_commit(edited_files, context="Ran the linter")
+                    if (
+                        lint_errors and not self.reflected_message
+                    ):  # Reflect only if edits failed
+                        ok = await self.io.confirm_ask("Attempt to fix lint errors?")
                         if ok:
                             self.reflected_message = lint_errors
 
-                shared_output = self.run_shell_commands()
+                shared_output = await self.run_shell_commands()
                 if shared_output:
                     # Add shell output as a new user message? Or just display?
                     # Let's just display for now to avoid complex history manipulation
                     self.io.tool_output("Shell command output:\n" + shared_output)
 
-                if self.auto_test and not self.reflected_message: # Reflect only if no prior errors
-                    test_errors = self.commands.cmd_test(self.test_cmd)
+                if (
+                    self.auto_test and not self.reflected_message
+                ):  # Reflect only if no prior errors
+                    test_errors = await self.commands.cmd_test(self.test_cmd)
                     if test_errors:
-                        ok = self.io.confirm_ask("Attempt to fix test errors?")
+                        ok = await self.io.confirm_ask("Attempt to fix test errors?")
                         if ok:
                             self.reflected_message = test_errors
 
@@ -2768,7 +2672,7 @@ Just reply with fixed versions of the {blocks} above that failed to match.
             self.io.tool_output(urls.edit_errors)
             self.io.tool_output()
             self.io.tool_output(str(error_message))
-            self.reflected_message = str(error_message) # Reflect parsing errors
+            self.reflected_message = str(error_message)  # Reflect parsing errors
         except ANY_GIT_ERROR as err:
             self.io.tool_error(f"Git error during edit application: {str(err)}")
             self.reflected_message = f"Git error during edit application: {str(err)}"
@@ -2860,7 +2764,7 @@ Just reply with fixed versions of the {blocks} above that failed to match.
         # Do nothing here for implicit mentions.
         pass
 
-    def check_for_file_mentions(self, content):
+    async def check_for_file_mentions(self, content):
         """
         Override parent's method to use our own file processing logic.
 
@@ -2871,13 +2775,13 @@ Just reply with fixed versions of the {blocks} above that failed to match.
         # Do nothing - disable implicit file adds in navigator mode.
         pass
 
-    def preproc_user_input(self, inp):
+    async def preproc_user_input(self, inp):
         """
         Override parent's method to wrap user input in a context block.
         This clearly delineates user input from other sections in the context window.
         """
         # First apply the parent's preprocessing
-        inp = super().preproc_user_input(inp)
+        inp = await super().preproc_user_input(inp)
 
         # If we still have input after preprocessing, wrap it in a context block
         if inp and not inp.startswith('<context name="user_input">'):
@@ -2947,11 +2851,11 @@ Just reply with fixed versions of the {blocks} above that failed to match.
                 parts = file.split("/")
                 current = tree
                 for i, part in enumerate(parts):
-                    if i == len(parts) - 1: # Last part (file)
+                    if i == len(parts) - 1:  # Last part (file)
                         if "." not in current:
                             current["."] = []
                         current["."].append(part)
-                    else: # Directory
+                    else:  # Directory
                         if part not in current:
                             current[part] = {}
                         current = current[part]
@@ -2987,6 +2891,44 @@ Just reply with fixed versions of the {blocks} above that failed to match.
             return result
         except Exception as e:
             self.io.tool_error(f"Error generating directory structure: {str(e)}")
+            return None
+
+    def get_todo_list(self):
+        """
+        Generate a todo list context block from the .aider.todo.txt file.
+        Returns formatted string with the current todo list or None if empty/not present.
+        """
+
+        try:
+            # Define the todo file path
+            todo_file_path = ".aider.todo.txt"
+            abs_path = self.abs_root_path(todo_file_path)
+
+            # Check if file exists
+            import os
+
+            if not os.path.isfile(abs_path):
+                return (
+                    '<context name="todo_list">\n'
+                    "Todo list does not exist. Please update it."
+                    "</context>"
+                )
+
+            # Read todo list content
+            content = self.io.read_text(abs_path)
+            if content is None or not content.strip():
+                return None
+
+            # Format the todo list context block
+            result = '<context name="todo_list">\n'
+            result += "## Current Todo List\n\n"
+            result += "Below is the current todo list managed via `UpdateTodoList` tool:\n\n"
+            result += f"```\n{content}\n```\n"
+            result += "</context>"
+
+            return result
+        except Exception as e:
+            self.io.tool_error(f"Error generating todo list context: {str(e)}")
             return None
 
     def get_git_status(self):
@@ -3040,7 +2982,7 @@ Just reply with fixed versions of the {blocks} above that failed to match.
                     untracked = []
 
                     for line in status_lines:
-                        if len(line) < 4: # Ensure the line has enough characters
+                        if len(line) < 4:  # Ensure the line has enough characters
                             continue
 
                         status_code = line[:2]
@@ -3096,7 +3038,7 @@ Just reply with fixed versions of the {blocks} above that failed to match.
                 commits = list(self.repo.repo.iter_commits(max_count=5))
                 for commit in commits:
                     short_hash = commit.hexsha[:8]
-                    message = commit.message.strip().split("\n")[0] # First line only
+                    message = commit.message.strip().split("\n")[0]  # First line only
                     result += f"{short_hash} {message}\n"
             except Exception:
                 result += "Unable to get recent commits\n"
@@ -3136,7 +3078,7 @@ Just reply with fixed versions of the {blocks} above that failed to match.
     def cmd_copy_context(self, args=None):
         """Copy the current chat context as markdown, suitable to paste into a web UI"""
 
-        chunks = self.coder.format_chat_chunks()
+        chunks = self.format_chat_chunks()
 
         markdown = ""
 

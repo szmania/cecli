@@ -1,4 +1,4 @@
-import shlex
+import oslex
 import shutil
 from pathlib import Path
 
@@ -160,7 +160,7 @@ class Grep(BaseAiderTool):
             cmd_args.extend([pattern, str(search_dir_path)])
 
             # Convert list to command string for run_cmd_subprocess
-            command_string = shlex.join(cmd_args)
+            command_string = oslex.join(cmd_args)
 
             self.coder.io.tool_output(f"⚙️ Executing {tool_name}: {command_string}")
 
