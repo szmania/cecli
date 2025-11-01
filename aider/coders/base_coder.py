@@ -3218,7 +3218,7 @@ class Coder:
         self.io.tool_output(f"Committing {path} before applying edits.")
         self.need_commit_before_edits.add(path)
 
-    def allowed_to_edit(self, path):
+    async def allowed_to_edit(self, path):
         full_path = self.abs_root_path(path)
         if self.repo:
             need_to_add = not self.repo.path_in_repo(path)
@@ -3272,7 +3272,7 @@ class Coder:
             self.check_added_files()
             return True
 
-        if not self.io.confirm_ask(
+        if not await self.io.confirm_ask(
             "Allow edits to file that has not been added to the chat?",
             subject=path,
         ):
@@ -3315,7 +3315,7 @@ class Coder:
         self.io.tool_warning(urls.edit_errors)
         self.warning_given = True
 
-    def prepare_to_edit(self, edits):
+    async def prepare_to_edit(self, edits):
         res = []
         seen = dict()
 
@@ -3331,7 +3331,7 @@ class Coder:
             if path in seen:
                 allowed = seen[path]
             else:
-                allowed = self.allowed_to_edit(path)
+                allowed = await self.allowed_to_edit(path)
                 seen[path] = allowed
 
             if allowed:
@@ -3342,12 +3342,12 @@ class Coder:
 
         return res
 
-    def apply_updates(self):
+    async def apply_updates(self):
         edited = set()
         try:
             edits = self.get_edits()
             edits = self.apply_edits_dry_run(edits)
-            edits = self.prepare_to_edit(edits)
+            edits = await self.prepare_to_edit(edits)
             edited = set(edit[0] for edit in edits)
 
             self.apply_edits(edits)
@@ -3444,7 +3444,7 @@ class Coder:
 
         return context
 
-    def auto_commit(self, edited, context=None):
+    async def auto_commit(self, edited, context=None):
         if not self.repo or not self.auto_commits or self.dry_run:
             return
 
@@ -3503,7 +3503,7 @@ class Coder:
     def apply_edits_dry_run(self, edits):
         return edits
 
-    def run_shell_commands(self):
+    async def run_shell_commands(self):
         if not self.suggest_shell_commands:
             return ""
 
@@ -3514,18 +3514,18 @@ class Coder:
             if command in done:
                 continue
             done.add(command)
-            output = self.handle_shell_commands(command, group)
+            output = await self.handle_shell_commands(command, group)
             if output:
                 accumulated_output += output + "\n\n"
         return accumulated_output
 
-    def handle_shell_commands(self, commands_str, group):
+    async def handle_shell_commands(self, commands_str, group):
         commands = commands_str.strip().splitlines()
         command_count = sum(
             1 for cmd in commands if cmd.strip() and not cmd.strip().startswith("#")
         )
         prompt = "Run shell command?" if command_count == 1 else "Run shell commands?"
-        if not self.io.confirm_ask(
+        if not await self.io.confirm_ask(
             prompt,
             subject="\n".join(commands),
             explicit_yes_required=True,
@@ -3548,7 +3548,7 @@ class Coder:
             if output:
                 accumulated_output += f"Output from {command}\n{output}\n"
 
-        if accumulated_output.strip() and self.io.confirm_ask(
+        if accumulated_output.strip() and await self.io.confirm_ask(
             "Add command output to the chat?", allow_never=True
         ):
             num_lines = len(accumulated_output.strip().splitlines())
