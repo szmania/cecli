@@ -3075,6 +3075,45 @@ Just reply with fixed versions of the {blocks} above that failed to match.
 
         return True
 
+def cmd_tools_repair(self, args=""):
+    """
+    Repair a custom tool that is erroring.
+
+    /tools-repair <tool_name_or_path> [description of problem]
+    """
+    if not args:
+        self.io.tool_error("Usage: /tools-repair <tool_name_or_path> [description of problem]")
+        return
+
+    tool_identifier = args.split(" ", 1)[0]
+
+    tool_file_path = None
+
+    # Check if identifier is a path
+    abs_path_identifier = self.abs_root_path(tool_identifier)
+    if os.path.isfile(abs_path_identifier):
+        tool_file_path = tool_identifier
+    # Check if identifier is a tool name
+    elif tool_identifier in self.custom_tools:
+        tool_file_path = self.custom_tools[tool_identifier].get("file_path")
+
+    if not tool_file_path:
+        self.io.tool_error(f"Tool '{tool_identifier}' not found.")
+        return
+
+    abs_tool_path = self.abs_root_path(tool_file_path)
+    if not os.path.exists(abs_tool_path):
+        self.io.tool_error(f"Tool file '{tool_file_path}' not found for tool '{tool_identifier}'.")
+        return
+
+    # Add the tool file to the chat
+    self.add_rel_fname(tool_file_path)
+    self.io.tool_output(f"Added '{tool_file_path}' to the chat to be repaired.")
+
+    # Mark for reload after fix
+    self.tool_file_to_reload_after_fix = tool_file_path
+
+    return True
     def cmd_copy_context(self, args=None):
         """Copy the current chat context as markdown, suitable to paste into a web UI"""
 
