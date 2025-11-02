@@ -10,7 +10,8 @@ class ExtractLines(BaseAiderTool):
     Extract a range of lines from a source file and move them to a target file.
     """
 
-    def get_tool_definition(self):
+    @staticmethod
+    def get_tool_definition():
         return {
             "type": "function",
             "function": {
@@ -363,3 +364,6 @@ def _execute_extract_lines(
         occurrence=occurrence,
         dry_run=dry_run,
     )
+
+
+extract_lines_schema = ExtractLines.get_tool_definition()

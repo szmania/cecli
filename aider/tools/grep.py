@@ -11,7 +11,8 @@ class Grep(BaseAiderTool):
     Search for lines matching a pattern in files within the project repository.
     """
 
-    def get_tool_definition(self):
+    @staticmethod
+    def get_tool_definition():
         return {
             "type": "function",
             "function": {
@@ -241,3 +242,6 @@ def _execute_grep(
         context_before=context_before,
         context_after=context_after,
     )
+
+
+grep_schema = Grep.get_tool_definition()
