@@ -226,3 +226,6 @@ def _execute_delete_block(
         change_id=change_id,
         dry_run=dry_run,
     )
+
+
+delete_block_schema = DeleteBlock(None).get_tool_definition()
