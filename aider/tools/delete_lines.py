@@ -183,3 +183,6 @@ def _execute_delete_lines(coder, file_path, start_line, end_line, change_id=None
         change_id=change_id,
         dry_run=dry_run,
     )
+
+
+delete_lines_schema = DeleteLines(None).get_tool_definition()
