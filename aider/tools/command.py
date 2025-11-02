@@ -7,7 +7,8 @@ class Command(BaseAiderTool):
     Execute a non-interactive shell command after user confirmation.
     """
 
-    def get_tool_definition(self):
+    @staticmethod
+    def get_tool_definition():
         return {
             "type": "function",
             "function": {
@@ -95,4 +96,4 @@ def _execute_command(coder, command_string):
     return Command(coder).run(command_string=command_string)
 
 
-command_schema = Command(None).get_tool_definition()
+command_schema = Command.get_tool_definition()

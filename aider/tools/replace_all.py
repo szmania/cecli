@@ -14,7 +14,8 @@ class ReplaceAll(BaseAiderTool):
     Replace all occurrences of text in a file.
     """
 
-    def get_tool_definition(self):
+    @staticmethod
+    def get_tool_definition():
         return {
             "type": "function",
             "function": {
@@ -138,3 +139,6 @@ def _execute_replace_all(coder, file_path, find_text, replace_text, change_id=No
         change_id=change_id,
         dry_run=dry_run,
     )
+
+
+replace_all_schema = ReplaceAll.get_tool_definition()

@@ -14,7 +14,8 @@ class ReplaceText(BaseAiderTool):
     Replace specific text with new text, optionally using nearby context for disambiguation.
     """
 
-    def get_tool_definition(self):
+    @staticmethod
+    def get_tool_definition():
         return {
             "type": "function",
             "function": {
@@ -216,3 +217,6 @@ def _execute_replace_text(
         change_id=change_id,
         dry_run=dry_run,
     )
+
+
+replace_text_schema = ReplaceText.get_tool_definition()

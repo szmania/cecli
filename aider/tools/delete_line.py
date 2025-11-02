@@ -15,7 +15,8 @@ class DeleteLine(BaseAiderTool):
     Delete a specific line number (1-based).
     """
 
-    def get_tool_definition(self):
+    @staticmethod
+    def get_tool_definition():
         return {
             "type": "function",
             "function": {
@@ -163,4 +164,4 @@ def _execute_delete_line(coder, file_path, line_number, change_id=None, dry_run=
     )
 
 
-delete_line_schema = DeleteLine(None).get_tool_definition()
+delete_line_schema = DeleteLine.get_tool_definition()

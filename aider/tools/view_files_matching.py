@@ -9,7 +9,8 @@ class ViewFilesMatching(BaseAiderTool):
     Search for a pattern in files and add matching files to context as read-only.
     """
 
-    def get_tool_definition(self):
+    @staticmethod
+    def get_tool_definition():
         return {
             "type": "function",
             "function": {
@@ -151,3 +152,6 @@ def execute_view_files_matching(coder, search_pattern, file_pattern=None, regex=
     return ViewFilesMatching(coder).run(
         search_pattern=search_pattern, file_pattern=file_pattern, regex=regex
     )
+
+
+view_files_matching_schema = ViewFilesMatching.get_tool_definition()

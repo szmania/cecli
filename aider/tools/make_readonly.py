@@ -6,7 +6,8 @@ class MakeReadonly(BaseAiderTool):
     Convert an editable file to a read-only file.
     """
 
-    def get_tool_definition(self):
+    @staticmethod
+    def get_tool_definition():
         return {
             "type": "function",
             "function": {
@@ -54,3 +55,10 @@ class MakeReadonly(BaseAiderTool):
         except Exception as e:
             self.coder.io.tool_error(f"Error making file read-only: {str(e)}")
             return f"Error: {str(e)}"
+
+
+async def _execute_make_readonly(coder, file_path):
+    return await MakeReadonly(coder).run(file_path=file_path)
+
+
+make_readonly_schema = MakeReadonly.get_tool_definition()

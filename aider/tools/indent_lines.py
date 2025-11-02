@@ -17,7 +17,8 @@ class IndentLines(BaseAiderTool):
     Indent or unindent a block of lines in a file.
     """
 
-    def get_tool_definition(self):
+    @staticmethod
+    def get_tool_definition():
         return {
             "type": "function",
             "function": {
@@ -253,3 +254,6 @@ def _execute_indent_lines(
         change_id=change_id,
         dry_run=dry_run,
     )
+
+
+indent_lines_schema = IndentLines.get_tool_definition()

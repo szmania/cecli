@@ -19,7 +19,8 @@ class InsertBlock(BaseAiderTool):
     Insert a block of text after or before a specified pattern.
     """
 
-    def get_tool_definition(self):
+    @staticmethod
+    def get_tool_definition():
         return {
             "type": "function",
             "function": {
@@ -307,3 +308,6 @@ def _execute_insert_block(
         auto_indent=auto_indent,
         use_regex=use_regex,
     )
+
+
+insert_block_schema = InsertBlock.get_tool_definition()

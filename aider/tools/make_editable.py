@@ -8,7 +8,8 @@ class MakeEditable(BaseAiderTool):
     Convert a read-only file to an editable file.
     """
 
-    def get_tool_definition(self):
+    @staticmethod
+    def get_tool_definition():
         return {
             "type": "function",
             "function": {
@@ -83,3 +84,6 @@ class MakeEditable(BaseAiderTool):
 
 async def _execute_make_editable(coder, file_path):
     return await MakeEditable(coder).run(file_path=file_path)
+
+
+make_editable_schema = MakeEditable.get_tool_definition()

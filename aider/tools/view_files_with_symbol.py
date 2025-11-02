@@ -8,7 +8,8 @@ class ViewFilesWithSymbol(BaseAiderTool):
     Find files containing a symbol using RepoMap and add them to context.
     """
 
-    def get_tool_definition(self):
+    @staticmethod
+    def get_tool_definition():
         return {
             "type": "function",
             "function": {
@@ -176,3 +177,6 @@ class ViewFilesWithSymbol(BaseAiderTool):
 
 def _execute_view_files_with_symbol(coder, symbol):
     return ViewFilesWithSymbol(coder).run(symbol=symbol)
+
+
+view_files_with_symbol_schema = ViewFilesWithSymbol.get_tool_definition()

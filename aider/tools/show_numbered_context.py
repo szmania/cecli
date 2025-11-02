@@ -9,7 +9,8 @@ class ShowNumberedContext(BaseAiderTool):
     Displays numbered lines from a file centered around a target location.
     """
 
-    def get_tool_definition(self):
+    @staticmethod
+    def get_tool_definition():
         return {
             "type": "function",
             "function": {
@@ -155,3 +156,6 @@ def execute_show_numbered_context(
         line_number=line_number,
         context_lines=context_lines,
     )
+
+
+show_numbered_context_schema = ShowNumberedContext.get_tool_definition()

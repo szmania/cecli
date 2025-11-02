@@ -9,7 +9,8 @@ class ViewFilesAtGlob(BaseAiderTool):
     Execute a glob pattern and add matching files to context as read-only.
     """
 
-    def get_tool_definition(self):
+    @staticmethod
+    def get_tool_definition():
         return {
             "type": "function",
             "function": {
@@ -108,3 +109,6 @@ class ViewFilesAtGlob(BaseAiderTool):
 
 def execute_view_files_at_glob(coder, pattern):
     return ViewFilesAtGlob(coder).run(pattern=pattern)
+
+
+view_files_at_glob_schema = ViewFilesAtGlob.get_tool_definition()

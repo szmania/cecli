@@ -17,7 +17,8 @@ class DeleteBlock(BaseAiderTool):
     Delete a block of text between start_pattern and end_pattern (inclusive).
     """
 
-    def get_tool_definition(self):
+    @staticmethod
+    def get_tool_definition():
         return {
             "type": "function",
             "function": {
@@ -228,4 +229,4 @@ def _execute_delete_block(
     )
 
 
-delete_block_schema = DeleteBlock(None).get_tool_definition()
+delete_block_schema = DeleteBlock.get_tool_definition()

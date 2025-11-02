@@ -8,7 +8,8 @@ class Ls(BaseAiderTool):
     List files in a directory.
     """
 
-    def get_tool_definition(self):
+    @staticmethod
+    def get_tool_definition():
         return {
             "type": "function",
             "function": {
@@ -82,3 +83,6 @@ def execute_ls(coder, dir_path=None, directory=None):
     elif directory is None:
         return "Error: Missing directory parameter"
     return Ls(coder).run(directory=directory)
+
+
+ls_schema = Ls.get_tool_definition()

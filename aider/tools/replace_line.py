@@ -9,7 +9,8 @@ class ReplaceLine(BaseAiderTool):
     Replace a specific line identified by line number.
     """
 
-    def get_tool_definition(self):
+    @staticmethod
+    def get_tool_definition():
         return {
             "type": "function",
             "function": {
@@ -174,3 +175,6 @@ def _execute_replace_line(
         change_id=change_id,
         dry_run=dry_run,
     )
+
+
+replace_line_schema = ReplaceLine.get_tool_definition()

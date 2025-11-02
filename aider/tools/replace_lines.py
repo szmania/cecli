@@ -15,7 +15,8 @@ class ReplaceLines(BaseAiderTool):
     Replace a range of lines identified by line numbers.
     """
 
-    def get_tool_definition(self):
+    @staticmethod
+    def get_tool_definition():
         return {
             "type": "function",
             "function": {
@@ -215,3 +216,6 @@ def _execute_replace_lines(
         change_id=change_id,
         dry_run=dry_run,
     )
+
+
+replace_lines_schema = ReplaceLines.get_tool_definition()

@@ -8,7 +8,8 @@ class UndoChange(BaseAiderTool):
     Undo a specific change by ID, or the last change to a file.
     """
 
-    def get_tool_definition(self):
+    @staticmethod
+    def get_tool_definition():
         return {
             "type": "function",
             "function": {
@@ -91,3 +92,6 @@ class UndoChange(BaseAiderTool):
 
 def _execute_undo_change(coder, change_id=None, file_path=None):
     return UndoChange(coder).run(change_id=change_id, file_path=file_path)
+
+
+undo_change_schema = UndoChange.get_tool_definition()

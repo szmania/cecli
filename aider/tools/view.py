@@ -6,7 +6,8 @@ class View(BaseAiderTool):
     Explicitly add a file to context as read-only.
     """
 
-    def get_tool_definition(self):
+    @staticmethod
+    def get_tool_definition():
         return {
             "type": "function",
             "function": {
@@ -55,3 +56,6 @@ class View(BaseAiderTool):
 
 def execute_view(coder, file_path):
     return View(coder).run(file_path=file_path)
+
+
+view_schema = View.get_tool_definition()

@@ -9,7 +9,8 @@ class ListChanges(BaseAiderTool):
     List recent changes made to files.
     """
 
-    def get_tool_definition(self):
+    @staticmethod
+    def get_tool_definition():
         return {
             "type": "function",
             "function": {
@@ -83,3 +84,6 @@ class ListChanges(BaseAiderTool):
 
 def _execute_list_changes(coder, file_path=None, limit=10):
     return ListChanges(coder).run(file_path=file_path, limit=limit)
+
+
+list_changes_schema = ListChanges.get_tool_definition()

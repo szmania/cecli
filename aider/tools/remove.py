@@ -8,7 +8,8 @@ class Remove(BaseAiderTool):
     Explicitly remove a file from context.
     """
 
-    def get_tool_definition(self):
+    @staticmethod
+    def get_tool_definition():
         return {
             "type": "function",
             "function": {
@@ -76,3 +77,6 @@ class Remove(BaseAiderTool):
 
 def _execute_remove(coder, file_path):
     return Remove(coder).run(file_path=file_path)
+
+
+remove_schema = Remove.get_tool_definition()

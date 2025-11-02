@@ -7,7 +7,8 @@ class CommandInteractive(BaseAiderTool):
     Execute an interactive shell command using run_cmd (which uses pexpect/PTY).
     """
 
-    def get_tool_definition(self):
+    @staticmethod
+    def get_tool_definition():
         return {
             "type": "function",
             "function": {
@@ -81,4 +82,4 @@ def _execute_command_interactive(coder, command_string):
     return CommandInteractive(coder).run(command_string=command_string)
 
 
-command_interactive_schema = CommandInteractive(None).get_tool_definition()
+command_interactive_schema = CommandInteractive.get_tool_definition()
