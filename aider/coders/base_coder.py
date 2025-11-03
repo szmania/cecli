@@ -1927,7 +1927,9 @@ class Coder:
             self.io.start_spinner(spinner_text)
 
             if self.stream:
-                self.mdstream = True
+                from aider.mdstream import MarkdownStream
+
+                self.mdstream = MarkdownStream(self.io.console, self.io.code_theme)
             else:
                 self.mdstream = None
         else:
@@ -2009,8 +2011,7 @@ class Coder:
                     return
         finally:
             if self.mdstream:
-                content_to_show = self.live_incremental_response(True)
-                self.stream_wrapper(content_to_show, final=True)
+                self.live_incremental_response(True)
             self.mdstream = None
 
             # Ensure any waiting spinner is stopped
@@ -2474,6 +2475,8 @@ class Coder:
         tools = []
 
         async def get_server_tools(server):
+            if isinstance(server, LocalServer):
+                return None
             try:
                 session = await server.connect()
                 server_tools = await experimental_mcp_client.load_mcp_tools(
@@ -2967,8 +2970,7 @@ class Coder:
             self.partial_response_content += text
             if self.show_pretty():
                 # Use simplified streaming - just call the method with full content
-                content_to_show = self.live_incremental_response(False)
-                self.stream_wrapper(content_to_show, final=False)
+                self.live_incremental_response(False)
             elif text:
                 # Apply reasoning tag formatting for non-pretty output
                 text = replace_reasoning_tags(text, self.reasoning_tag_name)
