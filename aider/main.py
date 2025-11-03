@@ -1332,6 +1332,10 @@ async def main_async(argv=None, input=None, output=None, force_git_root=None, re
 
             if switch.kwargs.get("show_announcements") is False:
                 coder.suppress_announcements_for_next_prompt = True
+        except KeyboardInterrupt:
+            print("\nGoodbye!")
+            analytics.event("exit", reason="KeyboardInterrupt")
+            return
 
 
 def is_first_run_of_new_version(io, verbose=False):
