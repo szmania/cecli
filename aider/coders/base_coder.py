@@ -1184,83 +1184,71 @@ class Coder:
             user_message = None
 
             while True:
-                try:
-                    if (
-                        not self.confirmation_in_progress
-                        and not input_task
-                        and not user_message
-                        and (not processing_task or not self.io.placeholder)
-                    ):
-                        if not self.suppress_announcements_for_next_prompt:
-                            self.show_announcements()
-                        self.suppress_announcements_for_next_prompt = False
+                if (
+                    not self.confirmation_in_progress
+                    and not input_task
+                    and not user_message
+                    and (not processing_task or not self.io.placeholder)
+                ):
+                    if not self.suppress_announcements_for_next_prompt:
+                        self.show_announcements()
+                    self.suppress_announcements_for_next_prompt = False
 
-                        # Stop spinner before showing announcements or getting input
-                        self.io.stop_spinner()
+                    # Stop spinner before showing announcements or getting input
+                    self.io.stop_spinner()
 
-                        self.copy_context()
-                        self.input_task = asyncio.create_task(self.get_input())
-                        input_task = self.input_task
+                    self.copy_context()
+                    self.input_task = asyncio.create_task(self.get_input())
+                    input_task = self.input_task
 
-                    tasks = set()
-                    if processing_task:
-                        tasks.add(processing_task)
-                    if input_task:
-                        tasks.add(input_task)
+                tasks = set()
+                if processing_task:
+                    tasks.add(processing_task)
+                if input_task:
+                    tasks.add(input_task)
 
-                    if tasks:
-                        done, pending = await asyncio.wait(
-                            tasks, return_when=asyncio.FIRST_COMPLETED
-                        )
+                if tasks:
+                    done, pending = await asyncio.wait(
+                        tasks, return_when=asyncio.FIRST_COMPLETED
+                    )
 
-                        if input_task and input_task in done:
-                            if processing_task:
-                                if not self.confirmation_in_progress:
-                                    processing_task.cancel()
-                                    try:
-                                        await processing_task
-                                    except asyncio.CancelledError:
-                                        pass
-                                    self.io.stop_spinner()
-                                    processing_task = None
+                    if input_task and input_task in done:
+                        if processing_task:
+                            if not self.confirmation_in_progress:
+                                processing_task.cancel()
+                                try:
+                                    await processing_task
+                                except asyncio.CancelledError:
+                                    pass
+                                self.io.stop_spinner()
+                                processing_task = None
 
-                            try:
-                                user_message = input_task.result()
-                            except (asyncio.CancelledError, KeyboardInterrupt):
-                                user_message = None
-                            input_task = None
-                            self.input_task = None
-                            if user_message is None:
-                                continue
-
-                        if processing_task and processing_task in done:
-                            try:
-                                await processing_task
-                            except (asyncio.CancelledError, KeyboardInterrupt):
-                                pass
-                            processing_task = None
-                            # Stop spinner when processing task completes
-                            self.io.stop_spinner()
-
-                    if user_message and self.run_one_completed and self.compact_context_completed:
-                        processing_task = asyncio.create_task(
-                            self._processing_logic(user_message, preproc)
-                        )
-                        # Start spinner for processing task
-                        self.io.start_spinner("Processing...")
-                        user_message = None  # Clear message after starting task
-                except KeyboardInterrupt:
-                    if processing_task:
-                        processing_task.cancel()
-                        processing_task = None
-                        # Stop spinner when processing task is cancelled
-                        self.io.stop_spinner()
-                    if input_task:
-                        self.io.set_placeholder("")
-                        input_task.cancel()
+                        try:
+                            user_message = input_task.result()
+                        except asyncio.CancelledError:
+                            user_message = None
                         input_task = None
-                    self.keyboard_interrupt()
-        except EOFError:
+                        self.input_task = None
+                        if user_message is None:
+                            continue
+
+                    if processing_task and processing_task in done:
+                        try:
+                            await processing_task
+                        except asyncio.CancelledError:
+                            pass
+                        processing_task = None
+                        # Stop spinner when processing task completes
+                        self.io.stop_spinner()
+
+                if user_message and self.run_one_completed and self.compact_context_completed:
+                    processing_task = asyncio.create_task(
+                        self._processing_logic(user_message, preproc)
+                    )
+                    # Start spinner for processing task
+                    self.io.start_spinner("Processing...")
+                    user_message = None  # Clear message after starting task
+        except (EOFError, KeyboardInterrupt):
             return
         finally:
             if input_task:
