@@ -1225,7 +1225,7 @@ class Coder:
 
                         try:
                             user_message = input_task.result()
-                        except asyncio.CancelledError:
+                        except (asyncio.CancelledError, KeyboardInterrupt):
                             user_message = None
                         input_task = None
                         self.input_task = None
@@ -1235,7 +1235,7 @@ class Coder:
                     if processing_task and processing_task in done:
                         try:
                             await processing_task
-                        except asyncio.CancelledError:
+                        except (asyncio.CancelledError, KeyboardInterrupt):
                             pass
                         processing_task = None
                         # Stop spinner when processing task completes
@@ -1248,8 +1248,17 @@ class Coder:
                     # Start spinner for processing task
                     self.io.start_spinner("Processing...")
                     user_message = None  # Clear message after starting task
-        except (EOFError, KeyboardInterrupt):
-            return
+        except KeyboardInterrupt:
+            if processing_task:
+                processing_task.cancel()
+                processing_task = None
+                # Stop spinner when processing task is cancelled
+                self.io.stop_spinner()
+            if input_task:
+                self.io.set_placeholder("")
+                input_task.cancel()
+                input_task = None
+            self.keyboard_interrupt()
         finally:
             if input_task:
                 input_task.cancel()
@@ -2726,6 +2735,9 @@ class Coder:
                 # Still calculate costs for context window errors
                 self.calculate_and_show_tokens_and_cost(messages, completion)
             raise
+        except KeyboardInterrupt as kbi:
+            self.keyboard_interrupt()
+            raise kbi
         finally:
             self.io.log_llm_history(
                 "LLM RESPONSE",
