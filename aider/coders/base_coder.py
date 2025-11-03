@@ -1941,7 +1941,6 @@ class Coder:
 
         self.usage_report = None
         exhausted = False
-        interrupted = False
         try:
             while True:
                 try:
@@ -1985,9 +1984,6 @@ class Coder:
                     self.io.tool_output(f"Retrying in {retry_delay:.1f} seconds...")
                     await asyncio.sleep(retry_delay)
                     continue
-                except KeyboardInterrupt:
-                    interrupted = True
-                    break
                 except FinishReasonLength:
                     # We hit the output limit!
                     if not self.main_model.info.get("supports_assistant_prefill"):
@@ -2051,16 +2047,6 @@ class Coder:
         else:
             content = ""
 
-        if interrupted:
-            if self.cur_messages and self.cur_messages[-1]["role"] == "user":
-                self.cur_messages[-1]["content"] += "\n^C KeyboardInterrupt"
-            else:
-                self.cur_messages += [dict(role="user", content="^C KeyboardInterrupt")]
-            self.cur_messages += [
-                dict(role="assistant", content="I see that you interrupted my previous reply.")
-            ]
-            return
-
         edited = await self.apply_updates()
 
         if edited:
@@ -2072,62 +2058,58 @@ class Coder:
 
             self.move_back_cur_messages(saved_message)
 
-        if not interrupted:
-            add_rel_files_message = await self.check_for_file_mentions(content)
-            if add_rel_files_message:
-                if self.reflected_message:
-                    self.reflected_message += "\n\n" + add_rel_files_message
-                else:
-                    self.reflected_message = add_rel_files_message
-                return
+        add_rel_files_message = await self.check_for_file_mentions(content)
+        if add_rel_files_message:
+            if self.reflected_message:
+                self.reflected_message += "\n\n" + add_rel_files_message
+            else:
+                self.reflected_message = add_rel_files_message
+            return
 
-            # Process any tools using MCP servers
-            try:
-                if self.partial_response_tool_calls:
-                    tool_calls = []
-                    for tool_call_dict in self.partial_response_tool_calls:
-                        tool_calls.append(
-                            ChatCompletionMessageToolCall(
-                                id=tool_call_dict.get("id"),
-                                function=Function(
-                                    name=tool_call_dict.get("function", {}).get("name"),
-                                    arguments=tool_call_dict.get("function", {}).get(
-                                        "arguments", ""
-                                    ),
+        # Process any tools using MCP servers
+        try:
+            if self.partial_response_tool_calls:
+                tool_calls = []
+                for tool_call_dict in self.partial_response_tool_calls:
+                    tool_calls.append(
+                        ChatCompletionMessageToolCall(
+                            id=tool_call_dict.get("id"),
+                            function=Function(
+                                name=tool_call_dict.get("function", {}).get("name"),
+                                arguments=tool_call_dict.get("function", {}).get(
+                                    "arguments", ""
                                 ),
-                                type=tool_call_dict.get("type"),
-                            )
+                            ),
+                            type=tool_call_dict.get("type"),
                         )
-
-                    tool_call_response = ModelResponse(
-                        choices=[
-                            Choices(
-                                finish_reason="tool_calls",
-                                index=0,
-                                message=Message(
-                                    content=None,
-                                    role="assistant",
-                                    tool_calls=tool_calls,
-                                ),
-                            )
-                        ]
                     )
 
-                    if await self.process_tool_calls(tool_call_response):
-                        self.num_tool_calls += 1
-                        self.reflected_message = True
-                        return
-            except Exception as e:
-                self.io.tool_error(f"Error processing tool calls: {str(e)}")
-                # Continue without tool processing
+                tool_call_response = ModelResponse(
+                    choices=[
+                        Choices(
+                            finish_reason="tool_calls",
+                            index=0,
+                            message=Message(
+                                content=None,
+                                role="assistant",
+                                tool_calls=tool_calls,
+                            ),
+                        )
+                    ]
+                )
 
-            self.num_tool_calls = 0
-
-            try:
-                if await self.reply_completed():
+                if await self.process_tool_calls(tool_call_response):
+                    self.num_tool_calls += 1
+                    self.reflected_message = True
                     return
-            except KeyboardInterrupt:
-                interrupted = True
+        except Exception as e:
+            self.io.tool_error(f"Error processing tool calls: {str(e)}")
+            # Continue without tool processing
+
+        self.num_tool_calls = 0
+
+        if await self.reply_completed():
+            return
 
         if self.reflected_message:
             return
@@ -2756,9 +2738,6 @@ class Coder:
                 # Still calculate costs for context window errors
                 self.calculate_and_show_tokens_and_cost(messages, completion)
             raise
-        except KeyboardInterrupt as kbi:
-            self.keyboard_interrupt()
-            raise kbi
         finally:
             self.io.log_llm_history(
                 "LLM RESPONSE",
