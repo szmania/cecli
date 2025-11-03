@@ -3017,6 +3017,15 @@ class Coder:
             self.reasoning_tag_name,
         )
 
+    def format_cost(self, value):
+        if value == 0:
+            return "0.00"
+        magnitude = abs(value)
+        if magnitude >= 0.01:
+            return f"{value:.2f}"
+        else:
+            return f"{value:.{max(2, 2 - int(math.log10(magnitude)))}f}"
+
     def calculate_and_show_tokens_and_cost(self, messages, completion=None):
         prompt_tokens = 0
         completion_tokens = 0
@@ -3072,18 +3081,9 @@ class Coder:
         self.total_cost += cost
         self.message_cost += cost
 
-        def format_cost(value):
-            if value == 0:
-                return "0.00"
-            magnitude = abs(value)
-            if magnitude >= 0.01:
-                return f"{value:.2f}"
-            else:
-                return f"{value:.{max(2, 2 - int(math.log10(magnitude)))}f}"
-
         cost_report = (
-            f"Cost: ${format_cost(self.message_cost)} message,"
-            f" ${format_cost(self.total_cost)} session."
+            f"Cost: ${self.format_cost(self.message_cost)} message,"
+            f" ${self.format_cost(self.total_cost)} session."
         )
 
         if cache_hit_tokens and cache_write_tokens:
