@@ -115,9 +115,13 @@ class ViewFilesMatching(BaseAiderTool):
                 sorted_matches = sorted(matches.items(), key=lambda x: x[1], reverse=True)
                 match_list_preview = [f"{file} ({count} matches)" for file, count in sorted_matches[:5]]
 
+                subject = ", ".join(match_list_preview)
+                if len(sorted_matches) > 5:
+                    subject += f" and {len(matches) - 5} more"
                 if not self.coder.io.confirm_ask(
-                    f"Allow adding {len(matches)} files containing '{search_pattern}' to chat as read-only?",
-                    subject=", ".join(match_list_preview) + (f" and {len(matches) - 5} more" if len(sorted_matches) > 5 else ""),
+                    f"Allow adding {len(matches)} files containing '{search_pattern}' to chat as"
+                    " read-only?",
+                    subject=subject,
                 ):
                     self.coder.io.tool_output(f"Skipped adding files matching '{search_pattern}'.")
                     return "Action skipped by user."

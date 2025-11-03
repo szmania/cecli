@@ -1,12 +1,11 @@
 import os
-import json
 from pathlib import Path
+
+import importlib.resources  # Added import
 import litellm
-import importlib.resources # Added import
-from aider.utils import strip_fenced_code # Added import
+from aider.utils import strip_fenced_code  # Added import
 
 from aider.tools.base_tool import BaseAiderTool
-from aider.utils import split_concatenated_json
 
 
 class CreateTool(BaseAiderTool):
@@ -19,23 +18,35 @@ class CreateTool(BaseAiderTool):
             "type": "function",
             "function": {
                 "name": "CreateTool",
-                "description": "Create a new custom tool by providing a description and filename. The new tool will be automatically loaded and available for use.",
+                "description": (
+                    "Create a new custom tool by providing a description and filename. The new"
+                    " tool will be automatically loaded and available for use."
+                ),
                 "parameters": {
                     "type": "object",
                     "properties": {
                         "description": {
                             "type": "string",
-                            "description": "A natural language description of the tool to be created. This will be used to generate the tool's Python code.",
+                            "description": (
+                                "A natural language description of the tool to be created. This will be"
+                                " used to generate the tool's Python code."
+                            ),
                         },
                         "file_name": {
                             "type": "string",
-                            "description": "The desired filename for the new tool (e.g., 'my_new_tool.py'). Must end with .py and not contain path separators.",
+                            "description": (
+                                "The desired filename for the new tool (e.g., 'my_new_tool.py'). Must"
+                                " end with .py and not contain path separators."
+                            ),
                         },
                         "scope": {
                             "type": "string",
                             "enum": ["local", "global"],
                             "default": "local",
-                            "description": "The scope of the tool. 'local' for the current project, 'global' for all projects. Defaults to 'local'.",
+                            "description": (
+                                "The scope of the tool. 'local' for the current project, 'global'"
+                                " for all projects. Defaults to 'local'."
+                            ),
                         },
                     },
                     "required": ["description", "file_name"],

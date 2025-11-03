@@ -12,7 +12,10 @@ class DependencyInstaller(BaseAiderTool):
             "type": "function",
             "function": {
                 "name": "InstallDependencies",
-                "description": "Installs Python package dependencies using pip. Use this tool when another tool fails due to missing packages.",
+                "description": (
+                    "Installs Python package dependencies using pip. Use this tool when another"
+                    " tool fails due to missing packages."
+                ),
                 "parameters": {
                     "type": "object",
                     "properties": {

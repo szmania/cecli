@@ -48,7 +48,12 @@ EXCEPTIONS = [
     ),
     ExInfo("RouterRateLimitError", True, None),
     ExInfo("ServiceUnavailableError", False, "The API provider's servers are down or overloaded."),
-    ExInfo("MidStreamFallbackError", False, "A fallback model failed mid-stream. This is often due to rate limits or temporary outages on the upstream model provider."),
+    ExInfo(
+        "MidStreamFallbackError",
+        False,
+        "A fallback model failed mid-stream. This is often due to rate limits or temporary"
+        " outages on the upstream model provider.",
+    ),
     ExInfo("UnprocessableEntityError", True, None),
     ExInfo("UnsupportedParamsError", True, None),
     ExInfo(

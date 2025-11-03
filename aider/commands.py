@@ -1408,12 +1408,6 @@ class Commands:
 
         await coder.run(user_msg, preproc=False)
 
-        if self.coder.repo_map:
-            map_tokens = self.coder.repo_map.max_map_tokens
-            map_mul_no_files = self.coder.repo_map.map_mul_no_files
-        else:
-            map_tokens = 0
-            map_mul_no_files = 1
 
         raise SwitchCoder(
             edit_format=self.coder.edit_format,
@@ -2077,8 +2071,6 @@ class Commands:
             + "\n".join([f"- {f}" for f in tool_files_list])
             + "\nOnly load tools from sources you trust."
         )
-        question = "Load these tools?"
-
         if not await self.io.confirm_ask(warning_message, default="y", subject=warning_message):
             self.io.tool_output("Tool loading cancelled.")
             return

@@ -14,8 +14,6 @@ import sys
 import threading
 import time
 import traceback
-import importlib.util
-import inspect
 import weakref
 from collections import defaultdict
 from datetime import datetime
@@ -3411,7 +3409,7 @@ class Coder:
             else:
                 occurrences.append(index)
 
-            start = index + 1 # Move past this occurrence's start
+            start = index + 1  # Move past this occurrence's start
         return occurrences
 
     # commits...

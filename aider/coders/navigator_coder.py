@@ -23,7 +23,6 @@ from aider import urls, utils
 from aider.change_tracker import ChangeTracker
 from aider.mcp.server import LocalServer
 from aider.repo import ANY_GIT_ERROR
-from aider.tools.base_tool import BaseAiderTool
 from aider.tools.command import _execute_command
 from aider.tools.command_interactive import _execute_command_interactive
 from aider.tools.create_tool import CreateTool
@@ -439,11 +438,17 @@ class NavigatorCoder(Coder):
                         "properties": {
                             "description": {
                                 "type": "string",
-                                "description": "A natural language description of the tool to be created. This will be used to generate the tool's Python code.",
+                                "description": (
+                                    "A natural language description of the tool to be created. This will be used"
+                                    " to generate the tool's Python code."
+                                ),
                             },
                             "file_name": {
                                 "type": "string",
-                                "description": "The desired filename for the new tool (e.g., 'my_new_tool.py'). Must end with .py and not contain path separators.",
+                                "description": (
+                                    "The desired filename for the new tool (e.g., 'my_new_tool.py'). Must end with"
+                                    " .py and not contain path separators."
+                                ),
                             },
                             "scope": {
                                 "type": "string",
@@ -462,7 +467,11 @@ class NavigatorCoder(Coder):
                 "type": "function",
                 "function": {
                     "name": "ReplaceText",
-                    "description": "Replace specific text. `near_context` (optional) helps find the right spot. `occurrence` (optional, default 1) specifies which match (-1 for last). `dry_run=True` simulates the change.",
+                    "description": (
+                        "Replace specific text. `near_context` (optional) helps find the right spot."
+                        " `occurrence` (optional, default 1) specifies which match (-1 for last)."
+                        " `dry_run=True` simulates the change."
+                    ),
                     "parameters": {
                         "type": "object",
                         "properties": {
@@ -581,7 +590,12 @@ class NavigatorCoder(Coder):
                 "type": "function",
                 "function": {
                     "name": "IndentLines",
-                    "description": "Indent (`indent_levels` > 0) or unindent (`indent_levels` < 0) a block. Use `end_pattern` or `line_count` for range. Use `near_context` and `occurrence` (optional, default 1, -1 for last) for `start_pattern`. `dry_run=True` simulates.",
+                    "description": (
+                        "Indent (`indent_levels` > 0) or unindent (`indent_levels` < 0) a block. Use"
+                        " `end_pattern` or `line_count` for range. Use `near_context` and `occurrence`"
+                        " (optional, default 1, -1 for last) for `start_pattern`. `dry_run=True`"
+                        " simulates."
+                    ),
                     "parameters": {
                         "type": "object",
                         "properties": {
@@ -782,7 +796,6 @@ class NavigatorCoder(Coder):
             return (Path.cwd() / ".aider.tools").resolve()
 
     def tool_add_from_path(self, file_path: str):
-        from aider.tools.base_tool import BaseAiderTool
 
         # Safeguard: Only process Python files
         if not file_path.lower().endswith(".py"):
@@ -3075,7 +3088,7 @@ Just reply with fixed versions of the {blocks} above that failed to match.
 
         return True
 
-def cmd_tools_repair(self, args=""):
+def cmd_tools_repair(self, args=""):  # noqa: F811
     """
     Repair a custom tool that is erroring.
 
@@ -3114,6 +3127,7 @@ def cmd_tools_repair(self, args=""):
     self.tool_file_to_reload_after_fix = tool_file_path
 
     return True
+
     def cmd_copy_context(self, args=None):
         """Copy the current chat context as markdown, suitable to paste into a web UI"""
 
@@ -3178,6 +3192,6 @@ def expand_subdir(file_path):
 
 
 def parse_quoted_filenames(args):
-    filenames = re.findall(r"\"(.+?)\"|(\S+)", args)
+    filenames = re.findall(r'"(.+?)"|(\S+)', args)
     filenames = [name for sublist in filenames for name in sublist if name]
     return filenames
