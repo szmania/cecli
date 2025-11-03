@@ -2071,7 +2071,9 @@ class Commands:
             + "\n".join([f"- {f}" for f in tool_files_list])
             + "\nOnly load tools from sources you trust."
         )
-        if not await self.io.confirm_ask(warning_message, default="y", subject=warning_message):
+        if not await self.io.confirm_ask(
+            "Load these tools?", default="y", subject=warning_message
+        ):
             self.io.tool_output("Tool loading cancelled.")
             return
 
