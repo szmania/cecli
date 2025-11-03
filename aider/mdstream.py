@@ -102,18 +102,20 @@ class MarkdownStream:
     min_delay = 1.0 / 20  # Minimum time between updates (20fps)
     live_window = 6  # Number of lines to keep visible at bottom during streaming
 
-    def __init__(self, mdargs=None):
+    def __init__(self, console=None, code_theme=None):
         """Initialize the markdown stream.
 
         Args:
-            mdargs (dict, optional): Additional arguments to pass to rich Markdown renderer
+            console (rich.console.Console, optional): The console for Live display.
+            code_theme (str, optional): The theme for code syntax highlighting.
         """
         self.printed = []  # Stores lines that have already been printed
+        self.console = console
 
-        if mdargs:
-            self.mdargs = mdargs
-        else:
-            self.mdargs = dict()
+        mdargs = {}
+        if code_theme:
+            mdargs["code_theme"] = code_theme
+        self.mdargs = mdargs
 
         # Defer Live creation until the first update.
         self.live = None
@@ -122,7 +124,11 @@ class MarkdownStream:
     def _start_live(self):
         if self._live_started:
             return
-        self.live = Live(Text(""), refresh_per_second=1.0 / self.min_delay)
+        self.live = Live(
+            Text(""),
+            refresh_per_second=1.0 / self.min_delay,
+            console=self.console,
+        )
         self.live.start()
         self._live_started = True
 
@@ -238,7 +244,7 @@ if __name__ == "__main__":
     _text = _text_prefix + code + _text_suffix
     _text = _text * 10
 
-    pm = MarkdownStream()
+    pm = MarkdownStream(console=Console())
     print("Using NoInsetMarkdown for code blocks with padding=0")
     for i in range(6, len(_text), 5):
         pm.update(_text[:i])
