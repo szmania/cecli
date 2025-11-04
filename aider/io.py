@@ -843,9 +843,6 @@ class InputOutput:
 
             except EOFError:
                 raise
-            except KeyboardInterrupt:
-                self.console.print()
-                return ""
             except UnicodeEncodeError as err:
                 self.tool_error(str(err))
                 return ""
