@@ -1916,11 +1916,6 @@ class Coder:
 
         self.multi_response_content = ""
         if self.show_pretty():
-            spinner_text = (
-                f"Waiting for {self.main_model.name} • ${self.format_cost(self.total_cost)} session"
-            )
-            self.io.start_spinner(spinner_text)
-
             if self.stream:
                 from aider.mdstream import MarkdownStream
 
@@ -2004,9 +1999,6 @@ class Coder:
             if self.mdstream:
                 self.live_incremental_response(True)
             self.mdstream = None
-
-            # Ensure any waiting spinner is stopped
-            self._stop_waiting_spinner()
 
             self.partial_response_content = self.get_multi_response_content_in_progress(True)
             self.remove_reasoning_content()
