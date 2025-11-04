@@ -419,28 +419,16 @@ class InputOutput:
             fancy_input = False
 
         # Spinner state
-        self.spinner_running = False
-        self.spinner_text = ""
-        self.spinner_frame_index = 0
-        self.spinner_last_frame_index = 0
+        self.spinner_live = None
         self.unicode_palette = "░█"
 
         if fancy_input:
-            # If unicode is supported, use the rich 'dots2' spinner, otherwise an ascii fallback
-            if self._spinner_supports_unicode():
-                self.spinner_frames = SPINNERS["dots2"]["frames"]
-            else:
-                # A simple ascii spinner
-                self.spinner_frames = SPINNERS["line"]["frames"]
-
             # Initialize PromptSession only if we have a capable terminal
             session_kwargs = {
                 "input": self.input,
                 "output": self.output,
                 "lexer": PygmentsLexer(MarkdownLexer),
                 "editing_mode": self.editingmode,
-                "bottom_toolbar": self.get_bottom_toolbar,
-                "refresh_interval": 0.1,
             }
             if self.editingmode == EditingMode.VI:
                 session_kwargs["cursor"] = ModalCursorShapeConfig()
@@ -465,53 +453,36 @@ class InputOutput:
         # Validate color settings after console is initialized
         self._validate_color_settings()
 
-    def _spinner_supports_unicode(self) -> bool:
-        if not self.is_tty:
-            return False
-        try:
-            out = self.unicode_palette
-            out += "\b" * len(self.unicode_palette)
-            out += " " * len(self.unicode_palette)
-            out += "\b" * len(self.unicode_palette)
-            sys.stdout.write(out)
-            sys.stdout.flush()
-            return True
-        except UnicodeEncodeError:
-            return False
-        except Exception:
-            return False
-
     def start_spinner(self, text):
         """Start the spinner."""
         self.stop_spinner()
 
         if self.prompt_session:
-            self.spinner_running = True
-            self.spinner_text = text
-            self.spinner_frame_index = self.spinner_last_frame_index
+            from rich.live import Live
+            from rich.spinner import Spinner as RichSpinner
+            from rich.text import Text
+
+            spinner_renderable = RichSpinner("dots2", text=Text(f" {text}"))
+            self.spinner_live = Live(
+                spinner_renderable,
+                console=self.console,
+                transient=True,
+                refresh_per_second=20,
+            )
+            self.spinner_live.start()
         else:
             self.fallback_spinner = Spinner(text)
             self.fallback_spinner.step()
 
     def stop_spinner(self):
         """Stop the spinner."""
-        self.spinner_running = False
-        self.spinner_text = ""
-        # Keep last frame index to avoid spinner "jumping" on restart
-        self.spinner_last_frame_index = self.spinner_frame_index
+        if hasattr(self, "spinner_live") and self.spinner_live:
+            self.spinner_live.stop()
+            self.spinner_live = None
+
         if self.fallback_spinner:
             self.fallback_spinner.end()
             self.fallback_spinner = None
-
-    def get_bottom_toolbar(self):
-        """Get the current spinner frame and text for the bottom toolbar."""
-        if not self.spinner_running or not self.spinner_frames:
-            return None
-
-        frame = self.spinner_frames[self.spinner_frame_index]
-        self.spinner_frame_index = (self.spinner_frame_index + 1) % len(self.spinner_frames)
-
-        return f"{frame} {self.spinner_text}"
 
     def _validate_color_settings(self):
         """Validate configured color strings and reset invalid ones."""
