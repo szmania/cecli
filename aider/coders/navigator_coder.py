@@ -24,6 +24,7 @@ from aider.change_tracker import ChangeTracker
 from aider.mcp.server import LocalServer
 from aider.repo import ANY_GIT_ERROR
 from aider.tools.command import _execute_command
+from aider.tools.base_tool import BaseAiderTool
 from aider.tools.command_interactive import _execute_command_interactive
 from aider.tools.create_tool import CreateTool
 from aider.tools.delete_block import _execute_delete_block
