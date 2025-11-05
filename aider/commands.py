@@ -1276,11 +1276,23 @@ class Commands:
                 formatted_blocks = [name.replace("_", " ").title() for name in available_blocks]
                 self.io.tool_output(f"Available blocks: {', '.join(formatted_blocks)}")
                 self.io.tool_output("Use '/context-blocks [block name]' to view a specific block.")
+            # Mark tokens as needing calculation, but don't calculate yet (lazy calculation)
+            if hasattr(self.coder, "tokens_calculated"):
+                self.coder.tokens_calculated = False
+            if hasattr(self.coder, "context_blocks_cache"):
+                self.coder.context_blocks_cache = {}
         else:
             self.io.tool_output(
                 "Enhanced context blocks are now OFF - directory structure and git status will not"
                 " be included."
             )
+            # Clear token counts and cache when disabled
+            if hasattr(self.coder, "context_block_tokens"):
+                self.coder.context_block_tokens = {}
+            if hasattr(self.coder, "context_blocks_cache"):
+                self.coder.context_blocks_cache = {}
+            if hasattr(self.coder, "tokens_calculated"):
+                self.coder.tokens_calculated = False
 
     def cmd_granular_editing(self, args=""):
         "Toggle granular editing tools in navigator mode"
