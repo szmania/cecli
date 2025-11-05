@@ -1454,6 +1454,11 @@ class Commands:
             self.coder.context_management_enabled = True
             self.io.tool_output("Context management enabled for large files")
 
+        # Also enable enhanced context blocks
+        if hasattr(self.coder, "use_enhanced_context"):
+            self.coder.use_enhanced_context = True
+            self.io.tool_output("Enhanced context blocks enabled")
+
         return await self._generic_chat_command(args, "navigator", placeholder=args.strip() or None)
 
     async def _generic_chat_command(self, args, edit_format, placeholder=None):
