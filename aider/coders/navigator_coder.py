@@ -3062,32 +3062,6 @@ Just reply with fixed versions of the {blocks} above that failed to match.
             self.io.tool_error(f"Error generating git status: {str(e)}")
             return None
 
-    def cmd_context_blocks(self, args=""):
-        """
-        Toggle enhanced context blocks feature.
-        """
-        self.use_enhanced_context = not self.use_enhanced_context
-
-        if self.use_enhanced_context:
-            self.io.tool_output(
-                "Enhanced context blocks are now ON - directory structure and git status will be"
-                " included."
-            )
-            # Mark tokens as needing calculation, but don't calculate yet (lazy calculation)
-            self.tokens_calculated = False
-            self.context_blocks_cache = {}
-        else:
-            self.io.tool_output(
-                "Enhanced context blocks are now OFF - directory structure and git status will not"
-                " be included."
-            )
-            # Clear token counts and cache when disabled
-            self.context_block_tokens = {}
-            self.context_blocks_cache = {}
-            self.tokens_calculated = False
-
-        return True
-
 def cmd_tools_repair(self, args=""):  # noqa: F811
     """
     Repair a custom tool that is erroring.
