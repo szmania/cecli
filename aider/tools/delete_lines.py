@@ -15,42 +15,35 @@ class DeleteLines(BaseAiderTool):
     Delete a range of lines (1-based, inclusive).
     """
 
-    @staticmethod
-    def get_tool_definition():
-        return {
-            "type": "function",
-            "function": {
-                "name": "DeleteLines",
-                "description": "Delete a range of lines in a file.",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "file_path": {
-                            "type": "string",
-                            "description": "The path to the file to modify.",
-                        },
-                        "start_line": {
-                            "type": "integer",
-                            "description": "The 1-based starting line number to delete.",
-                        },
-                        "end_line": {
-                            "type": "integer",
-                            "description": "The 1-based ending line number to delete.",
-                        },
-                        "change_id": {
-                            "type": "string",
-                            "description": "Optional ID for tracking the change.",
-                        },
-                        "dry_run": {
-                            "type": "boolean",
-                            "description": "If True, simulate the change without modifying the file.",
-                            "default": False,
-                        },
-                    },
-                    "required": ["file_path", "start_line", "end_line"],
-                },
+    name = "DeleteLines"
+    description = "Delete a range of lines in a file."
+    parameters = {
+        "type": "object",
+        "properties": {
+            "file_path": {
+                "type": "string",
+                "description": "The path to the file to modify.",
             },
-        }
+            "start_line": {
+                "type": "integer",
+                "description": "The 1-based starting line number to delete.",
+            },
+            "end_line": {
+                "type": "integer",
+                "description": "The 1-based ending line number to delete.",
+            },
+            "change_id": {
+                "type": "string",
+                "description": "Optional ID for tracking the change.",
+            },
+            "dry_run": {
+                "type": "boolean",
+                "description": "If True, simulate the change without modifying the file.",
+                "default": False,
+            },
+        },
+        "required": ["file_path", "start_line", "end_line"],
+    }
 
     def run(self, file_path, start_line, end_line, change_id=None, dry_run=False):
         """

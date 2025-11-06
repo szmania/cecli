@@ -15,38 +15,31 @@ class DeleteLine(BaseAiderTool):
     Delete a specific line number (1-based).
     """
 
-    @staticmethod
-    def get_tool_definition():
-        return {
-            "type": "function",
-            "function": {
-                "name": "DeleteLine",
-                "description": "Delete a specific line in a file.",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "file_path": {
-                            "type": "string",
-                            "description": "The path to the file to modify.",
-                        },
-                        "line_number": {
-                            "type": "integer",
-                            "description": "The 1-based line number to delete.",
-                        },
-                        "change_id": {
-                            "type": "string",
-                            "description": "Optional ID for tracking the change, allowing for undo.",
-                        },
-                        "dry_run": {
-                            "type": "boolean",
-                            "description": "If True, simulate the change without modifying the file.",
-                            "default": False,
-                        },
-                    },
-                    "required": ["file_path", "line_number"],
-                },
+    name = "DeleteLine"
+    description = "Delete a specific line in a file."
+    parameters = {
+        "type": "object",
+        "properties": {
+            "file_path": {
+                "type": "string",
+                "description": "The path to the file to modify.",
             },
-        }
+            "line_number": {
+                "type": "integer",
+                "description": "The 1-based line number to delete.",
+            },
+            "change_id": {
+                "type": "string",
+                "description": "Optional ID for tracking the change, allowing for undo.",
+            },
+            "dry_run": {
+                "type": "boolean",
+                "description": "If True, simulate the change without modifying the file.",
+                "default": False,
+            },
+        },
+        "required": ["file_path", "line_number"],
+    }
 
     def run(self, file_path, line_number, change_id=None, dry_run=False):
         """
