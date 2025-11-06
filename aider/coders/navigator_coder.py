@@ -953,10 +953,8 @@ class NavigatorCoder(Coder):
             else:
                 self.io.tool_output(f"Skipping automatic fix for '{rel_file_path}'.")
 
-    def tool_unload_from_path(self, file_path: str):
-        """Unloads all custom tools found in the specified file path."""
-        abs_file_path = Path(file_path).resolve()
-        rel_file_path = self.get_rel_fname(abs_file_path)
+        abs_file_path = Path(self.abs_root_path(file_path)).resolve()
+        rel_file_path = self.get_rel_fname(str(abs_file_path))
 
         tools_to_remove = []
         for tool_name, tool_info in self.custom_tools.items():
@@ -964,18 +962,17 @@ class NavigatorCoder(Coder):
                 tools_to_remove.append(tool_name)
 
         if not tools_to_remove:
-            self.io.tool_output(f"No custom tools found loaded from '{rel_file_path}'.")
+            self.io.tool_error(f"No tool found associated with file path: {rel_file_path}")
             return
 
         for tool_name in tools_to_remove:
-            # Remove from custom_tools metadata
-            del self.custom_tools[tool_name]
-
-            # Remove from local_tool_instances
+            # Remove from custom_tools and local_tool_instances
+            if tool_name in self.custom_tools:
+                del self.custom_tools[tool_name]
             if tool_name in self.local_tool_instances:
                 del self.local_tool_instances[tool_name]
 
-            # Remove from self.mcp_tools (specifically the 'local_tools' entry)
+            # Remove from self.mcp_tools
             local_tools_entry_index = -1
             for i, (server_name, _) in enumerate(self.mcp_tools):
                 if server_name == "local_tools":
@@ -991,7 +988,7 @@ class NavigatorCoder(Coder):
 
             self.io.tool_output(f"Unloaded tool: {tool_name} from {rel_file_path}")
 
-        # Refresh the master list of functions for the LLM
+        # Refresh the master tool list
         self.functions = self.get_tool_list()
 
     def tool_move(self, file_path: str):
