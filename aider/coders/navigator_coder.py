@@ -814,33 +814,23 @@ class NavigatorCoder(Coder):
             return (Path.cwd() / ".aider.tools").resolve()
 
     def tool_add_from_path(self, file_path: str):
-
         # Safeguard: Only process Python files
         if not file_path.lower().endswith(".py"):
+            self.io.tool_error(f"Tool file must be a Python file: {file_path}")
+            return
+
+        # Use absolute path for consistency
+        abs_file_path = self.abs_root_path(file_path)
+        if not os.path.exists(abs_file_path):
+            self.io.tool_error(f"Tool file not found: {file_path}")
             return
 
         try:
-            # Create a unique module name that places it under aider.tools
-            # This allows relative imports like 'from .base_tool import BaseAiderTool' to work
-            # if the tool was generated with the old prompt.
-            # For new tools, the prompt will generate 'from aider.tools.base_tool import BaseAiderTool'.
-            tool_stem = Path(file_path).stem
-            module_name = f"aider.tools.{tool_stem}"
-
-            # Create a module spec from the file path
-            spec = importlib.util.spec_from_file_location(module_name, file_path)
-            if spec is None:
-                raise ImportError(f"Could not create module spec for {file_path}")
-
-            # Create a new module from the spec
+            # Dynamically import the module
+            spec = importlib.util.spec_from_file_location(
+                f"custom_tool_{Path(abs_file_path).stem}", abs_file_path
+            )
             module = importlib.util.module_from_spec(spec)
-
-            # Crucially, set the __package__ and add to sys.modules *before* executing.
-            # This establishes the package context for relative imports.
-            module.__package__ = "aider.tools"
-            sys.modules[module_name] = module
-
-            # Execute the module to load its contents
             spec.loader.exec_module(module)
 
             tool_class = None
@@ -858,38 +848,23 @@ class NavigatorCoder(Coder):
 
             # Instantiate the tool
             tool_instance = tool_class(self)
-            tool_definition = tool_instance.get_tool_definition()
+            tool_name = tool_instance.name
+            tool_description = tool_instance.description
+            tool_parameters = tool_instance.parameters
+            scope = tool_instance.scope
 
             # Validate the tool definition
+            tool_definition = {
+                "type": "function",
+                "function": {
+                    "name": tool_name,
+                    "description": tool_description,
+                    "parameters": tool_parameters,
+                },
+            }
             self.validate_tool_definition(tool_definition)
 
-            tool_name = tool_definition["function"]["name"]
-            tool_description = tool_definition["function"]["description"]
-
-            # Determine scope
-            scope = "unknown"
-            p_file_path = Path(file_path).resolve()
-            home_tools_dir = self._get_global_tools_dir()
-
-            try:
-                if p_file_path.is_relative_to(home_tools_dir):
-                    scope = "global"
-            except ValueError:
-                pass
-
-            if scope == "unknown":
-                project_tools_dir = self._get_local_tools_dir()
-
-                try:
-                    if p_file_path.is_relative_to(project_tools_dir):
-                        scope = "local"
-                except ValueError:
-                    pass
-
-            # Store the instantiated tool object
-            self.local_tool_instances[tool_name] = tool_instance
-
-            # Update self.mcp_tools
+            # Find the 'local_tools' entry in self.mcp_tools
             local_tools_entry_index = -1
             for i, (server_name, _) in enumerate(self.mcp_tools):
                 if server_name == "local_tools":
@@ -906,12 +881,8 @@ class NavigatorCoder(Coder):
                 # Add the new/updated tool definition
                 updated_tools.append(tool_definition)
                 self.mcp_tools[local_tools_entry_index] = ("local_tools", updated_tools)
-            else:
-                # This case should ideally not happen if initialize_local_tools was called,
-                # but as a fallback, add a new entry.
-                self.mcp_tools.append(("local_tools", [tool_definition]))
 
-            # Update the master list of functions for the LLM
+            # Refresh the master tool list
             self.functions = self.get_tool_list()
 
             # Store tool metadata
@@ -932,14 +903,10 @@ class NavigatorCoder(Coder):
 
             # Ask for confirmation before attempting to fix
             if self.io.confirm_ask(
-                f"The tool at '{rel_file_path}' failed to load. Do you want to add it to the chat to attempt an automatic fix?",
-                subject=f"Error loading tool: {e}",
+                f"Do you want to try and fix the error in {rel_file_path} now?"
             ):
-                # Automatically add the file to the chat and attempt to fix it
                 self.add_rel_fname(rel_file_path)
-                self.io.tool_output(
-                    f"'{rel_file_path}' added to the chat. Attempting to fix the error automatically..."
-                )
+                self.io.tool_output(f"Added {rel_file_path} to the chat to be repaired.")
                 # ARCHITECT: Added logic to queue the fix prompt
                 fix_prompt = (
                     f"The tool at `{rel_file_path}` failed to load with this error:\n\n"
