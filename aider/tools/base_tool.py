@@ -6,6 +6,11 @@ class BaseAiderTool(ABC):
     An abstract base class for creating aider tools.
     """
 
+    name: str = ""
+    description: str = ""
+    parameters: dict = {"type": "object", "properties": {}}
+    scope: str = "local"
+
     def __init__(self, coder, **kwargs):
         """
         Initializes the tool with a coder instance.
@@ -15,7 +20,6 @@ class BaseAiderTool(ABC):
         """
         self.coder = coder
 
-    @abstractmethod
     def get_tool_definition(self):
         """
         Returns the JSON schema definition for the tool.
@@ -25,7 +29,14 @@ class BaseAiderTool(ABC):
 
         :return: A dictionary representing the tool's JSON schema.
         """
-        pass
+        return {
+            "type": "function",
+            "function": {
+                "name": self.name,
+                "description": self.description,
+                "parameters": self.parameters,
+            },
+        }
 
     @abstractmethod
     def run(self, **kwargs):

@@ -13,46 +13,40 @@ class CreateTool(BaseAiderTool):
     A tool that allows the LLM to create new custom tools.
     """
 
-    def get_tool_definition(self):
-        return {
-            "type": "function",
-            "function": {
-                "name": "CreateTool",
+    name = "CreateTool"
+    description = (
+        "Create a new custom tool by providing a description and filename. The new"
+        " tool will be automatically loaded and available for use."
+    )
+    parameters = {
+        "type": "object",
+        "properties": {
+            "description": {
+                "type": "string",
                 "description": (
-                    "Create a new custom tool by providing a description and filename. The new"
-                    " tool will be automatically loaded and available for use."
+                    "A natural language description of the tool to be created. This will be"
+                    " used to generate the tool's Python code."
                 ),
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "description": {
-                            "type": "string",
-                            "description": (
-                                "A natural language description of the tool to be created. This will be"
-                                " used to generate the tool's Python code."
-                            ),
-                        },
-                        "file_name": {
-                            "type": "string",
-                            "description": (
-                                "The desired filename for the new tool (e.g., 'my_new_tool.py'). Must"
-                                " end with .py and not contain path separators."
-                            ),
-                        },
-                        "scope": {
-                            "type": "string",
-                            "enum": ["local", "global"],
-                            "default": "local",
-                            "description": (
-                                "The scope of the tool. 'local' for the current project, 'global'"
-                                " for all projects. Defaults to 'local'."
-                            ),
-                        },
-                    },
-                    "required": ["description", "file_name"],
-                },
             },
-        }
+            "file_name": {
+                "type": "string",
+                "description": (
+                    "The desired filename for the new tool (e.g., 'my_new_tool.py'). Must"
+                    " end with .py and not contain path separators."
+                ),
+            },
+            "scope": {
+                "type": "string",
+                "enum": ["local", "global"],
+                "default": "local",
+                "description": (
+                    "The scope of the tool. 'local' for the current project, 'global'"
+                    " for all projects. Defaults to 'local'."
+                ),
+            },
+        },
+        "required": ["description", "file_name"],
+    }
 
     def run(self, description: str, file_name: str, scope: str = "local"):
         """

@@ -7,25 +7,18 @@ class Command(BaseAiderTool):
     Execute a non-interactive shell command after user confirmation.
     """
 
-    @staticmethod
-    def get_tool_definition():
-        return {
-            "type": "function",
-            "function": {
-                "name": "Command",
-                "description": "Execute a non-interactive shell command after user confirmation.",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "command_string": {
-                            "type": "string",
-                            "description": "The shell command to execute.",
-                        },
-                    },
-                    "required": ["command_string"],
-                },
+    name = "Command"
+    description = "Execute a non-interactive shell command after user confirmation."
+    parameters = {
+        "type": "object",
+        "properties": {
+            "command_string": {
+                "type": "string",
+                "description": "The shell command to execute.",
             },
-        }
+        },
+        "required": ["command_string"],
+    }
 
     def run(self, command_string):
         """

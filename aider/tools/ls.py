@@ -8,25 +8,18 @@ class Ls(BaseAiderTool):
     List files in a directory.
     """
 
-    @staticmethod
-    def get_tool_definition():
-        return {
-            "type": "function",
-            "function": {
-                "name": "Ls",
-                "description": "List files in a directory.",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "directory": {
-                            "type": "string",
-                            "description": "The path to the directory to list.",
-                        },
-                    },
-                    "required": ["directory"],
-                },
+    name = "Ls"
+    description = "List files in a directory."
+    parameters = {
+        "type": "object",
+        "properties": {
+            "directory": {
+                "type": "string",
+                "description": "The path to the directory to list.",
             },
-        }
+        },
+        "required": ["directory"],
+    }
 
     def run(self, directory):
         """

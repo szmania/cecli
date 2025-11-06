@@ -6,25 +6,18 @@ class View(BaseAiderTool):
     Explicitly add a file to context as read-only.
     """
 
-    @staticmethod
-    def get_tool_definition():
-        return {
-            "type": "function",
-            "function": {
-                "name": "View",
-                "description": "Explicitly add a file to context as read-only.",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "file_path": {
-                            "type": "string",
-                            "description": "The path to the file to view.",
-                        },
-                    },
-                    "required": ["file_path"],
-                },
+    name = "View"
+    description = "Explicitly add a file to context as read-only."
+    parameters = {
+        "type": "object",
+        "properties": {
+            "file_path": {
+                "type": "string",
+                "description": "The path to the file to view.",
             },
-        }
+        },
+        "required": ["file_path"],
+    }
 
     def run(self, file_path):
         """
