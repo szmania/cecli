@@ -7,25 +7,18 @@ class CommandInteractive(BaseAiderTool):
     Execute an interactive shell command using run_cmd (which uses pexpect/PTY).
     """
 
-    @staticmethod
-    def get_tool_definition():
-        return {
-            "type": "function",
-            "function": {
-                "name": "CommandInteractive",
-                "description": "Execute an interactive shell command.",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "command_string": {
-                            "type": "string",
-                            "description": "The interactive shell command to execute.",
-                        },
-                    },
-                    "required": ["command_string"],
-                },
+    name = "CommandInteractive"
+    description = "Execute an interactive shell command."
+    parameters = {
+        "type": "object",
+        "properties": {
+            "command_string": {
+                "type": "string",
+                "description": "The interactive shell command to execute.",
             },
-        }
+        },
+        "required": ["command_string"],
+    }
 
     def run(self, command_string):
         """

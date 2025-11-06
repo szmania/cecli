@@ -17,78 +17,64 @@ class DeleteBlock(BaseAiderTool):
     Delete a block of text between start_pattern and end_pattern (inclusive).
     """
 
-    @staticmethod
-    def get_tool_definition():
-        return {
-            "type": "function",
-            "function": {
-                "name": "DeleteBlock",
-                "description": (
-                    "Delete a block of text in a file, from a start pattern to an end pattern or"
-                    " for a number of lines."
-                ),
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "file_path": {
-                            "type": "string",
-                            "description": "The path to the file to modify.",
-                        },
-                        "start_pattern": {
-                            "type": "string",
-                            "description": (
-                                "The pattern that marks the start of the block to delete. The line"
-                                " containing this pattern will be deleted."
-                            ),
-                        },
-                        "end_pattern": {
-                            "type": "string",
-                            "description": (
-                                "The pattern that marks the end of the block to delete. The line"
-                                " containing this pattern will also be deleted. Mutually exclusive"
-                                " with line_count."
-                            ),
-                        },
-                        "line_count": {
-                            "type": "integer",
-                            "description": (
-                                "The number of lines to delete, starting from the line with"
-                                " start_pattern. Mutually exclusive with end_pattern."
-                            ),
-                        },
-                        "near_context": {
-                            "type": "string",
-                            "description": (
-                                "Optional text nearby to help locate the correct instance of the"
-                                " start_pattern."
-                            ),
-                        },
-                        "occurrence": {
-                            "type": "integer",
-                            "description": (
-                                "Which occurrence of the start_pattern to use (1-based index, or"
-                                " -1 for last)."
-                            ),
-                            "default": 1,
-                        },
-                        "change_id": {
-                            "type": "string",
-                            "description": (
-                                "Optional ID for tracking the change, allowing for undo."
-                            ),
-                        },
-                        "dry_run": {
-                            "type": "boolean",
-                            "description": (
-                                "If True, simulate the change without modifying the file."
-                            ),
-                            "default": False,
-                        },
-                    },
-                    "required": ["file_path", "start_pattern"],
-                },
+    name = "DeleteBlock"
+    description = (
+        "Delete a block of text in a file, from a start pattern to an end pattern or for a"
+        " number of lines."
+    )
+    parameters = {
+        "type": "object",
+        "properties": {
+            "file_path": {
+                "type": "string",
+                "description": "The path to the file to modify.",
             },
-        }
+            "start_pattern": {
+                "type": "string",
+                "description": (
+                    "The pattern that marks the start of the block to delete. The line containing"
+                    " this pattern will be deleted."
+                ),
+            },
+            "end_pattern": {
+                "type": "string",
+                "description": (
+                    "The pattern that marks the end of the block to delete. The line containing"
+                    " this pattern will also be deleted. Mutually exclusive with line_count."
+                ),
+            },
+            "line_count": {
+                "type": "integer",
+                "description": (
+                    "The number of lines to delete, starting from the line with start_pattern."
+                    " Mutually exclusive with end_pattern."
+                ),
+            },
+            "near_context": {
+                "type": "string",
+                "description": (
+                    "Optional text nearby to help locate the correct instance of the start_pattern."
+                ),
+            },
+            "occurrence": {
+                "type": "integer",
+                "description": (
+                    "Which occurrence of the start_pattern to use (1-based index, or -1 for last)."
+                ),
+                "default": 1,
+            },
+            "change_id": {
+                "type": "string",
+                "description": "Optional ID for tracking the change, allowing for undo.",
+            },
+            "dry_run": {
+                "type": "boolean",
+                "description": "If True, simulate the change without modifying the file.",
+                "default": False,
+            },
+        },
+        "required": ["file_path", "start_pattern"],
+    }
 
     def run(
         self,
