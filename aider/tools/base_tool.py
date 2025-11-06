@@ -20,7 +20,8 @@ class BaseAiderTool(ABC):
         """
         self.coder = coder
 
-    def get_tool_definition(self):
+    @classmethod
+    def get_tool_definition(cls):
         """
         Returns the JSON schema definition for the tool.
 
@@ -32,9 +33,9 @@ class BaseAiderTool(ABC):
         return {
             "type": "function",
             "function": {
-                "name": self.name,
-                "description": self.description,
-                "parameters": self.parameters,
+                "name": cls.name,
+                "description": cls.description,
+                "parameters": cls.parameters,
             },
         }
 
