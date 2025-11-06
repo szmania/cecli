@@ -42,12 +42,7 @@ from aider.tools.delete_block import _execute_delete_block
 from aider.tools.delete_line import _execute_delete_line
 from aider.tools.delete_lines import _execute_delete_lines
 from aider.tools.extract_lines import _execute_extract_lines
-from aider.tools.git import (
-    _execute_git_diff,
-    _execute_git_log,
-    _execute_git_show,
-    _execute_git_status,
-)
+from aider.tools.git import GitDiff, GitLog, GitShow, GitStatus
 from aider.tools.grep import _execute_grep
 from aider.tools.indent_lines import _execute_indent_lines
 from aider.tools.insert_block import _execute_insert_block
@@ -163,6 +158,11 @@ class NavigatorCoder(Coder):
         # Initialize tool tracking attributes
         self.custom_tools = {}
         self.local_tool_instances = {}
+
+        git_tool_classes = [GitDiff, GitLog, GitShow, GitStatus]
+        for tool_class in git_tool_classes:
+            instance = tool_class(self)
+            self.local_tool_instances[instance.name] = instance
 
     def initialize_local_tools(self):
         # Ensure self.mcp_tools is always a list
