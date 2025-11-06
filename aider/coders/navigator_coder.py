@@ -733,9 +733,7 @@ class NavigatorCoder(Coder):
             },
         ]
 
-        other_tools = [
-            update_todo_list_schema,
-        ]
+        other_tools = []
 
         git_tools = [
             git_diff_schema,
