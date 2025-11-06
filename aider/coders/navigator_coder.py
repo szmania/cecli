@@ -444,7 +444,10 @@ class NavigatorCoder(Coder):
                 "type": "function",
                 "function": {
                     "name": "CreateTool",
-                    "description": "Create a new custom tool by providing a description and a valid Python filename. The new tool will be automatically loaded and available for use.",
+                    "description": (
+                        "Create a new custom tool by providing a description and a valid Python"
+                        " filename. The new tool will be automatically loaded and available for use."
+                    ),
                     "parameters": {
                         "type": "object",
                         "properties": {
@@ -464,8 +467,11 @@ class NavigatorCoder(Coder):
                             },
                             "scope": {
                                 "type": "string",
-                                "description": "The scope for the new tool. Can be 'local' (default) for the current project or 'global' for all projects.",
                                 "enum": ["local", "global"],
+                                "description": (
+                                    "The scope for the new tool. Can be 'local' (default) for the current project"
+                                    " or 'global' for all projects."
+                                ),
                             },
                         },
                         "required": ["description", "file_name"],
