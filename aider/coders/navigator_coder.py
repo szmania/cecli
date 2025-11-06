@@ -47,10 +47,6 @@ from aider.tools.git import (
     _execute_git_log,
     _execute_git_show,
     _execute_git_status,
-    git_diff_schema,
-    git_log_schema,
-    git_show_schema,
-    git_status_schema,
 )
 from aider.tools.grep import _execute_grep
 from aider.tools.indent_lines import _execute_indent_lines
