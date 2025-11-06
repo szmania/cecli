@@ -39,6 +39,13 @@ class GitDiff(BaseAiderTool):
             return f"Error running git diff: {e}"
 
 
+def _execute_git_diff(coder, branch=None):
+    return GitDiff(coder).run(branch=branch)
+
+
+git_diff_schema = GitDiff.get_tool_definition()
+
+
 class GitLog(BaseAiderTool):
     """
     Show the git log.
@@ -74,6 +81,13 @@ class GitLog(BaseAiderTool):
             return f"Error running git log: {e}"
 
 
+def _execute_git_log(coder, limit=10):
+    return GitLog(coder).run(limit=limit)
+
+
+git_log_schema = GitLog.get_tool_definition()
+
+
 class GitShow(BaseAiderTool):
     """
     Show various types of objects (blobs, trees, tags, and commits).
@@ -103,6 +117,13 @@ class GitShow(BaseAiderTool):
             return f"Error running git show: {e}"
 
 
+def _execute_git_show(coder, object="HEAD"):
+    return GitShow(coder).run(object=object)
+
+
+git_show_schema = GitShow.get_tool_definition()
+
+
 class GitStatus(BaseAiderTool):
     """
     Show the working tree status.
@@ -125,5 +146,12 @@ class GitStatus(BaseAiderTool):
         except ANY_GIT_ERROR as e:
             self.coder.io.tool_error(f"Error running git status: {e}")
             return f"Error running git status: {e}"
+
+
+def _execute_git_status(coder):
+    return GitStatus(coder).run()
+
+
+git_status_schema = GitStatus.get_tool_definition()
 
 
