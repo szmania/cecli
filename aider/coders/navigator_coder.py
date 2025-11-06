@@ -62,7 +62,7 @@ from aider.tools.replace_lines import _execute_replace_lines
 from aider.tools.replace_text import _execute_replace_text
 from aider.tools.show_numbered_context import execute_show_numbered_context
 from aider.tools.undo_change import _execute_undo_change
-from aider.tools.update_todo_list import _execute_update_todo_list, update_todo_list_schema
+from aider.tools.update_todo_list import _execute_update_todo_list
 from aider.tools.view import execute_view
 from aider.tools.view_files_at_glob import execute_view_files_at_glob
 from aider.tools.view_files_matching import execute_view_files_matching
