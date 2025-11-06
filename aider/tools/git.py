@@ -127,17 +127,3 @@ class GitStatus(BaseAiderTool):
             return f"Error running git status: {e}"
 
 
-def _execute_git_diff(coder, branch=None):
-    return GitDiff(coder).run(branch=branch)
-
-
-def _execute_git_log(coder, limit=10):
-    return GitLog(coder).run(limit=limit)
-
-
-def _execute_git_show(coder, object="HEAD"):
-    return GitShow(coder).run(object=object)
-
-
-def _execute_git_status(coder):
-    return GitStatus(coder).run()
