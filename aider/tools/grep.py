@@ -11,57 +11,48 @@ class Grep(BaseAiderTool):
     Search for lines matching a pattern in files within the project repository.
     """
 
-    @staticmethod
-    def get_tool_definition():
-        return {
-            "type": "function",
-            "function": {
-                "name": "Grep",
-                "description": (
-                    "Search for lines matching a pattern in files within the project repository."
-                ),
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "pattern": {
-                            "type": "string",
-                            "description": "The pattern to search for.",
-                        },
-                        "file_pattern": {
-                            "type": "string",
-                            "description": "Glob pattern to filter files.",
-                            "default": "*",
-                        },
-                        "directory": {
-                            "type": "string",
-                            "description": "Directory to search within relative to repo root.",
-                            "default": ".",
-                        },
-                        "use_regex": {
-                            "type": "boolean",
-                            "description": "Whether the pattern is a regular expression.",
-                            "default": False,
-                        },
-                        "case_insensitive": {
-                            "type": "boolean",
-                            "description": "Whether the search should be case-insensitive.",
-                            "default": False,
-                        },
-                        "context_before": {
-                            "type": "integer",
-                            "description": "Number of context lines to show before matches.",
-                            "default": 5,
-                        },
-                        "context_after": {
-                            "type": "integer",
-                            "description": "Number of context lines to show after matches.",
-                            "default": 5,
-                        },
-                    },
-                    "required": ["pattern"],
-                },
+    name = "Grep"
+    description = "Search for lines matching a pattern in files within the project repository."
+    parameters = {
+        "type": "object",
+        "properties": {
+            "pattern": {
+                "type": "string",
+                "description": "The pattern to search for.",
             },
-        }
+            "file_pattern": {
+                "type": "string",
+                "description": "Glob pattern to filter files.",
+                "default": "*",
+            },
+            "directory": {
+                "type": "string",
+                "description": "Directory to search within relative to repo root.",
+                "default": ".",
+            },
+            "use_regex": {
+                "type": "boolean",
+                "description": "Whether the pattern is a regular expression.",
+                "default": False,
+            },
+            "case_insensitive": {
+                "type": "boolean",
+                "description": "Whether the search should be case-insensitive.",
+                "default": False,
+            },
+            "context_before": {
+                "type": "integer",
+                "description": "Number of context lines to show before matches.",
+                "default": 5,
+            },
+            "context_after": {
+                "type": "integer",
+                "description": "Number of context lines to show after matches.",
+                "default": 5,
+            },
+        },
+        "required": ["pattern"],
+    }
 
     def _find_search_tool(self):
         """Find the best available command-line search tool (rg, ag, grep)."""
