@@ -3437,7 +3437,7 @@ class Coder:
             if allowed:
                 res.append(edit)
 
-        self.dirty_commit()
+        await self.dirty_commit()
         self.need_commit_before_edits = set()
 
         return res
@@ -3540,7 +3540,7 @@ class Coder:
         if history:
             for msg in history:
                 msg_content = msg.get("content") or ""
-                context += "\n" + msg["role"].UPPER() + ": " + msg_content + "\n"
+                context += "\n" + msg["role"].upper() + ": " + msg_content + "\n"
 
         return context
 
@@ -3552,7 +3552,9 @@ class Coder:
             context = self.get_context_from_history(self.cur_messages)
 
         try:
-            res = self.repo.commit(fnames=edited, context=context, aider_edits=True, coder=self)
+            res = await self.repo.commit(
+                fnames=edited, context=context, aider_edits=True, coder=self
+            )
             if res:
                 self.show_auto_commit_outcome(res)
                 commit_hash, commit_message = res
@@ -3580,7 +3582,7 @@ class Coder:
         if self.commit_before_message[-1] != self.repo.get_head_commit_sha():
             self.io.tool_output("You can use /undo to undo and discard each aider commit.")
 
-    def dirty_commit(self):
+    async def dirty_commit(self):
         if not self.need_commit_before_edits:
             return
         if not self.dirty_commits:
@@ -3588,7 +3590,7 @@ class Coder:
         if not self.repo:
             return
 
-        self.repo.commit(fnames=self.need_commit_before_edits, coder=self)
+        await self.repo.commit(fnames=self.need_commit_before_edits, coder=self)
 
         # files changed, move cur messages back behind the files messages
         # self.move_back_cur_messages(self.gpt_prompts.files_content_local_edits)
@@ -3644,7 +3646,9 @@ class Coder:
             self.io.tool_output(f"Running {command}")
             # Add the command to input history
             self.io.add_to_input_history(f"/run {command.strip()}")
-            exit_status, output = run_cmd(command, error_print=self.io.tool_error, cwd=self.root)
+            exit_status, output = await asyncio.to_thread(
+                run_cmd, command, error_print=self.io.tool_error, cwd=self.root
+            )
             if output:
                 accumulated_output += f"Output from {command}\n{output}\n"
 
