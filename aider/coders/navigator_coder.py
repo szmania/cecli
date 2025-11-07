@@ -42,7 +42,16 @@ from aider.tools.delete_block import _execute_delete_block, delete_block_schema
 from aider.tools.delete_line import _execute_delete_line, delete_line_schema
 from aider.tools.delete_lines import _execute_delete_lines, delete_lines_schema
 from aider.tools.extract_lines import _execute_extract_lines, extract_lines_schema
-from aider.tools.git import GitDiff, GitLog, GitShow, GitStatus
+from aider.tools.git import (
+    GitDiff,
+    git_diff_schema,
+    GitLog,
+    git_log_schema,
+    GitShow,
+    git_show_schema,
+    GitStatus,
+    git_status_schema,
+)
 from aider.tools.grep import _execute_grep
 from aider.tools.indent_lines import _execute_indent_lines, indent_lines_schema
 from aider.tools.insert_block import _execute_insert_block, insert_block_schema
