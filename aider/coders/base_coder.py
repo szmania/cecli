@@ -1386,6 +1386,7 @@ class Coder:
         finally:
             self.run_one_completed = True
             self.compact_context_completed = True
+            self.io.stop_spinner()
 
     def copy_context(self):
         if self.auto_copy_context:
@@ -2091,6 +2092,9 @@ class Coder:
                     self.io.tool_output(f"Retrying in {retry_delay:.1f} seconds...")
                     await asyncio.sleep(retry_delay)
                     continue
+                except KeyboardInterrupt:
+                    interrupted = True
+                    break
                 except FinishReasonLength:
                     # We hit the output limit!
                     if not self.main_model.info.get("supports_assistant_prefill"):
@@ -2151,6 +2155,16 @@ class Coder:
         else:
             content = ""
 
+        if interrupted:
+            if self.cur_messages and self.cur_messages[-1]["role"] == "user":
+                self.cur_messages[-1]["content"] += "\n^C KeyboardInterrupt"
+            else:
+                self.cur_messages += [dict(role="user", content="^C KeyboardInterrupt")]
+            self.cur_messages += [
+                dict(role="assistant", content="I see that you interrupted my previous reply.")
+            ]
+            return
+
         edited = await self.apply_updates()
 
         if edited:
@@ -2162,58 +2176,62 @@ class Coder:
 
             self.move_back_cur_messages(saved_message)
 
-        add_rel_files_message = await self.check_for_file_mentions(content)
-        if add_rel_files_message:
-            if self.reflected_message:
-                self.reflected_message += "\n\n" + add_rel_files_message
-            else:
-                self.reflected_message = add_rel_files_message
-            return
+        if not interrupted:
+            add_rel_files_message = await self.check_for_file_mentions(content)
+            if add_rel_files_message:
+                if self.reflected_message:
+                    self.reflected_message += "\n\n" + add_rel_files_message
+                else:
+                    self.reflected_message = add_rel_files_message
+                return
 
-        # Process any tools using MCP servers
-        try:
-            if self.partial_response_tool_calls:
-                tool_calls = []
-                for tool_call_dict in self.partial_response_tool_calls:
-                    tool_calls.append(
-                        ChatCompletionMessageToolCall(
-                            id=tool_call_dict.get("id"),
-                            function=Function(
-                                name=tool_call_dict.get("function", {}).get("name"),
-                                arguments=tool_call_dict.get("function", {}).get(
-                                    "arguments", ""
+            # Process any tools using MCP servers
+            try:
+                if self.partial_response_tool_calls:
+                    tool_calls = []
+                    for tool_call_dict in self.partial_response_tool_calls:
+                        tool_calls.append(
+                            ChatCompletionMessageToolCall(
+                                id=tool_call_dict.get("id"),
+                                function=Function(
+                                    name=tool_call_dict.get("function", {}).get("name"),
+                                    arguments=tool_call_dict.get("function", {}).get(
+                                        "arguments", ""
+                                    ),
                                 ),
-                            ),
-                            type=tool_call_dict.get("type"),
+                                type=tool_call_dict.get("type"),
+                            )
                         )
+
+                    tool_call_response = ModelResponse(
+                        choices=[
+                            Choices(
+                                finish_reason="tool_calls",
+                                index=0,
+                                message=Message(
+                                    content=None,
+                                    role="assistant",
+                                    tool_calls=tool_calls,
+                                ),
+                            )
+                        ]
                     )
 
-                tool_call_response = ModelResponse(
-                    choices=[
-                        Choices(
-                            finish_reason="tool_calls",
-                            index=0,
-                            message=Message(
-                                content=None,
-                                role="assistant",
-                                tool_calls=tool_calls,
-                            ),
-                        )
-                    ]
-                )
+                    if await self.process_tool_calls(tool_call_response):
+                        self.num_tool_calls += 1
+                        self.reflected_message = True
+                        return
+            except Exception as e:
+                self.io.tool_error(f"Error processing tool calls: {str(e)}")
+                # Continue without tool processing
 
-                if await self.process_tool_calls(tool_call_response):
-                    self.num_tool_calls += 1
-                    self.reflected_message = True
+            self.num_tool_calls = 0
+
+            try:
+                if await self.reply_completed():
                     return
-        except Exception as e:
-            self.io.tool_error(f"Error processing tool calls: {str(e)}")
-            # Continue without tool processing
-
-        self.num_tool_calls = 0
-
-        if await self.reply_completed():
-            return
+            except KeyboardInterrupt:
+                interrupted = True
 
         if self.reflected_message:
             return
@@ -3470,9 +3488,7 @@ class Coder:
         except Exception as err:
             self.io.tool_error("Exception while updating files:")
             self.io.tool_error(str(err), strip=False)
-
-            traceback.print_exc()
-
+            self.io.tool_error(traceback.format_exc())
             self.reflected_message = str(err)
             return edited
 
