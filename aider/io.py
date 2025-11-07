@@ -945,7 +945,7 @@ class InputOutput:
             try:
                 input_task.cancel()
                 await input_task
-            except (asyncio.CancelledError, IndexError):
+            except (asyncio.CancelledError, EOFError, IndexError):
                 pass
 
     async def cancel_processing_task(self):
@@ -955,7 +955,7 @@ class InputOutput:
             try:
                 processing_task.cancel()
                 await processing_task
-            except (asyncio.CancelledError, IndexError):
+            except (asyncio.CancelledError, EOFError, IndexError):
                 pass
 
     def add_to_input_history(self, inp):
@@ -1517,8 +1517,6 @@ class InputOutput:
 
         output = StringIO()
         console = Console(file=output, force_terminal=False)
-
-        read_only_lines = []
 
         # Handle read-only files
         if rel_read_only_fnames or rel_read_only_stubs_fnames:
