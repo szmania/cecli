@@ -38,25 +38,28 @@ from aider.tools.command import _execute_command
 from aider.tools.base_tool import BaseAiderTool
 from aider.tools.command_interactive import _execute_command_interactive
 from aider.tools.create_tool import CreateTool
-from aider.tools.delete_block import _execute_delete_block
-from aider.tools.delete_line import _execute_delete_line
-from aider.tools.delete_lines import _execute_delete_lines
-from aider.tools.extract_lines import _execute_extract_lines
+from aider.tools.delete_block import _execute_delete_block, delete_block_schema
+from aider.tools.delete_line import _execute_delete_line, delete_line_schema
+from aider.tools.delete_lines import _execute_delete_lines, delete_lines_schema
+from aider.tools.extract_lines import _execute_extract_lines, extract_lines_schema
 from aider.tools.git import GitDiff, GitLog, GitShow, GitStatus
 from aider.tools.grep import _execute_grep
-from aider.tools.indent_lines import _execute_indent_lines
-from aider.tools.insert_block import _execute_insert_block
-from aider.tools.list_changes import _execute_list_changes
+from aider.tools.indent_lines import _execute_indent_lines, indent_lines_schema
+from aider.tools.insert_block import _execute_insert_block, insert_block_schema
+from aider.tools.list_changes import _execute_list_changes, list_changes_schema
 from aider.tools.ls import execute_ls
 from aider.tools.make_editable import _execute_make_editable
 from aider.tools.make_readonly import _execute_make_readonly
 from aider.tools.remove import _execute_remove
-from aider.tools.replace_all import _execute_replace_all
-from aider.tools.replace_line import _execute_replace_line
-from aider.tools.replace_lines import _execute_replace_lines
-from aider.tools.replace_text import _execute_replace_text
-from aider.tools.show_numbered_context import execute_show_numbered_context
-from aider.tools.undo_change import _execute_undo_change
+from aider.tools.replace_all import _execute_replace_all, replace_all_schema
+from aider.tools.replace_line import _execute_replace_line, replace_line_schema
+from aider.tools.replace_lines import _execute_replace_lines, replace_lines_schema
+from aider.tools.replace_text import _execute_replace_text, replace_text_schema
+from aider.tools.show_numbered_context import (
+    execute_show_numbered_context,
+    show_numbered_context_schema,
+)
+from aider.tools.undo_change import _execute_undo_change, undo_change_schema
 from aider.tools.view import execute_view
 from aider.tools.view_files_at_glob import execute_view_files_at_glob
 from aider.tools.view_files_matching import execute_view_files_matching
@@ -151,9 +154,6 @@ class NavigatorCoder(Coder):
         # Track a tool file that failed to load and might need reloading after a fix
         self.tool_file_to_reload_after_fix = None
 
-        super().__init__(*args, **kwargs)
-        self.initialize_local_tools()
-
         # Initialize tool tracking attributes
         self.custom_tools = {}
         self.local_tool_instances = {}
@@ -162,6 +162,9 @@ class NavigatorCoder(Coder):
         for tool_class in git_tool_classes:
             instance = tool_class(self)
             self.local_tool_instances[instance.name] = instance
+
+        self.initialize_local_tools()
+        super().__init__(*args, **kwargs)
 
     def initialize_local_tools(self):
         # Ensure self.mcp_tools is always a list
