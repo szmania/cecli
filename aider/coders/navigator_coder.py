@@ -1087,11 +1087,6 @@ class NavigatorCoder(Coder):
                     "listchanges": _execute_list_changes,
                     "extractlines": _execute_extract_lines,
                     "shownumberedcontext": execute_show_numbered_context,
-                    "updatetodolist": _execute_update_todo_list,
-                    "git_diff": _execute_git_diff,
-                    "git_log": _execute_git_log,
-                    "git_show": _execute_git_show,
-                    "git_status": _execute_git_status,
                 }
 
                 for params in parsed_args_list:
