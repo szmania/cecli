@@ -58,7 +58,7 @@ class McpServer:
             self.session = session
             return session
         except Exception as e:
-            logging.error(f"Error initializing server {self.name}: {e}")
+            logging.error(f"Error initializing server {self.name} with command '{command}': {e}")
             await self.disconnect()
             raise
 
