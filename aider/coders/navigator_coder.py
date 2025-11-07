@@ -2327,10 +2327,6 @@ class NavigatorCoder(Coder):
                     result_message = await asyncio.to_thread(
                         execute_show_numbered_context, self, **params
                     )
-                elif norm_tool_name == "updatetodolist":
-                    result_message = await asyncio.to_thread(
-                        _execute_update_todo_list, self, **params
-                    )
                 elif (
                     hasattr(self, "local_tool_instances")
                     and tool_name in self.local_tool_instances
