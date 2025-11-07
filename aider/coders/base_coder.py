@@ -2046,6 +2046,8 @@ class Coder:
 
         self.usage_report = None
         exhausted = False
+        interrupted = False
+
         try:
             while True:
                 try:
@@ -2062,11 +2064,11 @@ class Coder:
                         break
 
                     should_retry = ex_info.retry
-                    if self.retry_on_unavailable and ex_info.name in (
-                        "ServiceUnavailableError",
-                        "MidStreamFallbackError",
-                        "InternalServerError",
-                    ) or "ServiceUnavailableError" in str(err) or "MidStreamFallbackError" in str(err) or "InternalServerError" in str(err):
+                    if self.retry_on_unavailable and (
+                        ex_info.name in ("ServiceUnavailableError", "InternalServerError")
+                        or "ServiceUnavailableError" in str(err)
+                        or "InternalServerError" in str(err)
+                    ):
                         should_retry = True
 
                     if should_retry:
@@ -2569,7 +2571,7 @@ class Coder:
                 return (server.name, server_tools)
             except Exception as e:
                 if server.name != "unnamed-server":
-                    self.io.tool_warning(f"Error initializing MCP server {server.name}:\n{e}")
+                    self.io.tool_warning(f"Error initializing MCP server {server.name}: {e}")
                 return None
 
         async def get_all_server_tools():
@@ -2888,9 +2890,19 @@ class Coder:
         show_content_err = None
         try:
             if completion.choices[0].message.tool_calls:
-                self.partial_response_function_call = (
-                    completion.choices[0].message.tool_calls[0].function
-                )
+                self.partial_response_tool_calls = [
+                    {
+                        "id": tc.id,
+                        "type": tc.type,
+                        "function": {
+                            "name": tc.function.name,
+                            "arguments": tc.function.arguments,
+                        },
+                    }
+                    for tc in completion.choices[0].message.tool_calls
+                ]
+            elif getattr(completion.choices[0].message, "function_call", None):
+                self.partial_response_function_call = completion.choices[0].message.function_call
         except AttributeError as func_err:
             show_func_err = func_err
 
@@ -2911,6 +2923,8 @@ class Coder:
             function_call=str(self.partial_response_function_call),
             content=self.partial_response_content,
         )
+        if self.partial_response_tool_calls:
+            resp_hash["tool_calls"] = str(self.partial_response_tool_calls)
         resp_hash = hashlib.sha1(json.dumps(resp_hash, sort_keys=True).encode())
         self.chat_completion_response_hashes.append(resp_hash.hexdigest())
 

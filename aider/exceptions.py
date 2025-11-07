@@ -16,6 +16,12 @@ class EmptyLLMResponseError(Exception):
     pass
 
 
+class MidStreamFallbackError(Exception):
+    """A fallback model failed mid-stream."""
+
+    pass
+
+
 EXCEPTIONS = [
     ExInfo("APIConnectionError", True, None),
     ExInfo("APIError", True, None),
@@ -47,7 +53,7 @@ EXCEPTIONS = [
         "The API provider has rate limited you. Try again later or check your quotas.",
     ),
     ExInfo("RouterRateLimitError", True, None),
-    ExInfo("ServiceUnavailableError", False, "The API provider's servers are down or overloaded."),
+    ExInfo("ServiceUnavailableError", True, "The API provider's servers are down or overloaded."),
     ExInfo(
         "MidStreamFallbackError",
         False,

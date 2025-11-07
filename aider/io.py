@@ -422,16 +422,28 @@ class InputOutput:
             fancy_input = False
 
         # Spinner state
-        self.spinner_live = None
+        self.spinner_running = False
+        self.spinner_text = ""
+        self.spinner_frame_index = 0
+        self.spinner_last_frame_index = 0
         self.unicode_palette = "░█"
 
         if fancy_input:
+            # If unicode is supported, use the rich 'dots2' spinner, otherwise an ascii fallback
+            if self._spinner_supports_unicode():
+                self.spinner_frames = SPINNERS["dots2"]["frames"]
+            else:
+                # A simple ascii spinner
+                self.spinner_frames = SPINNERS["line"]["frames"]
+
             # Initialize PromptSession only if we have a capable terminal
             session_kwargs = {
                 "input": self.input,
                 "output": self.output,
                 "lexer": PygmentsLexer(MarkdownLexer),
                 "editing_mode": self.editingmode,
+                "bottom_toolbar": self.get_bottom_toolbar,
+                "refresh_interval": 0.1,
             }
             if self.editingmode == EditingMode.VI:
                 session_kwargs["cursor"] = ModalCursorShapeConfig()
@@ -465,36 +477,53 @@ class InputOutput:
         # Validate color settings after console is initialized
         self._validate_color_settings()
 
+    def _spinner_supports_unicode(self) -> bool:
+        if not self.is_tty:
+            return False
+        try:
+            out = self.unicode_palette
+            out += "\b" * len(self.unicode_palette)
+            out += " " * len(self.unicode_palette)
+            out += "\b" * len(self.unicode_palette)
+            sys.stdout.write(out)
+            sys.stdout.flush()
+            return True
+        except UnicodeEncodeError:
+            return False
+        except Exception:
+            return False
+
     def start_spinner(self, text):
         """Start the spinner."""
         self.stop_spinner()
 
         if self.prompt_session:
-            from rich.live import Live
-            from rich.spinner import Spinner as RichSpinner
-            from rich.text import Text
-
-            spinner_renderable = RichSpinner("dots2", text=Text(f" {text}"))
-            self.spinner_live = Live(
-                spinner_renderable,
-                console=self.console,
-                transient=True,
-                refresh_per_second=20,
-            )
-            self.spinner_live.start()
+            self.spinner_running = True
+            self.spinner_text = text
+            self.spinner_frame_index = self.spinner_last_frame_index
         else:
             self.fallback_spinner = Spinner(text)
             self.fallback_spinner.step()
 
     def stop_spinner(self):
         """Stop the spinner."""
-        if hasattr(self, "spinner_live") and self.spinner_live:
-            self.spinner_live.stop()
-            self.spinner_live = None
-
+        self.spinner_running = False
+        self.spinner_text = ""
+        # Keep last frame index to avoid spinner "jumping" on restart
+        self.spinner_last_frame_index = self.spinner_frame_index
         if self.fallback_spinner:
             self.fallback_spinner.end()
             self.fallback_spinner = None
+
+    def get_bottom_toolbar(self):
+        """Get the current spinner frame and text for the bottom toolbar."""
+        if not self.spinner_running or not self.spinner_frames:
+            return None
+
+        frame = self.spinner_frames[self.spinner_frame_index]
+        self.spinner_frame_index = (self.spinner_frame_index + 1) % len(self.spinner_frames)
+
+        return f"{frame} {self.spinner_text}"
 
     def _validate_color_settings(self):
         """Validate configured color strings and reset invalid ones."""
@@ -841,6 +870,9 @@ class InputOutput:
 
             except EOFError:
                 raise
+            except KeyboardInterrupt:
+                self.console.print()
+                return ""
             except UnicodeEncodeError as err:
                 self.tool_error(str(err))
                 return ""
@@ -959,7 +991,7 @@ class InputOutput:
         else:
             style = dict()
 
-        self.console.print(Text(inp), **style)
+        self.stream_print(Text(inp), **style)
 
     def user_input(self, inp, log_only=True):
         if not log_only:
@@ -1213,23 +1245,23 @@ class InputOutput:
             message = Text(message)
 
         style = dict()
-
         if self.pretty:
-            color = ensure_hash_prefix(color) if color else None
             if color:
-                style["color"] = color
+                style["color"] = ensure_hash_prefix(color)
+
+        style = RichStyle(**style)
 
         try:
-            self.stream_print(message, style=RichStyle(**style))
+            self.stream_print(message, style=style)
         except UnicodeEncodeError:
             # Fallback to ASCII-safe output
             if isinstance(message, Text):
                 message = message.plain
             message = str(message).encode("ascii", errors="replace").decode("ascii")
-            self.stream_print(message, style=RichStyle(**style))
+            self.stream_print(message, style=style)
 
-        if self.prompt_session and self.prompt_session.app:
-            self.prompt_session.app.invalidate()
+    def tool_success(self, message="", strip=True):
+        self._tool_message(message, strip, self.user_input_color)
 
     def tool_error(self, message="", strip=True):
         self.num_error_outputs += 1
@@ -1277,7 +1309,7 @@ class InputOutput:
         else:
             show_resp = Text(message or "(empty response)")
 
-        self.console.print(show_resp)
+        self.stream_print(show_resp)
 
     def render_markdown(self, text):
         output = StringIO()
@@ -1320,11 +1352,17 @@ class InputOutput:
 
         if not final:
             if len(lines) > 1:
-                self.console.print(output)
+                self.console.print(
+                    Text.from_ansi(output) if self.has_ansi_codes(output) else output
+                )
         else:
             # Ensure any remaining buffered content is printed using the full response
-            self.console.print(output)
+            self.console.print(Text.from_ansi(output) if self.has_ansi_codes(output) else output)
             self.reset_streaming_response()
+
+    def has_ansi_codes(self, s: str) -> bool:
+        """Check if a string contains the ANSI escape character."""
+        return "\x1b" in s
 
     def reset_streaming_response(self):
         self._stream_buffer = ""
@@ -1472,6 +1510,8 @@ class InputOutput:
 
         output = StringIO()
         console = Console(file=output, force_terminal=False)
+
+        read_only_lines = []
 
         # Handle read-only files
         if rel_read_only_fnames or rel_read_only_stubs_fnames:
