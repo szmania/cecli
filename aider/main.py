@@ -238,8 +238,6 @@ def launch_gui(args):
 
     from aider import gui
 
-    print()
-    print("CONTROL-C to exit...")
 
     # Necessary so streamlit does not prompt the user for an email address.
     write_streamlit_credentials()
