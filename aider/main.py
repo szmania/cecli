@@ -690,6 +690,7 @@ async def main_async(argv=None, input=None, output=None, force_git_root=None, re
             multiline_mode=args.multiline,
             notifications=args.notifications,
             notifications_command=args.notifications_command,
+            verbose=args.verbose,
         )
 
     io = get_io(args.pretty)
@@ -1147,9 +1148,9 @@ async def main_async(argv=None, input=None, output=None, force_git_root=None, re
             enable_context_compaction=args.enable_context_compaction,
             context_compaction_max_tokens=args.context_compaction_max_tokens,
             context_compaction_summary_tokens=args.context_compaction_summary_tokens,
-            map_cache_dir=args.map_cache_dir,
-            retry_timeout=args.retry_timeout,
-            retry_backoff_factor=args.retry_backoff_factor,
+            repomap_in_memory=args.map_memory_cache,
+            preserve_todo_list=args.preserve_todo_list,
+            linear_output=args.linear_output,
         )
     except UnknownEditFormat as err:
         io.tool_error(str(err))
