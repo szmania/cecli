@@ -430,6 +430,15 @@ class GitRepo:
 
         return diffs
 
+    def get_log(self, limit=10):
+        return self.repo.git.log(f"-n{limit}")
+
+    def show_commit(self, commit):
+        return self.repo.git.show(commit)
+
+    def get_status(self):
+        return self.repo.git.status()
+
     def get_tracked_files(self):
         if not self.repo:
             return []
