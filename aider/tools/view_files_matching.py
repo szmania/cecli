@@ -113,7 +113,9 @@ class ViewFilesMatching(BaseAiderTool):
             if matches:
                 # Sort by number of matches (most matches first) for preview
                 sorted_matches = sorted(matches.items(), key=lambda x: x[1], reverse=True)
-                match_list_preview = [f"{file} ({count} matches)" for file, count in sorted_matches[:5]]
+                match_list_preview = [
+                    f"{file} ({count} matches)" for file, count in sorted_matches[:5]
+                ]
 
                 subject = ", ".join(match_list_preview)
                 if len(sorted_matches) > 5:
@@ -126,7 +128,7 @@ class ViewFilesMatching(BaseAiderTool):
                     self.coder.io.tool_output(f"Skipped adding files matching '{search_pattern}'.")
                     return "Action skipped by user."
 
-                for file in matches:
+                for file, count in sorted_matches:
                     self.coder._add_file_to_context(file)
 
                 # Return a user-friendly result

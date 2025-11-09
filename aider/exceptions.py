@@ -32,6 +32,7 @@ EXCEPTIONS = [
         "The API provider is not able to authenticate you. Check your API key.",
     ),
     ExInfo("AzureOpenAIError", True, None),
+    ExInfo("BadGatewayError", False, None),
     ExInfo("BadRequestError", False, None),
     ExInfo("BudgetExceededError", True, None),
     ExInfo(
@@ -40,11 +41,18 @@ EXCEPTIONS = [
         "The API provider has refused the request due to a safety policy about the content.",
     ),
     ExInfo("ContextWindowExceededError", False, None),  # special case handled in base_coder
+    ExInfo("EmptyLLMResponseError", True, "The LLM returned an empty response."),
     ExInfo("ErrorEventError", True, None),
     ExInfo("ImageFetchError", True, "The API cannot fetch an image"),
     ExInfo("InternalServerError", True, "The API provider's servers are down or overloaded."),
     ExInfo("InvalidRequestError", True, None),
     ExInfo("JSONSchemaValidationError", True, None),
+    ExInfo(
+        "MidStreamFallbackError",
+        False,
+        "A fallback model failed mid-stream. This is often due to rate limits or temporary"
+        " outages on the upstream model provider.",
+    ),
     ExInfo("NotFoundError", False, None),
     ExInfo("OpenAIError", True, None),
     ExInfo(
@@ -55,19 +63,12 @@ EXCEPTIONS = [
     ExInfo("RouterRateLimitError", True, None),
     ExInfo("ServiceUnavailableError", True, "The API provider's servers are down or overloaded."),
     ExInfo(
-        "MidStreamFallbackError",
-        False,
-        "A fallback model failed mid-stream. This is often due to rate limits or temporary"
-        " outages on the upstream model provider.",
-    ),
-    ExInfo("UnprocessableEntityError", True, None),
-    ExInfo("UnsupportedParamsError", True, None),
-    ExInfo(
         "Timeout",
         True,
         "The API provider timed out without returning a response. They may be down or overloaded.",
     ),
-    ExInfo("EmptyLLMResponseError", True, "The LLM returned an empty response."),
+    ExInfo("UnprocessableEntityError", True, None),
+    ExInfo("UnsupportedParamsError", True, None),
 ]
 
 

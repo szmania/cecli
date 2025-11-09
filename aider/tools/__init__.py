@@ -41,6 +41,6 @@ from .view import execute_view, view_schema
 from .view_files_at_glob import execute_view_files_at_glob, view_files_at_glob_schema
 from .view_files_matching import execute_view_files_matching, view_files_matching_schema
 from .view_files_with_symbol import (
-    _execute_view_files_with_symbol,
+    execute_view_files_with_symbol,
     view_files_with_symbol_schema,
 )

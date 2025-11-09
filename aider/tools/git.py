@@ -153,5 +153,3 @@ def _execute_git_status(coder):
 
 
 git_status_schema = GitStatus.get_tool_definition()
-
-

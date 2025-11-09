@@ -403,6 +403,7 @@ class Coder:
         did_discover_tools=False,
         preserve_todo_list=False,
         linear_output=False,
+        args=None,
     ):
         # initialize from args.map_cache_dir
         self.map_cache_dir = map_cache_dir
@@ -437,6 +438,7 @@ class Coder:
 
         self.suggest_shell_commands = suggest_shell_commands
         self.detect_urls = detect_urls
+        self.args = args
 
         self.num_cache_warming_pings = num_cache_warming_pings
         self.mcp_servers = mcp_servers
