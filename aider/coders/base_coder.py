@@ -973,6 +973,8 @@ class Coder:
         if not self.repo_map:
             return
 
+        self.io.update_spinner("Updating repo map")
+
         cur_msg_text = self.get_cur_message_text()
         mentioned_fnames = self.get_file_mentions(cur_msg_text)
         mentioned_idents = self.get_ident_mentions(cur_msg_text)
@@ -989,6 +991,10 @@ class Coder:
                 rel = str(abs_path)
             parts = Path(rel).parts
             if ".meta" in parts or ".docs" in parts:
+                return False
+            if ".min." in parts[-1]:
+                return False
+            if self.repo.git_ignored_file(abs_path):
                 return False
             return True
 
@@ -1024,6 +1030,7 @@ class Coder:
                 all_abs_files,
             )
 
+        self.io.update_spinner(self.io.last_spinner_text)
         return repo_content
 
     def get_repo_messages(self):
@@ -1372,6 +1379,8 @@ class Coder:
             await self.io.cancel_processing_task()
 
     async def _processing_logic(self, user_message, preproc):
+        await asyncio.sleep(0.1)
+
         try:
             self.compact_context_completed = False
             await self.compact_context_if_needed()
@@ -2189,7 +2198,13 @@ class Coder:
             try:
                 if self.partial_response_tool_calls:
                     tool_calls = []
+                    tool_id_set = set()
                     for tool_call_dict in self.partial_response_tool_calls:
+                        # LLM APIs sometimes return duplicates and that's annoying
+                        if tool_call_dict.get("id") in tool_id_set:
+                            continue
+                        tool_id_set.add(tool_call_dict.get("id"))
+
                         tool_calls.append(
                             ChatCompletionMessageToolCall(
                                 id=tool_call_dict.get("id"),

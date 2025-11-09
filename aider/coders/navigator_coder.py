@@ -9,17 +9,6 @@ import re
 import shutil
 import sys
 import time
-import ast
-import asyncio
-import base64
-import json
-import locale
-import os
-import platform
-import re
-import shutil
-import sys
-import time
 import traceback
 from collections import Counter, defaultdict
 from datetime import datetime
@@ -34,8 +23,8 @@ from aider import urls, utils
 from aider.change_tracker import ChangeTracker
 from aider.mcp.server import LocalServer
 from aider.repo import ANY_GIT_ERROR
-from aider.tools.command import _execute_command
 from aider.tools.base_tool import BaseAiderTool
+from aider.tools.command import _execute_command
 from aider.tools.command_interactive import _execute_command_interactive
 from aider.tools.create_tool import CreateTool
 from aider.tools.delete_block import _execute_delete_block, delete_block_schema
@@ -69,6 +58,7 @@ from aider.tools.show_numbered_context import (
     show_numbered_context_schema,
 )
 from aider.tools.undo_change import _execute_undo_change, undo_change_schema
+from aider.tools.update_todo_list import _execute_update_todo_list, update_todo_list_schema
 from aider.tools.view import execute_view
 from aider.tools.view_files_at_glob import execute_view_files_at_glob
 from aider.tools.view_files_matching import execute_view_files_matching
@@ -745,7 +735,7 @@ class NavigatorCoder(Coder):
             },
         ]
 
-        other_tools = []
+        other_tools = [update_todo_list_schema]
 
         git_tools = [
             git_diff_schema,
@@ -925,6 +915,7 @@ class NavigatorCoder(Coder):
             else:
                 self.io.tool_output(f"Skipping automatic fix for '{rel_file_path}'.")
 
+    def tool_unload_from_path(self, file_path: str):
         abs_file_path = Path(self.abs_root_path(file_path)).resolve()
         rel_file_path = self.get_rel_fname(str(abs_file_path))
 
@@ -1087,6 +1078,7 @@ class NavigatorCoder(Coder):
                     "listchanges": _execute_list_changes,
                     "extractlines": _execute_extract_lines,
                     "shownumberedcontext": execute_show_numbered_context,
+                    "updatetodolist": _execute_update_todo_list,
                 }
 
                 for params in parsed_args_list:
@@ -2327,6 +2319,10 @@ class NavigatorCoder(Coder):
                     result_message = await asyncio.to_thread(
                         execute_show_numbered_context, self, **params
                     )
+                elif norm_tool_name == "updatetodolist":
+                    result_message = await asyncio.to_thread(
+                        _execute_update_todo_list, self, **params
+                    )
                 elif (
                     hasattr(self, "local_tool_instances")
                     and tool_name in self.local_tool_instances
@@ -2852,15 +2848,15 @@ Just reply with fixed versions of the {blocks} above that failed to match.
                         current = current[part]
 
             # Function to recursively print the tree
-            def print_tree(node, prefix="- ", indent="  ", path=""):
+            def print_tree(node, prefix="- ", indent="  ", current_path=""):
                 lines = []
                 # First print all directories
                 dirs = sorted([k for k in node.keys() if k != "."])
                 for i, dir_name in enumerate(dirs):
-                    full_path = f"{path}/{dir_name}" if path else dir_name
-                    lines.append(f"{prefix}{full_path}/")
+                    # Only print the current directory name, not the full path
+                    lines.append(f"{prefix}{dir_name}/")
                     sub_lines = print_tree(
-                        node[dir_name], prefix=prefix, indent=indent, path=full_path
+                        node[dir_name], prefix=prefix, indent=indent, current_path=dir_name
                     )
                     for sub_line in sub_lines:
                         lines.append(f"{indent}{sub_line}")
@@ -2868,9 +2864,8 @@ Just reply with fixed versions of the {blocks} above that failed to match.
                 # Then print all files
                 if "." in node:
                     for file_name in sorted(node["."]):
-                        lines.append(
-                            f"{prefix}{path}/{file_name}" if path else f"{prefix}{file_name}"
-                        )
+                        # Only print the current file name, not the full path
+                        lines.append(f"{prefix}{file_name}")
 
                 return lines
 
@@ -3040,45 +3035,71 @@ Just reply with fixed versions of the {blocks} above that failed to match.
             self.io.tool_error(f"Error generating git status: {str(e)}")
             return None
 
-def cmd_tools_repair(self, args=""):  # noqa: F811
-    """
-    Repair a custom tool that is erroring.
+    def cmd_context_blocks(self, args=""):
+        """
+        Toggle enhanced context blocks feature.
+        """
+        self.use_enhanced_context = not self.use_enhanced_context
 
-    /tools-repair <tool_name_or_path> [description of problem]
-    """
-    if not args:
-        self.io.tool_error("Usage: /tools-repair <tool_name_or_path> [description of problem]")
-        return
+        if self.use_enhanced_context:
+            self.io.tool_output(
+                "Enhanced context blocks are now ON - directory structure and git status will be"
+                " included."
+            )
+            # Mark tokens as needing calculation, but don't calculate yet (lazy calculation)
+            self.tokens_calculated = False
+            self.context_blocks_cache = {}
+        else:
+            self.io.tool_output(
+                "Enhanced context blocks are now OFF - directory structure and git status will not"
+                " be included."
+            )
+            # Clear token counts and cache when disabled
+            self.context_block_tokens = {}
+            self.context_blocks_cache = {}
+            self.tokens_calculated = False
 
-    tool_identifier = args.split(" ", 1)[0]
+        return True
 
-    tool_file_path = None
+    def cmd_tools_repair(self, args=""):  # noqa: F811
+        """
+        Repair a custom tool that is erroring.
 
-    # Check if identifier is a path
-    abs_path_identifier = self.abs_root_path(tool_identifier)
-    if os.path.isfile(abs_path_identifier):
-        tool_file_path = tool_identifier
-    # Check if identifier is a tool name
-    elif tool_identifier in self.custom_tools:
-        tool_file_path = self.custom_tools[tool_identifier].get("file_path")
+        /tools-repair <tool_name_or_path> [description of problem]
+        """
+        if not args:
+            self.io.tool_error("Usage: /tools-repair <tool_name_or_path> [description of problem]")
+            return
 
-    if not tool_file_path:
-        self.io.tool_error(f"Tool '{tool_identifier}' not found.")
-        return
+        tool_identifier = args.split(" ", 1)[0]
 
-    abs_tool_path = self.abs_root_path(tool_file_path)
-    if not os.path.exists(abs_tool_path):
-        self.io.tool_error(f"Tool file '{tool_file_path}' not found for tool '{tool_identifier}'.")
-        return
+        tool_file_path = None
 
-    # Add the tool file to the chat
-    self.add_rel_fname(tool_file_path)
-    self.io.tool_output(f"Added '{tool_file_path}' to the chat to be repaired.")
+        # Check if identifier is a path
+        abs_path_identifier = self.abs_root_path(tool_identifier)
+        if os.path.isfile(abs_path_identifier):
+            tool_file_path = tool_identifier
+        # Check if identifier is a tool name
+        elif tool_identifier in self.custom_tools:
+            tool_file_path = self.custom_tools[tool_identifier].get("file_path")
 
-    # Mark for reload after fix
-    self.tool_file_to_reload_after_fix = tool_file_path
+        if not tool_file_path:
+            self.io.tool_error(f"Tool '{tool_identifier}' not found.")
+            return
 
-    return True
+        abs_tool_path = self.abs_root_path(tool_file_path)
+        if not os.path.exists(abs_tool_path):
+            self.io.tool_error(f"Tool file '{tool_file_path}' not found for tool '{tool_identifier}'.")
+            return
+
+        # Add the tool file to the chat
+        self.add_rel_fname(tool_file_path)
+        self.io.tool_output(f"Added '{tool_file_path}' to the chat to be repaired.")
+
+        # Mark for reload after fix
+        self.tool_file_to_reload_after_fix = tool_file_path
+
+        return True
 
     def cmd_copy_context(self, args=None):
         """Copy the current chat context as markdown, suitable to paste into a web UI"""
