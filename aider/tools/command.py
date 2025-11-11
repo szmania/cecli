@@ -20,7 +20,7 @@ class Command(BaseAiderTool):
         "required": ["command_string"],
     }
 
-    def run(self, command_string):
+    async def run(self, command_string):
         """
         Execute a non-interactive shell command after user confirmation.
         """
@@ -28,7 +28,7 @@ class Command(BaseAiderTool):
             # Ask for confirmation before executing.
             # allow_never=True enables the 'Always' option.
             # confirm_ask handles remembering the 'Always' choice based on the subject.
-            confirmed = self.coder.io.confirm_ask(
+            confirmed = await self.coder.io.confirm_ask(
                 "Allow execution of this command?",
                 subject=command_string,
                 explicit_yes_required=True,  # Require explicit 'yes' or 'always'
@@ -85,8 +85,8 @@ class Command(BaseAiderTool):
             return f"Error executing command: {str(e)}"
 
 
-def _execute_command(coder, command_string):
-    return Command(coder).run(command_string=command_string)
+async def _execute_command(coder, command_string):
+    return await Command(coder).run(command_string=command_string)
 
 
 command_schema = Command.get_tool_definition()
