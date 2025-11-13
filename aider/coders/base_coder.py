@@ -1213,6 +1213,7 @@ class Coder:
 
                     self.io.ring_bell()
                     user_message = None
+                    self.auto_save_session()
                 except KeyboardInterrupt:
                     if self.io.input_task:
                         self.io.set_placeholder("")
@@ -1366,6 +1367,7 @@ class Coder:
 
                     self.io.ring_bell()
                     user_message = None
+                    self.auto_save_session()
                 except KeyboardInterrupt:
                     if self.io.input_task:
                         self.io.set_placeholder("")
@@ -1376,7 +1378,6 @@ class Coder:
                         self.io.stop_spinner()
 
                     self.keyboard_interrupt()
-                self.auto_save_session()
         except EOFError:
             return
         finally:
@@ -2026,7 +2027,7 @@ class Coder:
     async def send_message(self, inp):
         self.event("message_send_starting")
 
-        # Notify IO that LLM processing is starting
+        # Notify IO that LLM has started processing
         self.io.llm_started()
 
         if inp:

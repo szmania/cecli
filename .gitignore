@@ -14,6 +14,11 @@
 !/tests/**
 
 # Specific Files
+!/.aider.conf.yml
+!/.aider.dotcommands.md
+!/.aider.plans.md
+!/.aider.rules.md
+!/.aiderignore
 !/.dockerignore
 !/.flake8
 !/.gitignore
@@ -39,3 +44,4 @@ aider/_version.py
 .aider.db
 .aider.db-journal
 .aider.todo.txt
+.aider*

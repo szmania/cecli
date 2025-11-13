@@ -21,7 +21,7 @@ from litellm import experimental_mcp_client
 
 from aider import urls, utils
 from aider.change_tracker import ChangeTracker
-from aiderer.mcp.server import LocalServer
+from aider.mcp.server import LocalServer
 from aider.repo import ANY_GIT_ERROR
 from aider.tools.base_tool import BaseAiderTool
 from aider.tools.create_tool import CreateTool
@@ -33,8 +33,10 @@ from aider.tools import (
     delete_lines,
     extract_lines,
     finished,
+    git_branch,
     git_diff,
     git_log,
+    git_remote,
     git_show,
     git_status,
     grep,
@@ -172,8 +174,10 @@ class AgentCoder(Coder):
             delete_lines,
             extract_lines,
             finished,
+            git_branch,
             git_diff,
             git_log,
+            git_remote,
             git_show,
             git_status,
             grep,
@@ -277,12 +281,6 @@ class AgentCoder(Coder):
         for tool_module in self._tool_registry.values():
             if hasattr(tool_module, "schema"):
                 schemas.append(tool_module.schema)
-
-        # Add git schemas from the tool registry
-        git_tools = [git_diff, git_log, git_show, git_status]
-        for git_tool in git_tools:
-            if hasattr(git_tool, "schema"):
-                schemas.append(git_tool.schema)
 
         # Add CreateTool schema manually as it's a class-based tool
         schemas.append(CreateTool(self).schema)
@@ -821,20 +819,83 @@ class AgentCoder(Coder):
 
         This approach preserves prefix caching while providing fresh context information.
         """
-        chunks = super().format_chat_chunks()
-
+        # If enhanced context blocks are not enabled, use the base implementation
         if not self.use_enhanced_context:
-            return chunks
+            return super().format_chat_chunks()
 
+        # Build chunks from scratch to avoid duplication with enhanced context blocks
+        self.choose_fence()
+        main_sys = self.fmt_system_prompt(self.gpt_prompts.main_system)
+
+        example_messages = []
+        if self.main_model.examples_as_sys_msg:
+            if self.gpt_prompts.example_messages:
+                main_sys += "\n# Example conversations:\n\n"
+            for msg in self.gpt_prompts.example_messages:
+                role = msg["role"]
+                content = self.fmt_system_prompt(msg["content"])
+                main_sys += f"## {role.upper()}: {content}\n\n"
+            main_sys = main_sys.strip()
+        else:
+            for msg in self.gpt_prompts.example_messages:
+                example_messages.append(
+                    dict(
+                        role=msg["role"],
+                        content=self.fmt_system_prompt(msg["content"]),
+                    )
+                )
+            if self.gpt_prompts.example_messages:
+                example_messages += [
+                    dict(
+                        role="user",
+                        content=(
+                            "I switched to a new code base. Please don't consider the above files"
+                            " or try to edit them any longer."
+                        ),
+                    ),
+                    dict(role="assistant", content="Ok."),
+                ]
+
+        if self.gpt_prompts.system_reminder:
+            main_sys += "\n" + self.fmt_system_prompt(self.gpt_prompts.system_reminder)
+
+        chunks = ChatChunks()
+
+        if self.main_model.use_system_prompt:
+            chunks.system = [
+                dict(role="system", content=main_sys),
+            ]
+        else:
+            chunks.system = [
+                dict(role="user", content=main_sys),
+                dict(role="assistant", content="Ok."),
+            ]
+
+        chunks.examples = example_messages
+
+        self.summarize_end()
+        chunks.done = list(self.done_messages)
+
+        chunks.repo = self.get_repo_messages()
+        chunks.readonly_files = self.get_readonly_files_messages()
+        chunks.chat_files = self.get_chat_files_messages()
+
+        # Make sure token counts are updated - using centralized method
+        # This also populates the context block cache
         self._calculate_context_block_tokens()
 
+        # Get blocks from cache to avoid regenerating them
         env_context = self.get_cached_context_block("environment_info")
         dir_structure = self.get_cached_context_block("directory_structure")
         git_status = self.get_cached_context_block("git_status")
         symbol_outline = self.get_cached_context_block("symbol_outline")
         todo_list = self.get_cached_context_block("todo_list")
+
+        # Context summary needs special handling because it depends on other blocks
         context_summary = self.get_context_summary()
 
+        # 1. Add relatively static blocks BEFORE done_messages
+        # These blocks change less frequently and can be part of the cacheable prefix
         static_blocks = []
         if dir_structure:
             static_blocks.append(dir_structure)
@@ -843,8 +904,11 @@ class AgentCoder(Coder):
 
         if static_blocks:
             static_message = "\n\n".join(static_blocks)
+            # Insert as a system message right before done_messages
             chunks.done.insert(0, dict(role="system", content=static_message))
 
+        # 2. Add dynamic blocks AFTER chat_files
+        # These blocks change with the current files in context
         dynamic_blocks = []
         if todo_list:
             dynamic_blocks.append(todo_list)
@@ -855,6 +919,7 @@ class AgentCoder(Coder):
         if git_status:
             dynamic_blocks.append(git_status)
 
+        # Add tool usage context if there are repetitive tools
         if hasattr(self, "tool_usage_history") and self.tool_usage_history:
             repetitive_tools = self._get_repetitive_tools()
             if repetitive_tools:
@@ -864,7 +929,62 @@ class AgentCoder(Coder):
 
         if dynamic_blocks:
             dynamic_message = "\n\n".join(dynamic_blocks)
+            # Append as a system message after chat_files
             chunks.chat_files.append(dict(role="system", content=dynamic_message))
+
+        # Add reminder if needed
+        if self.gpt_prompts.system_reminder:
+            reminder_message = [
+                dict(
+                    role="system", content=self.fmt_system_prompt(self.gpt_prompts.system_reminder)
+                ),
+            ]
+        else:
+            reminder_message = []
+
+        chunks.cur = list(self.cur_messages)
+        chunks.reminder = []
+
+        # Use accurate token counting method that considers enhanced context blocks
+        base_messages = chunks.all_messages()
+        messages_tokens = self.main_model.token_count(base_messages)
+        reminder_tokens = self.main_model.token_count(reminder_message)
+        cur_tokens = self.main_model.token_count(chunks.cur)
+
+        if None not in (messages_tokens, reminder_tokens, cur_tokens):
+            total_tokens = messages_tokens
+            # Only add tokens for reminder and cur if they're not already included
+            # in the messages_tokens calculation
+            if not chunks.reminder:
+                total_tokens += reminder_tokens
+            if not chunks.cur:
+                total_tokens += cur_tokens
+        else:
+            # add the reminder anyway
+            total_tokens = 0
+
+        if chunks.cur:
+            final = chunks.cur[-1]
+        else:
+            final = None
+
+        max_input_tokens = self.main_model.info.get("max_input_tokens") or 0
+        # Add the reminder prompt if we still have room to include it.
+        if (
+            not max_input_tokens
+            or total_tokens < max_input_tokens
+            and self.gpt_prompts.system_reminder
+        ):
+            if self.main_model.reminder == "sys":
+                chunks.reminder = reminder_message
+            elif self.main_model.reminder == "user" and final and final["role"] == "user":
+                # stuff it into the user message
+                new_content = (
+                    final["content"]
+                    + "\n\n"
+                    + self.fmt_system_prompt(self.gpt_prompts.system_reminder)
+                )
+                chunks.cur[-1] = dict(role=final["role"], content=new_content)
 
         return chunks
 
@@ -1041,14 +1161,16 @@ class AgentCoder(Coder):
         iteratively discover and analyze relevant files before providing
         a final answer to the user's question.
         """
+        # Legacy tool call processing for use_granular_editing=False
         self.agent_finished = False
         content = self.partial_response_content
         if not content or not content.strip():
             if len(self.tool_usage_history) > self.tool_usage_retries:
                 self.tool_usage_history = []
             return True
-        original_content = content
+        original_content = content  # Keep the original response
 
+        # Process tool commands: returns content with tool calls removed, results, flag if any tool calls were found
         (
             processed_content,
             result_messages,
@@ -1061,16 +1183,25 @@ class AgentCoder(Coder):
             self.tool_usage_history = []
             return True
 
+        # Since we are no longer suppressing, the partial_response_content IS the final content.
+        # We might want to update it to the processed_content (without tool calls) if we don't
+        # want the raw tool calls to remain in the final assistant message history.
+        # Let's update it for cleaner history.
         self.partial_response_content = processed_content.strip()
+
+        # Process implicit file mentions using the content *after* tool calls were removed
         self._process_file_mentions(processed_content)
 
+        # Check if the content contains the SEARCH/REPLACE markers
         has_search = "<<<<<<< SEARCH" in self.partial_response_content
         has_divider = "=======" in self.partial_response_content
         has_replace = ">>>>>>> REPLACE" in self.partial_response_content
         edit_match = has_search and has_divider and has_replace
 
+        # Check if there's a '---' line - if yes, SEARCH/REPLACE blocks can only appear before it
         separator_marker = "\n---\n"
         if separator_marker in original_content and edit_match:
+            # Check if the edit blocks are only in the part before the last '---' line
             has_search_before = "<<<<<<< SEARCH" in content_before_last_separator
             has_divider_before = "=======" in content_before_last_separator
             has_replace_before = ">>>>>>> REPLACE" in content_before_last_separator
@@ -1079,33 +1210,48 @@ class AgentCoder(Coder):
         if edit_match:
             self.io.tool_output("Detected edit blocks, applying changes within Agent...")
             edited_files = await self._apply_edits_from_response()
+            # If _apply_edits_from_response set a reflected_message (due to errors),
+            # return False to trigger a reflection loop.
             if self.reflected_message:
                 return False
 
+            # If edits were successfully applied and we haven't exceeded reflection limits,
+            # set up for another iteration (similar to tool calls)
             if edited_files and self.num_reflections < self.max_reflections:
-                original_question = "Please continue your exploration and provide a final answer."
+                # Get the original user question from the most recent user message
                 if self.cur_messages and len(self.cur_messages) >= 1:
                     for msg in reversed(self.cur_messages):
                         if msg["role"] == "user":
                             original_question = msg["content"]
                             break
+                    else:
+                        # Default if no user message found
+                        original_question = (
+                            "Please continue your exploration and provide a final answer."
+                        )
 
-                next_prompt = (
-                    "I have applied the edits you suggested. "
-                    f"The following files were modified: {', '.join(edited_files)}. "
-                    "Let me continue working on your request.\n\n"
-                    f"Your original question was: {original_question}"
-                )
+                    # Construct the message for the next turn
+                    next_prompt = (
+                        "I have applied the edits you suggested. "
+                        f"The following files were modified: {', '.join(edited_files)}. "
+                        "Let me continue working on your request.\n\n"
+                        f"Your original question was: {original_question}"
+                    )
 
-                self.reflected_message = next_prompt
-                self.io.tool_output("Continuing after applying edits...")
-                return False
+                    self.reflected_message = next_prompt
+                    self.io.tool_output("Continuing after applying edits...")
+                    return False  # Indicate that we need another iteration
 
+        # If any tool calls were found and we haven't exceeded reflection limits, set up for another iteration
+        # This is implicit continuation when any tool calls are present, rather than requiring Continue explicitly
         if tool_calls_found and self.num_reflections < self.max_reflections:
+            # Reset tool counter for next iteration
             self.tool_call_count = 0
+
+            # Clear exploration files for the next round
             self.files_added_in_exploration = set()
 
-            original_question = "Please continue your exploration and provide a final answer."
+            # Get the original user question from the most recent user message
             if self.cur_messages and len(self.cur_messages) >= 1:
                 for msg in reversed(self.cur_messages):
                     if msg["role"] == "user":
@@ -1152,6 +1298,10 @@ class AgentCoder(Coder):
                 # Append results to the cleaned content
                 self.partial_response_content += results_block
 
+        # After applying edits OR determining no edits were needed (and no reflection needed),
+        # the turn is complete. Reset counters and finalize history.
+
+        # Auto-commit any files edited by granular tools
         if self.files_edited_by_tools:
             saved_message = await self.auto_commit(self.files_edited_by_tools)
             if not saved_message and hasattr(self.gpt_prompts, "files_content_gpt_edits_no_repo"):
@@ -1161,6 +1311,7 @@ class AgentCoder(Coder):
         self.tool_call_count = 0
         self.files_added_in_exploration = set()
         self.files_edited_by_tools = set()
+        # Move cur_messages to done_messages
         self.move_back_cur_messages(
             None
         )  # Pass None as we handled commit message earlier if needed
@@ -1455,131 +1606,414 @@ class AgentCoder(Coder):
             if result_message:
                 result_messages.append(f"[Result ({tool_name})]:\n{result_message}")
 
-        return processed_content, result_messages, tool_calls_found, content_before_separator, tool_names
+        return (
+            processed_content,
+            result_messages,
+            tool_calls_found,
+            content_before_separator,
+            tool_names,
+        )
 
     def _process_file_mentions(self, content):
         """
-        Check for file mentions in the content and add them to the chat if confirmed by the user.
+        Process implicit file mentions in the content, adding files if they're not already in context.
+
+        This handles the case where the LLM mentions file paths without using explicit tool commands.
         """
-        mentioned_files = self.get_file_mentions(content)
-        if mentioned_files:
-            for file_path in mentioned_files:
-                if self.io.confirm_ask(f"Add {file_path} to the chat?"):
-                    self.add_rel_fname(file_path)
+        # Extract file mentions using the parent class's method
+        mentioned_files = set(self.get_file_mentions(content, ignore_current=False))
+        current_files = set(self.get_inchat_relative_files())
+
+        # Get new files to add (not already in context)
+        mentioned_files - current_files
+
+        # In agent mode, we *only* add files via explicit tool commands (`View`, `ViewFilesAtGlob`, etc.).
+        # Do nothing here for implicit mentions.
+        pass
 
     async def _apply_edits_from_response(self):
         """
-        Apply edits from SEARCH/REPLACE blocks in the response content.
+        Parses and applies SEARCH/REPLACE edits found in self.partial_response_content.
+        Returns a set of relative file paths that were successfully edited.
         """
-        content = self.partial_response_content
-        if not content:
-            return []
-
-        edits = self.get_edits_from_content(content)
-        if not edits:
-            return []
-
         edited_files = set()
-        for path, original, updated in edits:
-            if await self.allowed_to_edit(path):
-                file_content = self.io.read_text(self.abs_root_path(path))
-                if file_content is None:
-                    self.io.tool_error(f"Could not read file {path} to apply edits.")
-                    continue
-
-                new_content = file_content.replace(original, updated)
-                if new_content != file_content:
-                    self.io.write_text(self.abs_root_path(path), new_content)
-                    edited_files.add(path)
-                    self.io.tool_output(f"Applied edit to {path}")
-                else:
-                    self.io.tool_warning(f"Edit for {path} did not change the file content.")
-            else:
-                self.io.tool_warning(f"Skipping edits to {path} as it was not allowed.")
-
-        return list(edited_files)
-
-    def get_edits_from_content(self, content):
-        """
-        Extract edits from SEARCH/REPLACE blocks in the content.
-        """
-        edits = []
-        file_content_for_edits = self.get_files_content()
-        original_update_blocks = find_original_update_blocks(content)
-
-        for original_text, updated_text in original_update_blocks:
-            found_in_files = []
-            for fname, fcontent in self.get_abs_fnames_content():
-                if original_text in fcontent:
-                    found_in_files.append(self.get_rel_fname(fname))
-
-            if len(found_in_files) == 1:
-                edits.append((found_in_files[0], original_text, updated_text))
-            elif len(found_in_files) > 1:
-                self.io.tool_warning(
-                    f"Found the original text in multiple files: {', '.join(found_in_files)}. Skipping this edit."
+        try:
+            # 1. Get edits (logic from EditBlockCoder.get_edits)
+            # Use the current partial_response_content which contains the LLM response
+            # including the edit blocks but excluding the tool calls.
+            edits = list(
+                find_original_update_blocks(
+                    self.partial_response_content,
+                    self.fence,
+                    self.get_inchat_relative_files(),
                 )
-            else:
-                similar_lines = find_similar_lines(original_text, file_content_for_edits)
-                if similar_lines:
-                    self.io.tool_warning(
-                        "Could not find the original text. Did you mean one of these?\n"
-                        + "\n".join(similar_lines)
-                    )
+            )
+            # Separate shell commands from file edits
+            self.shell_commands += [edit[1] for edit in edits if edit[0] is None]
+            edits = [edit for edit in edits if edit[0] is not None]
+
+            # 2. Prepare edits (check permissions, commit dirty files)
+            prepared_edits = []
+            seen_paths = dict()
+            self.need_commit_before_edits = set()  # Reset before checking
+
+            for edit in edits:
+                path = edit[0]
+                if path in seen_paths:
+                    allowed = seen_paths[path]
                 else:
-                    self.io.tool_warning("Could not find the original text. Skipping this edit.")
-        return edits
+                    # Use the base Coder's permission check method
+                    allowed = await self.allowed_to_edit(path)
+                    seen_paths[path] = allowed
+                if allowed:
+                    prepared_edits.append(edit)
+
+            # Commit any dirty files identified by allowed_to_edit
+            await self.dirty_commit()
+            self.need_commit_before_edits = set()  # Clear after commit
+
+            # 3. Apply edits (logic adapted from EditBlockCoder.apply_edits)
+            failed = []
+            passed = []
+            for edit in prepared_edits:
+                path, original, updated = edit
+                full_path = self.abs_root_path(path)
+                new_content = None
+
+                if Path(full_path).exists():
+                    content = self.io.read_text(full_path)
+                    # Use the imported do_replace function
+                    new_content = do_replace(full_path, content, original, updated, self.fence)
+
+                # Simplified cross-file patching check from EditBlockCoder
+                if not new_content and original.strip():
+                    for other_full_path in self.abs_fnames:
+                        if other_full_path == full_path:
+                            continue
+                        other_content = self.io.read_text(other_full_path)
+                        other_new_content = do_replace(
+                            other_full_path, other_content, original, updated, self.fence
+                        )
+                        if other_new_content:
+                            path = self.get_rel_fname(other_full_path)
+                            full_path = other_full_path
+                            new_content = other_new_content
+                            self.io.tool_warning(f"Applied edit intended for {edit[0]} to {path}")
+                            break
+
+                if new_content:
+                    if not self.dry_run:
+                        self.io.write_text(full_path, new_content)
+                        self.io.tool_output(f"Applied edit to {path}")
+                    else:
+                        self.io.tool_output(f"Did not apply edit to {path} (--dry-run)")
+                    passed.append((path, original, updated))  # Store path relative to root
+                else:
+                    failed.append(edit)
+
+            if failed:
+                # Handle failed edits (adapted from EditBlockCoder)
+                blocks = "block" if len(failed) == 1 else "blocks"
+                error_message = f"# {len(failed)} SEARCH/REPLACE {blocks} failed to match!\n"
+                for edit in failed:
+                    path, original, updated = edit
+                    full_path = self.abs_root_path(path)
+                    content = self.io.read_text(full_path)  # Read content again for context
+
+                    error_message += f"""
+## SearchReplaceNoExactMatch: This SEARCH block failed to exactly match lines in {path}
+<<<<<<< SEARCH
+{original}=======
+{updated}>>>>>>> REPLACE
+
+"""
+                    did_you_mean = find_similar_lines(original, content)
+                    if did_you_mean:
+                        error_message += f"""Did you mean to match some of these actual lines from {path}?
+
+{self.fence[0]}
+{did_you_mean}
+{self.fence[1]}
+
+"""
+                    if updated in content and updated:
+                        error_message += f"""Are you sure you need this SEARCH/REPLACE block?
+The REPLACE lines are already in {path}!
+
+"""
+                error_message += (
+                    "The SEARCH section must exactly match an existing block of lines including all"
+                    " white space, comments, indentation, docstrings, etc\n"
+                )
+                if passed:
+                    pblocks = "block" if len(passed) == 1 else "blocks"
+                    error_message += f"""
+# The other {len(passed)} SEARCH/REPLACE {pblocks} were applied successfully.
+Don't re-send them.
+Just reply with fixed versions of the {blocks} above that failed to match.
+"""
+                self.io.tool_error(error_message)
+                # Set reflected_message to prompt LLM to fix the failed blocks
+                self.reflected_message = error_message
+
+            edited_files = set(edit[0] for edit in passed)  # Use relative paths stored in passed
+
+            # 4. Post-edit actions (commit, lint, test, shell commands)
+            if edited_files:
+                self.aider_edited_files.update(edited_files)  # Track edited files
+                self.auto_commit(edited_files)
+                # We don't use saved_message here as we are not moving history back
+
+                if self.auto_lint:
+                    lint_errors = self.lint_edited(edited_files)
+                    self.auto_commit(edited_files, context="Ran the linter")
+                    if lint_errors and not self.reflected_message:  # Reflect only if no edit errors
+                        ok = await self.io.confirm_ask("Attempt to fix lint errors?")
+                        if ok:
+                            self.reflected_message = lint_errors
+
+                shared_output = await self.run_shell_commands()
+                if shared_output:
+                    # Add shell output as a new user message? Or just display?
+                    # Let's just display for now to avoid complex history manipulation
+                    self.io.tool_output("Shell command output:\n" + shared_output)
+
+                if self.auto_test and not self.reflected_message:  # Reflect only if no prior errors
+                    test_errors = await self.commands.cmd_test(self.test_cmd)
+                    if test_errors:
+                        ok = await self.io.confirm_ask("Attempt to fix test errors?")
+                        if ok:
+                            self.reflected_message = test_errors
+
+            self.show_undo_hint()
+
+        except ValueError as err:
+            # Handle parsing errors from find_original_update_blocks
+            self.num_malformed_responses += 1
+            error_message = err.args[0]
+            self.io.tool_error("The LLM did not conform to the edit format.")
+            self.io.tool_output(urls.edit_errors)
+            self.io.tool_output()
+            self.io.tool_output(str(error_message))
+            self.reflected_message = str(error_message)  # Reflect parsing errors
+        except ANY_GIT_ERROR as err:
+            self.io.tool_error(f"Git error during edit application: {str(err)}")
+            self.reflected_message = f"Git error during edit application: {str(err)}"
+        except Exception as err:
+            self.io.tool_error("Exception while applying edits:")
+            self.io.tool_error(str(err), strip=False)
+            self.io.tool_error(traceback.format_exc())
+            self.reflected_message = f"Exception while applying edits: {str(err)}"
+
+        return edited_files
 
     def _get_repetitive_tools(self):
         """
-        Identify tools that are being used repetitively.
-        """
-        if len(self.tool_usage_history) < 4:
-            return []
+        Identifies repetitive tool usage patterns from a flat list of tool calls.
 
-        last_four = self.tool_usage_history[-4:]
-        counts = Counter(last_four)
-        repetitive = [tool for tool, count in counts.items() if count >= 2]
-        return repetitive
+        This method checks for the following patterns in order:
+        1. If the last tool used was a write tool, it assumes progress and returns no repetitive tools.
+        2. It checks for any read tool that has been used 2 or more times in the history.
+        3. If no tools are repeated, but all tools in the history are read tools,
+           it flags all of them as potentially repetitive.
+
+        It avoids flagging repetition if a "write" tool was used recently,
+        as that suggests progress is being made.
+        """
+        history_len = len(self.tool_usage_history)
+
+        # Not enough history to detect a pattern
+        if history_len < 2:
+            return set()
+
+        # If the last tool was a write tool, we're likely making progress.
+        if isinstance(self.tool_usage_history[-1], str):
+            last_tool_lower = self.tool_usage_history[-1].lower()
+
+            if last_tool_lower in self.write_tools:
+                self.tool_usage_history = []
+                return set()
+
+        # If all tools in history are read tools, return all of them
+        if all(tool.lower() in self.read_tools for tool in self.tool_usage_history):
+            return set(tool for tool in self.tool_usage_history)
+
+        # Check for any read tool used more than once
+        tool_counts = Counter(tool for tool in self.tool_usage_history)
+        repetitive_tools = {
+            tool
+            for tool, count in tool_counts.items()
+            if count >= 2 and tool.lower() in self.read_tools
+        }
+
+        if repetitive_tools:
+            return repetitive_tools
+
+        return set()
 
     def _generate_tool_context(self, repetitive_tools):
         """
-        Generate a context block with information about repetitive tool usage.
+        Generate a context message for the LLM about recent tool usage.
         """
-        if not repetitive_tools:
-            return None
+        if not self.tool_usage_history:
+            return ""
 
-        result = '<context name="tool_usage_feedback">\n'
-        result += "## Tool Usage Feedback\n\n"
-        result += "You seem to be using the following tools repetitively:\n"
-        for tool in repetitive_tools:
-            result += f"- {tool}\n"
-        result += "\nConsider if there's a more direct way to achieve your goal.\n"
-        result += "</context>"
-        return result
+        context_parts = ['<context name="tool_usage_history">']
+
+        # Add turn and tool call statistics
+        context_parts.append("## Turn and Tool Call Statistics")
+        context_parts.append(f"- Current turn: {self.num_reflections + 1}")
+        context_parts.append(f"- Tool calls this turn: {self.tool_call_count}")
+        context_parts.append(f"- Total tool calls in session: {self.num_tool_calls}")
+        context_parts.append("\n\n")
+
+        # Add recent tool usage history
+        context_parts.append("## Recent Tool Usage History")
+        if len(self.tool_usage_history) > 10:
+            recent_history = self.tool_usage_history[-10:]
+            context_parts.append("(Showing last 10 tools)")
+        else:
+            recent_history = self.tool_usage_history
+
+        for i, tool in enumerate(recent_history, 1):
+            context_parts.append(f"{i}. {tool}")
+        context_parts.append("\n\n")
+
+        if repetitive_tools:
+            context_parts.append(
+                "**Instruction:**\nYou have used the following tool(s) repeatedly:"
+            )
+
+            context_parts.append("### DO NOT USE THE FOLLOWING TOOLS/FUNCTIONS")
+
+            for tool in repetitive_tools:
+                context_parts.append(f"- `{tool}`")
+            context_parts.append(
+                "Your exploration appears to be stuck in a loop. Please try a different approach:"
+            )
+            context_parts.append("\n")
+            context_parts.append("**Suggestions for alternative approaches:**")
+            context_parts.append(
+                "- If you've been searching for files, try working with the files already in"
+                " context"
+            )
+            context_parts.append(
+                "- If you've been viewing files, try making actual edits to move forward"
+            )
+            context_parts.append("- Consider using different tools that you haven't used recently")
+            context_parts.append(
+                "- Focus on making concrete progress rather than gathering more information"
+            )
+            context_parts.append(
+                "- Use the files you've already discovered to implement the requested changes"
+            )
+            context_parts.append("\n")
+            context_parts.append(
+                "You most likely have enough context for a subset of the necessary changes."
+            )
+            context_parts.append("Please prioritize file editing over further exploration.")
+
+        context_parts.append("</context>")
+        return "\n".join(context_parts)
 
     def get_directory_structure(self):
         """
-        Generate a directory structure context block.
+        Generate a structured directory listing of the project file structure.
+        Returns a formatted string representation of the directory tree.
         """
         if not self.use_enhanced_context:
             return None
 
         try:
-            result = '<context name="directory_structure">\n'
-            result += "## Directory Structure\n\n"
-            result += "```\n"
-            for root, dirs, files in os.walk(self.root):
-                # Exclude .git and other common metadata directories
-                dirs[:] = [d for d in dirs if d not in [".git", "__pycache__", ".vscode"]]
-                level = root.replace(self.root, "").count(os.sep)
-                indent = " " * 4 * level
-                result += f"{indent}{os.path.basename(root)}/\n"
-                sub_indent = " " * 4 * (level + 1)
-                for f in files:
-                    result += f"{sub_indent}{f}\n"
-            result += "```\n"
-            result += "</context>"
+            # Start with the header
+            result = '<context name="directoryStructure">\n'
+            result += "## Project File Structure\n\n"
+            result += (
+                "Below is a snapshot of this project's file structure at the current time. It skips"
+                " over .gitignore patterns.\n\n"
+            )
+
+            # Get the root directory
+            Path(self.root)
+
+            # Get all files in the repo (both tracked and untracked)
+            if self.repo:
+                # Get tracked files
+                tracked_files = self.repo.get_tracked_files()
+
+                # Get untracked files (files present in the working directory but not in git)
+                untracked_files = []
+                try:
+                    # Run git status to get untracked files
+                    untracked_output = self.repo.repo.git.status("--porcelain")
+                    for line in untracked_output.splitlines():
+                        if line.startswith("??"):
+                            # Extract the filename (remove the '?? ' prefix)
+                            untracked_file = line[3:]
+                            if not self.repo.git_ignored_file(untracked_file):
+                                untracked_files.append(untracked_file)
+                except Exception as e:
+                    self.io.tool_warning(f"Error getting untracked files: {str(e)}")
+
+                # Combine tracked and untracked files
+                all_files = tracked_files + untracked_files
+            else:
+                # If no repo, get all files relative to root
+                all_files = []
+                for path in Path(self.root).rglob("*"):
+                    if path.is_file():
+                        all_files.append(str(path.relative_to(self.root)))
+
+            # Sort files to ensure deterministic output
+            all_files = sorted(all_files)
+
+            # Filter out .aider files/dirs
+            all_files = [
+                f for f in all_files if not any(part.startswith(".aider") for part in f.split("/"))
+            ]
+
+            # Build tree structure
+            tree = {}
+            for file in all_files:
+                parts = file.split("/")
+                current = tree
+                for i, part in enumerate(parts):
+                    if i == len(parts) - 1:  # Last part (file)
+                        if "." not in current:
+                            current["."] = []
+                        current["."].append(part)
+                    else:  # Directory
+                        if part not in current:
+                            current[part] = {}
+                        current = current[part]
+
+            # Function to recursively print the tree
+            def print_tree(node, prefix="- ", indent="  ", current_path=""):
+                lines = []
+                # First print all directories
+                dirs = sorted([k for k in node.keys() if k != "."])
+                for i, dir_name in enumerate(dirs):
+                    # Only print the current directory name, not the full path
+                    lines.append(f"{prefix}{dir_name}/")
+                    sub_lines = print_tree(
+                        node[dir_name], prefix=prefix, indent=indent, current_path=dir_name
+                    )
+                    for sub_line in sub_lines:
+                        lines.append(f"{indent}{sub_line}")
+
+                # Then print all files
+                if "." in node:
+                    for file_name in sorted(node["."]):
+                        # Only print the current file name, not the full path
+                        lines.append(f"{prefix}{file_name}")
+
+                return lines
+
+            # Generate the tree starting from root
+            tree_lines = print_tree(tree, prefix="- ")
+            result += "\n".join(tree_lines)
+            result += "\n</context>"
+
             return result
         except Exception as e:
             self.io.tool_error(f"Error generating directory structure: {str(e)}")
@@ -1587,26 +2021,118 @@ class AgentCoder(Coder):
 
     def get_git_status(self):
         """
-        Generate a git status context block.
+        Generate a git status context block for repository information.
+        Returns a formatted string with git branch, status, and recent commits.
         """
         if not self.use_enhanced_context or not self.repo:
             return None
 
         try:
-            status = self.repo.repo.git.status("--porcelain")
-            if not status:
-                return None
+            result = '<context name="gitStatus">\n'
+            result += "## Git Repository Status\n\n"
+            result += "This is a snapshot of the git status at the current time.\n"
 
-            result = '<context name="git_status">\n'
-            result += "## Git Status\n\n"
-            result += "```\n"
-            result += status
-            result += "\n```\n"
+            # Get current branch
+            try:
+                current_branch = self.repo.repo.active_branch.name
+                result += f"Current branch: {current_branch}\n\n"
+            except Exception:
+                result += "Current branch: (detached HEAD state)\n\n"
+
+            # Get main/master branch
+            main_branch = None
+            try:
+                for branch in self.repo.repo.branches:
+                    if branch.name in ("main", "master"):
+                        main_branch = branch.name
+                        break
+                if main_branch:
+                    result += f"Main branch (you will usually use this for PRs): {main_branch}\n\n"
+            except Exception:
+                pass
+
+            # Git status
+            result += "Status:\n"
+            try:
+                # Get modified files
+                status = self.repo.repo.git.status("--porcelain")
+
+                # Process and categorize the status output
+                if status:
+                    status_lines = status.strip().split("\n")
+
+                    # Group by status type for better organization
+                    staged_added = []
+                    staged_modified = []
+                    staged_deleted = []
+                    unstaged_modified = []
+                    unstaged_deleted = []
+                    untracked = []
+
+                    for line in status_lines:
+                        if len(line) < 4:  # Ensure the line has enough characters
+                            continue
+
+                        status_code = line[:2]
+                        file_path = line[3:]
+
+                        # Skip .aider files/dirs
+                        if any(part.startswith(".aider") for part in file_path.split("/")):
+                            continue
+
+                        # Staged changes
+                        if status_code[0] == "A":
+                            staged_added.append(file_path)
+                        elif status_code[0] == "M":
+                            staged_modified.append(file_path)
+                        elif status_code[0] == "D":
+                            staged_deleted.append(file_path)
+                        # Unstaged changes
+                        if status_code[1] == "M":
+                            unstaged_modified.append(file_path)
+                        elif status_code[1] == "D":
+                            unstaged_deleted.append(file_path)
+                        # Untracked files
+                        if status_code == "??":
+                            untracked.append(file_path)
+
+                    # Output in a nicely formatted manner
+                    if staged_added:
+                        for file in staged_added:
+                            result += f"A  {file}\n"
+                    if staged_modified:
+                        for file in staged_modified:
+                            result += f"M  {file}\n"
+                    if staged_deleted:
+                        for file in staged_deleted:
+                            result += f"D  {file}\n"
+                    if unstaged_modified:
+                        for file in unstaged_modified:
+                            result += f" M {file}\n"
+                    if unstaged_deleted:
+                        for file in unstaged_deleted:
+                            result += f" D {file}\n"
+                    if untracked:
+                        for file in untracked:
+                            result += f"?? {file}\n"
+                else:
+                    result += "Working tree clean\n"
+            except Exception as e:
+                result += f"Unable to get modified files: {str(e)}\n"
+
+            # Recent commits
+            result += "\nRecent commits:\n"
+            try:
+                commits = list(self.repo.repo.iter_commits(max_count=5))
+                for commit in commits:
+                    short_hash = commit.hexsha[:8]
+                    message = commit.message.strip().split("\n")[0]  # First line only
+                    result += f"{short_hash} {message}\n"
+            except Exception:
+                result += "Unable to get recent commits\n"
+
             result += "</context>"
             return result
-        except ANY_GIT_ERROR as e:
-            self.io.tool_warning(f"Could not get git status: {e}")
-            return None
         except Exception as e:
             self.io.tool_error(f"Error generating git status: {str(e)}")
             return None
@@ -1614,26 +2140,151 @@ class AgentCoder(Coder):
     def get_todo_list(self):
         """
         Generate a todo list context block from the .aider.todo.txt file.
+        Returns formatted string with the current todo list or None if empty/not present.
         """
-        if not self.use_enhanced_context:
-            return None
-
-        todo_file_path = ".aider.todo.txt"
-        abs_path = self.abs_root_path(todo_file_path)
-        if not os.path.isfile(abs_path):
-            return None
 
         try:
-            with open(abs_path, "r") as f:
-                content = f.read()
-            if not content.strip():
+            # Define the todo file path
+            todo_file_path = ".aider.todo.txt"
+            abs_path = self.abs_root_path(todo_file_path)
+
+            # Check if file exists
+            import os
+
+            if not os.path.isfile(abs_path):
+                return (
+                    '<context name="todo_list">\n'
+                    "Todo list does not exist. Please update it."
+                    "</context>"
+                )
+
+            # Read todo list content
+            content = self.io.read_text(abs_path)
+            if content is None or not content.strip():
                 return None
 
+            # Format the todo list context block
             result = '<context name="todo_list">\n'
-            result += "## TODO List\n\n"
-            result += content
-            result += "\n</context>"
+            result += "## Current Todo List\n\n"
+            result += "Below is the current todo list managed via `UpdateTodoList` tool:\n\n"
+            result += f"```\n{content}\n```\n"
+            result += "</context>"
+
             return result
         except Exception as e:
-            self.io.tool_error(f"Error reading todo list: {str(e)}")
+            self.io.tool_error(f"Error generating todo list context: {str(e)}")
             return None
+
+    def _add_file_to_context(self, file_path, explicit=False):
+        """
+        Helper method to add a file to context as read-only.
+
+        Parameters:
+        - file_path: Path to the file to add
+        - explicit: Whether this was an explicit view command (vs. implicit through ViewFilesMatching)
+        """
+        # Check if file exists
+        abs_path = self.abs_root_path(file_path)
+        rel_path = self.get_rel_fname(abs_path)
+
+        if not os.path.isfile(abs_path):
+            self.io.tool_output(f"⚠️ File '{file_path}' not found")
+            return "File not found"
+
+        # Check if the file is already in context (either editable or read-only)
+        if abs_path in self.abs_fnames:
+            if explicit:
+                self.io.tool_output(f"📎 File '{file_path}' already in context as editable")
+                return "File already in context as editable"
+            return "File already in context as editable"
+
+        if abs_path in self.abs_read_only_fnames:
+            if explicit:
+                self.io.tool_output(f"📎 File '{file_path}' already in context as read-only")
+                return "File already in context as read-only"
+            return "File already in context as read-only"
+
+        # Add file to context as read-only
+        try:
+            # Check for large file and apply context management if enabled
+            content = self.io.read_text(abs_path)
+            if content is None:
+                return f"Error reading file: {file_path}"
+
+            # Check if file is very large and context management is enabled
+            if self.context_management_enabled:
+                file_tokens = self.main_model.token_count(content)
+                if file_tokens > self.large_file_token_threshold:
+                    self.io.tool_output(
+                        f"⚠️ '{file_path}' is very large ({file_tokens} tokens). "
+                        "Use /context-management to toggle truncation off if needed."
+                    )
+
+            # Add to read-only files
+            self.abs_read_only_fnames.add(abs_path)
+
+            # Track in exploration set
+            self.files_added_in_exploration.add(rel_path)
+
+            # Inform user
+            if explicit:
+                self.io.tool_output(f"📎 Viewed '{file_path}' (added to context as read-only)")
+                return "Viewed file (added to context as read-only)"
+            else:
+                # For implicit adds (from ViewFilesAtGlob/ViewFilesMatching), just return success
+                return "Added file to context as read-only"
+
+        except Exception as e:
+            self.io.tool_error(f"Error adding file '{file_path}' for viewing: {str(e)}")
+            return f"Error adding file for viewing: {str(e)}"
+
+    async def check_for_file_mentions(self, content):
+        """
+        Override parent's method to use our own file processing logic.
+
+        Override parent's method to disable implicit file mention handling in agent mode.
+        Files should only be added via explicit tool commands
+        (`View`, `ViewFilesAtGlob`, `ViewFilesMatching`, `ViewFilesWithSymbol`).
+        """
+        # Do nothing - disable implicit file adds in agent mode.
+        pass
+
+    async def preproc_user_input(self, inp):
+        """
+        Override parent's method to wrap user input in a context block.
+        This clearly delineates user input from other sections in the context window.
+        """
+        # First apply the parent's preprocessing
+        inp = await super().preproc_user_input(inp)
+
+        # If we still have input after preprocessing, wrap it in a context block
+        if inp and not inp.startswith('<context name="user_input">'):
+            inp = f'<context name="user_input">\n{inp}\n</context>'
+
+        return inp
+
+    def cmd_context_blocks(self, args=""):
+        """
+        Toggle enhanced context blocks feature.
+        """
+        self.use_enhanced_context = not self.use_enhanced_context
+
+        if self.use_enhanced_context:
+            self.io.tool_output(
+                "Enhanced context blocks are now ON - directory structure and git status will be"
+                " included."
+            )
+            # Mark tokens as needing calculation, but don't calculate yet (lazy calculation)
+            self.tokens_calculated = False
+            self.context_blocks_cache = {}
+        else:
+            self.io.tool_output(
+                "Enhanced context blocks are now OFF - directory structure and git status will not"
+                " be included."
+            )
+            # Clear token counts and cache when disabled
+            self.context_block_tokens = {}
+            self.context_blocks_cache = {}
+            self.tokens_calculated = False
+
+        return True
