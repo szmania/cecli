@@ -508,10 +508,10 @@ def expand_glob_patterns(patterns, root="."):
 
 
 async def discover_and_load_tools(coder, git_root, args):
-    from aider.coders.navigator_coder import NavigatorCoder
+    from aider.coders.agent_coder import AgentCoder
 
-    # Only proceed if the current coder is a NavigatorCoder
-    if not isinstance(coder, NavigatorCoder):
+    # Only proceed if the current coder is a AgentCoder
+    if not isinstance(coder, AgentCoder):
         return
 
     # Only run tool discovery once per session

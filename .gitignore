@@ -40,3 +40,4 @@ aider/_version.py
 .aider.tags.cache.v*
 .aider.udiff.undo
 .aider.tools/
+.aider*
