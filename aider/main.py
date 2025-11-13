@@ -1324,7 +1324,11 @@ async def main_async(argv=None, input=None, output=None, force_git_root=None, re
         io.tool_warning("Cost estimates may be inaccurate when using streaming and caching.")
 
     if args.load:
-        await commands.cmd_load(args.load)
+        try:
+            session_manager = SessionManager(coder, io)
+            session_manager.load_session(args.load)
+        except Exception as e:
+            io.tool_error(f"Error loading session: {e}")
 
     if args.message:
         io.add_to_input_history(args.message)
