@@ -5,6 +5,7 @@ import os
 import re
 import sys
 import threading
+import time
 import traceback
 import webbrowser
 from dataclasses import fields
@@ -37,6 +38,7 @@ from aider.models import ModelSettings
 from aider.onboarding import offer_openrouter_oauth, select_default_model
 from aider.repo import ANY_GIT_ERROR, GitRepo
 from aider.report import report_uncaught_exceptions
+from aider.sessions import SessionManager
 from aider.versioncheck import check_version, install_from_main_branch, install_upgrade
 from aider.watch import FileWatcher
 
@@ -44,7 +46,7 @@ from .dump import dump  # noqa: F401
 
 PROJECT_ROOT = os.path.abspath(os.path.dirname(__file__))
 log_file = None
-file_blacklist = ["get_bottom_toolbar", "<genexpr>"]
+file_excludelist = ["get_bottom_toolbar", "<genexpr>"]
 
 
 def custom_tracer(frame, event, arg):
@@ -64,17 +66,21 @@ def custom_tracer(frame, event, arg):
         func_name = frame.f_code.co_name
         line_no = frame.f_lineno
 
-        if func_name not in file_blacklist:
+        if func_name not in file_excludelist:
             log_file.write(
-                f"-> CALL (My Code): {func_name}() in {os.path.basename(filename)}:{line_no}\n"
+                f"-> CALL: {func_name}() in {os.path.basename(filename)}:{line_no} -"
+                f" {time.time()}\n"
             )
 
     if event == "return":
         func_name = frame.f_code.co_name
         line_no = frame.f_lineno
 
-        if func_name not in file_blacklist:
-            log_file.write(f"<- RETURN: {func_name}() in {os.path.basename(filename)}:{line_no}\n")
+        if func_name not in file_excludelist:
+            log_file.write(
+                f"<- RETURN: {func_name}() in {os.path.basename(filename)}:{line_no} -"
+                f" {time.time()}\n"
+            )
 
     # Must return the trace function (or a local one) for subsequent events
     return custom_tracer
@@ -125,10 +131,10 @@ def guessed_wrong_repo(io, git_root, fnames, git_dname):
     return str(check_repo)
 
 
-def make_new_repo(git_root, io):
+async def make_new_repo(git_root, io):
     try:
         repo = git.Repo.init(git_root)
-        check_gitignore(git_root, io, False)
+        await check_gitignore(git_root, io, False)
     except ANY_GIT_ERROR as err:  # issue #1233
         io.tool_error(f"Unable to create git repo in {git_root}")
         io.tool_output(str(err))
@@ -163,7 +169,7 @@ async def setup_git(git_root, io):
         "No git repo found, create one to track aider's changes (recommended)?"
     ):
         git_root = str(cwd.resolve())
-        repo = make_new_repo(git_root, io)
+        repo = await make_new_repo(git_root, io)
 
     if not repo:
         return
@@ -245,8 +251,8 @@ async def check_gitignore(git_root, io, ask=True):
             io.tool_output(f"  {pattern}")
 
 
-def check_streamlit_install(io):
-    return utils.check_pip_install_extra(
+async def check_streamlit_install(io):
+    return await utils.check_pip_install_extra(
         io,
         "streamlit",
         "You need to install the aider browser feature",
@@ -254,7 +260,7 @@ def check_streamlit_install(io):
     )
 
 
-def write_streamlit_credentials():
+async def write_streamlit_credentials():
     from streamlit.file_util import get_streamlit_file_path
 
     # See https://github.com/Aider-AI/aider/issues/772
@@ -270,7 +276,7 @@ def write_streamlit_credentials():
         print("Streamlit credentials already exist.")
 
 
-def launch_gui(args):
+async def launch_gui(args):
     from streamlit.web import cli
 
     from aider import gui
@@ -279,7 +285,7 @@ def launch_gui(args):
     print("CONTROL-C to exit...")
 
     # Necessary so streamlit does not prompt the user for an email address.
-    write_streamlit_credentials()
+    await write_streamlit_credentials()
 
     target = gui.__file__
 
@@ -825,11 +831,11 @@ async def main_async(argv=None, input=None, output=None, force_git_root=None, re
     analytics.event("launched")
 
     if args.gui and not return_coder:
-        if not check_streamlit_install(io):
+        if not await check_streamlit_install(io):
             analytics.event("exit", reason="Streamlit not installed")
             return
         analytics.event("gui session")
-        launch_gui(argv)
+        await launch_gui(argv)
         analytics.event("exit", reason="GUI session ended")
         return
 
@@ -892,12 +898,12 @@ async def main_async(argv=None, input=None, output=None, force_git_root=None, re
         return 0 if not update_available else 1
 
     if args.install_main_branch:
-        success = install_from_main_branch(io)
+        success = await install_from_main_branch(io)
         analytics.event("exit", reason="Installed main branch")
         return 0 if success else 1
 
     if args.upgrade:
-        success = install_upgrade(io)
+        success = await install_upgrade(io)
         analytics.event("exit", reason="Upgrade completed")
         return 0 if success else 1
 
@@ -1059,7 +1065,7 @@ async def main_async(argv=None, input=None, output=None, force_git_root=None, re
         return 1
 
     if args.show_model_warnings:
-        problem = models.sanity_check_models(io, main_model)
+        problem = await models.sanity_check_models(io, main_model)
         if problem:
             analytics.event("model warning", main_model=main_model)
             io.tool_output("You can skip this check with --no-show-model-warnings")
@@ -1198,6 +1204,7 @@ async def main_async(argv=None, input=None, output=None, force_git_root=None, re
             repomap_in_memory=args.map_memory_cache,
             preserve_todo_list=args.preserve_todo_list,
             linear_output=args.linear_output,
+            args=args,
         )
     except UnknownEditFormat as err:
         io.tool_error(str(err))
@@ -1353,6 +1360,15 @@ async def main_async(argv=None, input=None, output=None, force_git_root=None, re
         return
 
     analytics.event("cli session", main_model=main_model, edit_format=main_model.edit_format)
+
+    # Auto-load session if enabled
+    if args.auto_load:
+        try:
+            session_manager = SessionManager(coder, io)
+            session_manager.load_session("auto-save")
+        except Exception:
+            # Don't show errors for auto-load to avoid interrupting the user experience
+            pass
 
     while True:
         try:

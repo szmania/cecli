@@ -59,6 +59,7 @@ from aider.reasoning_tags import (
 from aider.repo import ANY_GIT_ERROR, GitRepo
 from aider.repomap import RepoMap
 from aider.run_cmd import run_cmd
+from aider.sessions import SessionManager
 from aider.utils import format_content, format_messages, format_tokens, is_image_file
 
 from ..dump import dump  # noqa: F401
@@ -158,6 +159,7 @@ class Coder:
         io=None,
         from_coder=None,
         summarize_from_coder=True,
+        args=None,
         **kwargs,
     ):
         import aider.coders as coders
@@ -228,7 +230,7 @@ class Coder:
 
         for coder in coders.__all__:
             if hasattr(coder, "edit_format") and coder.edit_format == edit_format:
-                res = coder(main_model, io, **kwargs)
+                res = coder(main_model, io, args=args, **kwargs)
                 await res.initialize_mcp_tools()
                 res.original_kwargs = dict(kwargs)
                 return res
@@ -1374,6 +1376,7 @@ class Coder:
                         self.io.stop_spinner()
 
                     self.keyboard_interrupt()
+                self.auto_save_session()
         except EOFError:
             return
         finally:
@@ -2031,7 +2034,8 @@ class Coder:
                 dict(role="user", content=inp),
             ]
 
-        chunks = self.format_messages()
+        loop = asyncio.get_running_loop()
+        chunks = await loop.run_in_executor(None, self.format_messages)
         messages = chunks.all_messages()
 
         if not await self.check_tokens(messages):
@@ -3268,6 +3272,7 @@ class Coder:
         self.total_tokens_received += self.message_tokens_received
 
         self.io.tool_output(self.usage_report)
+        self.io.rule()
 
         prompt_tokens = self.message_tokens_sent
         completion_tokens = self.message_tokens_received
@@ -3637,6 +3642,17 @@ class Coder:
 
     def apply_edits_dry_run(self, edits):
         return edits
+
+    def auto_save_session(self):
+        """Automatically save the current session as 'auto-save'."""
+        if not getattr(self.args, "auto_save", False):
+            return
+        try:
+            session_manager = SessionManager(self, self.io)
+            session_manager.save_session("auto-save", False)
+        except Exception:
+            # Don't show errors for auto-save to avoid interrupting the user experience
+            pass
 
     async def run_shell_commands(self):
         if not self.suggest_shell_commands:
