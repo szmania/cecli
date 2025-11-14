@@ -201,7 +201,7 @@ class Coder:
                         "Chat history summarization failed, continuing with full history"
                     )
 
-            cloned_commands = await from_coder.commands.clone()
+            cloned_commands = from_coder.commands.clone()
             # Bring along context from the old Coder
             update = dict(
                 fnames=list(from_coder.abs_fnames),
