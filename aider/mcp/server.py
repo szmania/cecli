@@ -69,11 +69,23 @@ class McpServer:
     async def disconnect(self):
         """Disconnect from the MCP server and clean up resources."""
         async with self._cleanup_lock:
+            if self.session is None:
+                return
+
             try:
                 await self.exit_stack.aclose()
-                self.session = None
+            except RuntimeError as e:
+                if "different task" in str(e):
+                    logging.warning(
+                        "Ignoring RuntimeError during disconnect, as it's expected in some"
+                        f" shutdown scenarios: {e}"
+                    )
+                else:
+                    raise
             except Exception as e:
                 logging.error(f"Error during cleanup of server {self.name}: {e}")
+            finally:
+                self.session = None
 
 
 class HttpStreamingServer(McpServer):
@@ -146,4 +158,5 @@ class LocalServer(McpServer):
 
     async def disconnect(self):
         """Disconnect from the MCP server and clean up resources."""
-        self.session = None
+        async with self._cleanup_lock:
+            self.session = None
