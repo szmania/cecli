@@ -283,7 +283,49 @@ class AgentCoder(Coder):
                 schemas.append(tool_module.schema)
 
         # Add CreateTool schema manually as it's a class-based tool
-        schemas.append(CreateTool(self).schema)
+        create_tool_schema = {
+            "type": "function",
+            "function": {
+                "name": "CreateTool",
+                "description": (
+                    "Create a new custom tool by providing a natural language `description` of its"
+                    " functionality and a valid Python filename. You must provide a suitable"
+                    " filename (must end with .py and not contain path separators). The `scope`"
+                    " parameter (optional, default 'local') can be 'local' for the current"
+                    " project or 'global' to make the tool available across all projects. The new"
+                    " tool will be automatically loaded and available for use in subsequent turns."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "description": {
+                            "type": "string",
+                            "description": (
+                                "A natural language description of the tool's functionality."
+                            ),
+                        },
+                        "file_name": {
+                            "type": "string",
+                            "description": (
+                                "A valid Python filename for the new tool (must end with .py and"
+                                " not contain path separators)."
+                            ),
+                        },
+                        "scope": {
+                            "type": "string",
+                            "description": (
+                                "The scope of the tool, either 'local' (project-specific) or"
+                                " 'global' (available across all projects)."
+                            ),
+                            "enum": ["local", "global"],
+                            "default": "local",
+                        },
+                    },
+                    "required": ["description", "file_name"],
+                },
+            },
+        }
+        schemas.append(create_tool_schema)
 
         return schemas
 
