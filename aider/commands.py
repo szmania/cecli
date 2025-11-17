@@ -1100,14 +1100,11 @@ class Commands:
             else:
                 # Use substring matching like we do for read-only files
                 matched_files = [
-                    self.coder.get_rel_fname(f)
-                    for f in self.coder.abs_fnames
-                    if expanded_word in f
+                    self.coder.get_rel_fname(f) for f in self.coder.abs_fnames if expanded_word in f
                 ]
 
             if not matched_files:
-                self.io.tool_error(f"No files matched '{word}'")
-                continue
+                matched_files.append(expanded_word)
 
             for matched_file in matched_files:
                 abs_fname = self.coder.abs_root_path(matched_file)
@@ -1116,11 +1113,14 @@ class Commands:
                     self.io.tool_output(f"Removed {matched_file} from the chat")
                     files_changed = True
 
-        if files_changed:
-            # Recalculate context block tokens if using agent mode
-            if hasattr(self.coder, "use_enhanced_context") and self.coder.use_enhanced_context:
-                if hasattr(self.coder, "_calculate_context_block_tokens"):
-                    self.coder._calculate_context_block_tokens()
+        # Recalculate context block tokens if any files were changed and using navigator mode
+        if (
+            files_changed
+            and hasattr(self.coder, "use_enhanced_context")
+            and self.coder.use_enhanced_context
+        ):
+            if hasattr(self.coder, "_calculate_context_block_tokens"):
+                self.coder._calculate_context_block_tokens()
 
     def cmd_context_management(self, args=""):
         "Toggle context management for large files"
@@ -1231,13 +1231,15 @@ class Commands:
         return await self._generic_chat_command(args, "context", placeholder=args.strip() or None)
 
     async def cmd_navigator(self, args):
-        """Enter agent mode to autonomously discover and manage relevant files. If no prompt provided, switches to agent mode."""  # noqa
-        # Enable context management when entering agent mode
+        """Enter navigator mode to autonomously discover and manage relevant files. If no prompt provided, switches to navigator mode."""  # noqa
+        # Enable context management when entering navigator mode
         if hasattr(self.coder, "context_management_enabled"):
             self.coder.context_management_enabled = True
             self.io.tool_output("Context management enabled for large files")
 
-        return await self._generic_chat_command(args, "agent", placeholder=args.strip() or None)
+        return await self._generic_chat_command(
+            args, "navigator", placeholder=args.strip() or None
+        )
 
     async def _generic_chat_command(self, args, edit_format, placeholder=None):
         if not args.strip():
@@ -1806,50 +1808,52 @@ Just show me the edits I need to make.
             self.io.tool_error(f"An unexpected error occurred while copying to clipboard: {str(e)}")
 
     def cmd_ls(self, args):
-        "List files and directories, optionally with a pattern"
-        if not args:
-            args = "*"
+        "List all known files and indicate which are included in the chat session"
 
-        if self.coder.repo:
-            files = self.coder.repo.get_tracked_files()
-        else:
-            files = [str(p) for p in Path(self.coder.root).rglob("*") if p.is_file()]
+        files = self.coder.get_all_relative_files()
 
-        in_chat = self.coder.get_inchat_relative_files()
-        read_only_in_chat = [
-            self.coder.get_rel_fname(fn)
-            for fn in self.coder.abs_read_only_fnames | self.coder.abs_read_only_stubs_fnames
-        ]
-
-        try:
-            patterns = parse_quoted_filenames(args)
-            matched_files = set()
-            for pattern in patterns:
-                matched_files.update(fn for fn in files if glob.fnmatch.fnmatch(fn, pattern))
-        except Exception as e:
-            self.io.tool_error(f"Error matching pattern: {e}")
-            return
-
-        if not matched_files:
-            self.io.tool_output("No files match the pattern.")
-            return
-
-        # Sort files: in-chat first, then alphabetically
-        sorted_files = sorted(
-            matched_files,
-            key=lambda f: (f not in in_chat and f not in read_only_in_chat, f),
-        )
-
-        output = []
-        for fname in sorted_files:
-            if fname in in_chat:
-                output.append(f"* {fname}")
-            elif fname in read_only_in_chat:
-                output.append(f"  {fname} (read-only)")
+        other_files = []
+        chat_files = []
+        read_only_files = []
+        read_only_stub_files = []
+        for file in files:
+            abs_file_path = self.coder.abs_root_path(file)
+            if abs_file_path in self.coder.abs_fnames:
+                chat_files.append(file)
             else:
-                output.append(f"  {fname}")
+                other_files.append(file)
 
-        self.io.tool_output("\n".join(output))
+        # Add read-only files
+        for abs_file_path in self.coder.abs_read_only_fnames:
+            rel_file_path = self.coder.get_rel_fname(abs_file_path)
+            read_only_files.append(rel_file_path)
+
+        # Add read-only stub files
+        for abs_file_path in self.coder.abs_read_only_stubs_fnames:
+            rel_file_path = self.coder.get_rel_fname(abs_file_path)
+            read_only_stub_files.append(rel_file_path)
+
+        if not chat_files and not other_files and not read_only_files and not read_only_stub_files:
+            self.io.tool_output("\nNo files in chat, git repo, or read-only list.")
+            return
+
+        if other_files:
+            self.io.tool_output("Repo files not in the chat:\n")
+        for file in other_files:
+            self.io.tool_output(f"  {file}")
+
+        # Read-only files:
+        if read_only_files or read_only_stub_files:
+            self.io.tool_output("\nRead-only files:\n")
+        for file in read_only_files:
+            self.io.tool_output(f"  {file}")
+        for file in read_only_stub_files:
+            self.io.tool_output(f"  {file} (stub)")
+
+        if chat_files:
+            self.io.tool_output("\nFiles in chat:\n")
+        for file in chat_files:
+            self.io.tool_output(f"  {file}")
 
     def cmd_exit(self, args):
         "Exit the application"
@@ -1857,6 +1861,10 @@ Just show me the edits I need to make.
         sys.exit()
 
     def cmd_quit(self, args):
+        "Exit the application"
+        self.cmd_exit(args)
+
+    def cmd_bye(self, args):
         "Exit the application"
         self.cmd_exit(args)
 
@@ -2078,33 +2086,33 @@ Just show me the edits I need to make.
 
 
 
-def expand_subdir(path):
-    if not path.is_dir():
-        return [path]
+def expand_subdir(file_path):
+    if file_path.is_file():
+        yield file_path
+        return
 
-    res = []
-    for p in path.rglob("*"):
-        if p.is_file():
-            res.append(p)
-    return res
+    if file_path.is_dir():
+        for file in file_path.rglob("*"):
+            if file.is_file():
+                yield file
 
 
 def parse_quoted_filenames(args):
-    res = []
-    if not args:
-        return res
+    filenames = re.findall(r"\"(.+?)\"|(\S+)", args)
+    filenames = [name for sublist in filenames for name in sublist if name]
+    return filenames
 
-    # Find all quoted strings
-    quoted_strings = re.findall(r'"([^"]*)"', args)
 
-    # Remove quoted strings from the original string to get unquoted words
-    unquoted_part = re.sub(r'"[^"]*"', "", args)
+def get_help_md():
+    md = Commands(None, None).get_help_md()
+    return md
 
-    # Split the remaining string by spaces to get unquoted words
-    unquoted_words = unquoted_part.split()
 
-    # Combine quoted strings and unquoted words
-    res.extend(quoted_strings)
-    res.extend(unquoted_words)
+def main():
+    md = get_help_md()
+    print(md)
 
-    return res
+
+if __name__ == "__main__":
+    status = main()
+    sys.exit(status)
