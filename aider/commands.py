@@ -1274,6 +1274,49 @@ class Commands:
         "Switch to the agent coder"
         raise SwitchCoder(edit_format="agent")
 
+    def cmd_tools_create(self, args):
+        "Create a new tool with AI assistance"
+
+        scope = "local"
+        args_list = args.strip().split()
+        if "--global" in args_list:
+            scope = "global"
+            args_list.remove("--global")
+        elif "--local" in args_list:
+            scope = "local"
+            args_list.remove("--local")
+
+        file_name = args_list[0] if args_list else None
+        description = " ".join(args_list[1:]) if len(args_list) > 1 else None
+
+        if not file_name or not description:
+            self.io.tool_error(
+                "Usage: /tools-create [--local|--global] <file_name.py> <description>"
+            )
+            return
+
+        if not hasattr(self.coder, "tool_create"):
+            self.io.tool_error("This command is only available in agent mode.")
+            return
+
+        self.coder.tool_create(file_name=file_name, description=description, scope=scope)
+
+    def cmd_tools_move(self, args):
+        "Move a custom tool between the local and global tool directories"
+        paths_str = args.strip()
+        if not paths_str:
+            self.io.tool_error(
+                "Please provide the path(s) to Python files or directories containing tools to"
+                " move."
+            )
+            return
+
+        if not hasattr(self.coder, "tool_move"):
+            self.io.tool_error("This command is only available in agent mode.")
+            return
+
+        self.coder.tool_move(paths_str)
+
     def cmd_tools_add(self, args):
         "Add a tool to the agent's tool belt"
         if not hasattr(self.coder, "tool_add_from_path"):
