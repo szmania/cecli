@@ -1852,16 +1852,17 @@ Just show me the edits I need to make.
         self.io.tool_output("\n".join(output))
 
     def cmd_exit(self, args):
-        "Exit the program"
-        raise SystemExit
+        "Exit the application"
+        self.coder.event("exit", reason="/exit")
+        sys.exit()
 
     def cmd_quit(self, args):
-        "Exit the program"
-        raise SystemExit
+        "Exit the application"
+        self.cmd_exit(args)
 
     def cmd_bye(self, args):
-        "Exit the program"
-        raise SystemExit
+        "Exit the application"
+        self.cmd_exit(args)
 
     def cmd_git(self, args):
         "Run a git command"
@@ -1871,21 +1872,76 @@ Just show me the edits I need to make.
         self.coder.repo.run_git_command(args)
 
     async def cmd_test(self, args):
-        "Run a test command"
-        if not args:
+        "Run a shell command and add the output to the chat on non-zero exit code"
+        if not args and self.coder.test_cmd:
             args = self.coder.test_cmd
 
         if not args:
-            self.io.tool_error("No test command provided.")
             return
 
-        self.io.tool_output(f"Running test: {args}")
-        self.io.tool_output(await run_cmd(args))
+        if not callable(args):
+            if type(args) is not str:
+                raise ValueError(repr(args))
+            return await self.cmd_run(args, True)
 
-    async def cmd_run(self, args):
-        "Run a shell command"
+        errors = args()
+        if not errors:
+            return
+
+        self.io.tool_output(errors)
+        return errors
+
+    async def cmd_run(self, args, add_on_nonzero_exit=False):
+        "Run a shell command and optionally add the output to the chat (alias: !)"
         self.io.tool_output(f"Running: {args}")
-        self.io.tool_output(await run_cmd(args))
+        try:
+            exit_status, combined_output = await run_cmd(
+                args, verbose=self.verbose, error_print=self.io.tool_error, cwd=self.coder.root
+            )
+        except TypeError:
+            # For compatibility with older run_cmd that is not async and returns a string
+            combined_output = run_cmd(
+                args, verbose=self.verbose, error_print=self.io.tool_error, cwd=self.coder.root
+            )
+            exit_status = 0 if combined_output is not None else 1
+
+        if combined_output is None:
+            return
+
+        # Calculate token count of output
+        token_count = self.coder.main_model.token_count(combined_output)
+        k_tokens = token_count / 1000
+
+        if add_on_nonzero_exit:
+            add = exit_status != 0
+        else:
+            add = await self.io.confirm_ask(
+                f"Add {k_tokens:.1f}k tokens of command output to the chat?"
+            )
+
+        if add:
+            num_lines = len(combined_output.strip().splitlines())
+            line_plural = "line" if num_lines == 1 else "lines"
+            self.io.tool_output(f"Added {num_lines} {line_plural} of output to the chat.")
+
+            msg = prompts.run_output.format(
+                command=args,
+                output=combined_output,
+            )
+
+            self.coder.cur_messages += [
+                dict(role="user", content=msg),
+                dict(role="assistant", content="Ok."),
+            ]
+
+            if add_on_nonzero_exit and exit_status != 0:
+                # Return the formatted output message for test failures
+                return msg
+            elif add and exit_status != 0:
+                self.io.placeholder = "What's wrong? Fix"
+
+        # Return None if output wasn't added or command succeeded
+        return None
 
     async def cmd_help(self, args):
         "Ask questions about aider"
@@ -1956,6 +2012,54 @@ Just show me the edits I need to make.
         "Load a chat session from a file"
         self.get_session_manager().load_session(args)
 
+    def cmd_files(self, args):
+        "List all known files and indicate which are included in the chat session"
+
+        files = self.coder.get_all_relative_files()
+
+        other_files = []
+        chat_files = []
+        read_only_files = []
+        read_only_stub_files = []
+        for file in files:
+            abs_file_path = self.coder.abs_root_path(file)
+            if abs_file_path in self.coder.abs_fnames:
+                chat_files.append(file)
+            else:
+                other_files.append(file)
+
+        # Add read-only files
+        for abs_file_path in self.coder.abs_read_only_fnames:
+            rel_file_path = self.coder.get_rel_fname(abs_file_path)
+            read_only_files.append(rel_file_path)
+
+        # Add read-only stub files
+        for abs_file_path in self.coder.abs_read_only_stubs_fnames:
+            rel_file_path = self.coder.get_rel_fname(abs_file_path)
+            read_only_stub_files.append(rel_file_path)
+
+        if not chat_files and not other_files and not read_only_files and not read_only_stub_files:
+            self.io.tool_output("\nNo files in chat, git repo, or read-only list.")
+            return
+
+        if other_files:
+            self.io.tool_output("Repo files not in the chat:\n")
+        for file in other_files:
+            self.io.tool_output(f"  {file}")
+
+        # Read-only files:
+        if read_only_files or read_only_stub_files:
+            self.io.tool_output("\nRead-only files:\n")
+        for file in read_only_files:
+            self.io.tool_output(f"  {file}")
+        for file in read_only_stub_files:
+            self.io.tool_output(f"  {file} (stub)")
+
+        if chat_files:
+            self.io.tool_output("\nFiles in chat:\n")
+        for file in chat_files:
+            self.io.tool_output(f"  {file}")
+
 
     def cmd_speak(self, args):
         "Speak the given text aloud"
@@ -1972,15 +2076,60 @@ Just show me the edits I need to make.
         return self.voice.listen()
 
     def cmd_paste(self, args):
-        "Paste from the clipboard"
-        return pyperclip.paste()
+        """Paste image/text from the clipboard into the chat.        Optionally provide a name for the image."""
+        try:
+            # Check for image first
+            image = ImageGrab.grabclipboard()
+            if isinstance(image, Image.Image):
+                if args.strip():
+                    filename = args.strip()
+                    ext = os.path.splitext(filename)[1].lower()
+                    if ext in (".jpg", ".jpeg", ".png"):
+                        basename = filename
+                    else:
+                        basename = f"{filename}.png"
+                else:
+                    basename = "clipboard_image.png"
 
-    def cmd_screenshot(self, args):
+                temp_dir = tempfile.mkdtemp()
+                temp_file_path = os.path.join(temp_dir, basename)
+                image_format = "PNG" if basename.lower().endswith(".png") else "JPEG"
+                image.save(temp_file_path, image_format)
+
+                abs_file_path = Path(temp_file_path).resolve()
+
+                # Check if a file with the same name already exists in the chat
+                existing_file = next(
+                    (f for f in self.coder.abs_fnames if Path(f).name == abs_file_path.name), None
+                )
+                if existing_file:
+                    self.coder.abs_fnames.remove(existing_file)
+                    self.io.tool_output(f"Replaced existing image in the chat: {existing_file}")
+
+                self.coder.abs_fnames.add(str(abs_file_path))
+                self.io.tool_output(f"Added clipboard image to the chat: {abs_file_path}")
+                self.coder.check_added_files()
+
+                return
+
+            # If not an image, try to get text
+            text = pyperclip.paste()
+            if text:
+                self.io.tool_output(text)
+                return text
+
+            self.io.tool_error("No image or text content found in clipboard.")
+            return
+
+        except Exception as e:
+            self.io.tool_error(f"Error processing clipboard content: {e}")
+
+    async def cmd_screenshot(self, args):
         "Add a screenshot to the chat"
         im = ImageGrab.grab()
         with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as fp:
             im.save(fp.name)
-            self.cmd_add(fp.name)
+            await self.cmd_add(fp.name)
 
     def basic_help(self):
         commands = sorted(self.get_commands())
