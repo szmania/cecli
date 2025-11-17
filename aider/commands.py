@@ -1122,6 +1122,689 @@ class Commands:
                 if hasattr(self.coder, "_calculate_context_block_tokens"):
                     self.coder._calculate_context_block_tokens()
 
+    def cmd_context_management(self, args=""):
+        "Toggle context management for large files"
+        if not hasattr(self.coder, "context_management_enabled"):
+            self.io.tool_error("Context management is only available in agent mode.")
+            return
+
+        # Toggle the setting
+        self.coder.context_management_enabled = not self.coder.context_management_enabled
+
+        # Report the new state
+        if self.coder.context_management_enabled:
+            self.io.tool_output("Context management is now ON - large files may be truncated.")
+        else:
+            self.io.tool_output("Context management is now OFF - files will not be truncated.")
+
+    def cmd_context_blocks(self, args=""):
+        "Toggle enhanced context blocks or print a specific block"
+        if not hasattr(self.coder, "use_enhanced_context"):
+            self.io.tool_error("Enhanced context blocks are only available in agent mode.")
+            return
+
+        # If an argument is provided, try to print that specific context block
+        if args.strip():
+            # Format block name to match internal naming conventions
+            block_name = args.strip().lower().replace(" ", "_")
+
+            # Check if the coder has the necessary method to get context blocks
+            if hasattr(self.coder, "_generate_context_block"):
+                # Force token recalculation to ensure blocks are fresh
+                if hasattr(self.coder, "_calculate_context_block_tokens"):
+                    self.coder._calculate_context_block_tokens(force=True)
+
+                # Try to get the requested block
+                block_content = self.coder._generate_context_block(block_name)
+
+                if block_content:
+                    # Calculate token count
+                    tokens = self.coder.main_model.token_count(block_content)
+                    self.io.tool_output(f"Context block '{args.strip()}' ({tokens} tokens):")
+                    self.io.tool_output(block_content)
+                    return
+                else:
+                    # List available blocks if the requested one wasn't found
+                    self.io.tool_error(f"Context block '{args.strip()}' not found or empty.")
+                    if hasattr(self.coder, "context_block_tokens"):
+                        available_blocks = list(self.coder.context_block_tokens.keys())
+                        formatted_blocks = [
+                            name.replace("_", " ").title() for name in available_blocks
+                        ]
+                        self.io.tool_output(f"Available blocks: {', '.join(formatted_blocks)}")
+                    return
+            else:
+                self.io.tool_error("This coder doesn't support generating context blocks.")
+                return
+
+        # If no argument, toggle the enhanced context setting
+        self.coder.use_enhanced_context = not self.coder.use_enhanced_context
+
+        # Report the new state
+        if self.coder.use_enhanced_context:
+            self.io.tool_output(
+                "Enhanced context blocks are now ON - directory structure and git status will be"
+                " included."
+            )
+            if hasattr(self.coder, "context_block_tokens"):
+                available_blocks = list(self.coder.context_block_tokens.keys())
+                formatted_blocks = [
+                    name.replace("_", " ").title() for name in available_blocks
+                ]
+                self.io.tool_output(f"Available blocks: {', '.join(formatted_blocks)}")
+                self.io.tool_output("Use '/context-blocks [block name]' to view a specific block.")
+        else:
+            self.io.tool_output(
+                "Enhanced context blocks are now OFF - directory structure and git status will not"
+                " be included."
+            )
+
+    def completions_ask(self):
+        raise CommandCompletionException()
+
+    def completions_code(self):
+        raise CommandCompletionException()
+
+    def completions_architect(self):
+        raise CommandCompletionException()
+
+    def completions_context(self):
+        raise CommandCompletionException()
+
+    def completions_navigator(self):
+        raise CommandCompletionException()
+
+    async def cmd_ask(self, args):
+        """Ask questions about the code base without editing any files. If no prompt provided, switches to ask mode."""  # noqa
+        return await self._generic_chat_command(args, "ask")
+
+    async def cmd_code(self, args):
+        """Ask for changes to your code. If no prompt provided, switches to code mode."""  # noqa
+        return await self._generic_chat_command(args, self.coder.main_model.edit_format)
+
+    async def cmd_architect(self, args):
+        """Enter architect/editor mode using 2 different models. If no prompt provided, switches to architect/editor mode."""  # noqa
+        return await self._generic_chat_command(args, "architect")
+
+    async def cmd_context(self, args):
+        """Enter context mode to see surrounding code context. If no prompt provided, switches to context mode."""  # noqa
+        return await self._generic_chat_command(args, "context", placeholder=args.strip() or None)
+
+    async def cmd_navigator(self, args):
+        """Enter agent mode to autonomously discover and manage relevant files. If no prompt provided, switches to agent mode."""  # noqa
+        # Enable context management when entering agent mode
+        if hasattr(self.coder, "context_management_enabled"):
+            self.coder.context_management_enabled = True
+            self.io.tool_output("Context management enabled for large files")
+
+        return await self._generic_chat_command(args, "agent", placeholder=args.strip() or None)
+
+    async def _generic_chat_command(self, args, edit_format, placeholder=None):
+        if not args.strip():
+            # Switch to the corresponding chat mode if no args provided
+            return self.cmd_chat_mode(edit_format)
+
+        from aider.coders.base_coder import Coder
+
+        coder = await Coder.create(
+            io=self.io,
+            from_coder=self.coder,
+            edit_format=edit_format,
+            summarize_from_coder=False,
+            num_cache_warming_pings=0,
+        )
+
+        user_msg = args
+        await coder.run(user_msg)
+
+        # Use the provided placeholder if any
+        raise SwitchCoder(
+            edit_format=self.coder.edit_format,
+            summarize_from_coder=False,
+            from_coder=coder,
+            show_announcements=False,
+            placeholder=placeholder,
+        )
+
+    def get_help_md(self):
+        "Show help about all commands in markdown"
+
+        res = """
+|Command|Description|
+|:------|:----------|
+"""
+        commands = sorted(self.get_commands())
+        for cmd in commands:
+            cmd_method_name = f"cmd_{cmd[1:]}".replace("-", "_")
+            cmd_method = getattr(self, cmd_method_name, None)
+            if cmd_method:
+                description = cmd_method.__doc__
+                res += f"| **{cmd}** | {description} |\n"
+            else:
+                res += f"| **{cmd}** | |\n"
+
+        res += "\n"
+        return res
+
+    def cmd_voice(self, args):
+        "Record and transcribe voice input"
+
+        if not self.voice:
+            if "OPENAI_API_KEY" not in os.environ:
+                self.io.tool_error("To use /voice you must provide an OpenAI API key.")
+                return
+            try:
+                self.voice = voice.Voice(
+                    audio_format=self.voice_format or "wav", device_name=self.voice_input_device
+                )
+            except voice.SoundDeviceError:
+                self.io.tool_error(
+                    "Unable to import `sounddevice` and/or `soundfile`, is portaudio installed?"
+                )
+                return
+
+        try:
+            text = self.voice.record_and_transcribe(None, language=self.voice_language)
+        except litellm.OpenAIError as err:
+            self.io.tool_error(f"Unable to use OpenAI whisper model: {err}")
+            return
+
+        if text:
+            self.io.placeholder = text
+
+    def _cmd_read_only_base(self, args, source_set, target_set, source_mode, target_mode):
+        """Base implementation for read-only and read-only-stub commands"""
+        if not args.strip():
+            # Handle editable files
+            for fname in list(self.coder.abs_fnames):
+                self.coder.abs_fnames.remove(fname)
+                target_set.add(fname)
+                rel_fname = self.coder.get_rel_fname(fname)
+                self.io.tool_output(f"Converted {rel_fname} from editable to {target_mode}")
+
+            # Handle source set files if provided
+            if source_set:
+                for fname in list(source_set):
+                    source_set.remove(fname)
+                    target_set.add(fname)
+                    rel_fname = self.coder.get_rel_fname(fname)
+                    self.io.tool_output(
+                        f"Converted {rel_fname} from {source_mode} to {target_mode}"
+                    )
+            return
+
+        filenames = parse_quoted_filenames(args)
+        all_paths = []
+
+        # First collect all expanded paths
+        for pattern in filenames:
+            expanded_pattern = expanduser(pattern)
+            path_obj = Path(expanded_pattern)
+            is_abs = path_obj.is_absolute()
+            if not is_abs:
+                path_obj = Path(self.coder.root) / path_obj
+
+            matches = []
+            # Check for literal path existence first
+            if path_obj.exists():
+                matches = [path_obj]
+            else:
+                # If literal path doesn't exist, try globbing
+                if is_abs:
+                    # For absolute paths, glob it
+                    matches = [Path(p) for p in glob.glob(expanded_pattern)]
+                else:
+                    # For relative paths and globs, use glob from the root directory
+                    matches = list(Path(self.coder.root).glob(expanded_pattern))
+
+            if not matches:
+                self.io.tool_error(f"No matches found for: {pattern}")
+            else:
+                all_paths.extend(matches)
+
+        # Then process them in sorted order
+        for path in sorted(all_paths):
+            abs_path = self.coder.abs_root_path(path)
+            if os.path.isfile(abs_path):
+                self._add_read_only_file(
+                    abs_path,
+                    path,
+                    target_set,
+                    source_set,
+                    source_mode=source_mode,
+                    target_mode=target_mode,
+                )
+            elif os.path.isdir(abs_path):
+                self._add_read_only_directory(abs_path, path, source_set, target_set, target_mode)
+            else:
+                self.io.tool_error(f"Not a file or directory: {abs_path}")
+
+    def _add_read_only_file(
+        self,
+        abs_path,
+        original_name,
+        target_set,
+        source_set,
+        source_mode="read-only",
+        target_mode="read-only",
+    ):
+        if is_image_file(original_name) and not self.coder.main_model.info.get("supports_vision"):
+            self.io.tool_error(
+                f"Cannot add image file {original_name} as the"
+                f" {self.coder.main_model.name} does not support images."
+            )
+            return
+
+        if abs_path in target_set:
+            self.io.tool_error(f"{original_name} is already in the chat as a {target_mode} file")
+            return
+        elif abs_path in self.coder.abs_fnames:
+            self.coder.abs_fnames.remove(abs_path)
+            target_set.add(abs_path)
+            self.io.tool_output(
+                f"Moved {original_name} from editable to {target_mode} files in the chat"
+            )
+        elif source_set and abs_path in source_set:
+            source_set.remove(abs_path)
+            target_set.add(abs_path)
+            self.io.tool_output(
+                f"Moved {original_name} from {source_mode} to {target_mode} files in the chat"
+            )
+        else:
+            target_set.add(abs_path)
+            self.io.tool_output(f"Added {original_name} to {target_mode} files.")
+
+    def _add_read_only_directory(
+        self, abs_path, original_name, source_set, target_set, target_mode
+    ):
+        added_files = 0
+        for root, _, files in os.walk(abs_path):
+            for file in files:
+                file_path = os.path.join(root, file)
+                if (
+                    file_path not in self.coder.abs_fnames
+                    and file_path not in target_set
+                    and (source_set is None or file_path not in source_set)
+                ):
+                    target_set.add(file_path)
+                    added_files += 1
+
+        if added_files > 0:
+            self.io.tool_output(
+                f"Added {added_files} files from directory {original_name} to {target_mode} files."
+            )
+        else:
+            self.io.tool_output(f"No new files added from directory {original_name}.")
+
+    async def cmd_read_only(self, args):
+        "Add files to the chat that are for reference only, or turn added files to read-only"
+        if not args.strip():
+            # If no args provided, use fuzzy finder to select files to add as read-only
+            all_files = self.coder.get_all_relative_files()
+            files_in_chat = self.coder.get_inchat_relative_files()
+            addable_files = sorted(set(all_files) - set(files_in_chat))
+            if not addable_files:
+                # If no files available to add, convert all editable files to read-only
+                self._cmd_read_only_base(
+                    "",
+                    source_set=self.coder.abs_read_only_stubs_fnames,
+                    target_set=self.coder.abs_read_only_fnames,
+                    source_mode="read-only (stub)",
+                    target_mode="read-only",
+                )
+                return
+            selected_files = run_fzf(addable_files, multi=True)
+            if not selected_files:
+                # If user didn't select any files, convert all editable files to read-only
+                self._cmd_read_only_base(
+                    "",
+                    source_set=self.coder.abs_read_only_stubs_fnames,
+                    target_set=self.coder.abs_read_only_fnames,
+                    source_mode="read-only (stub)",
+                    target_mode="read-only",
+                )
+                return
+            args = " ".join([self.quote_fname(f) for f in selected_files])
+
+        self._cmd_read_only_base(
+            args,
+            source_set=self.coder.abs_read_only_stubs_fnames,
+            target_set=self.coder.abs_read_only_fnames,
+            source_mode="read-only (stub)",
+            target_mode="read-only",
+        )
+
+    async def cmd_read_only_stub(self, args):
+        "Add files to the chat as read-only stubs, or turn added files to read-only (stubs)"
+        if not args.strip():
+            # If no args provided, use fuzzy finder to select files to add as read-only stubs
+            all_files = self.coder.get_all_relative_files()
+            files_in_chat = self.coder.get_inchat_relative_files()
+            addable_files = sorted(set(all_files) - set(files_in_chat))
+            if not addable_files:
+                # If no files available to add, convert all editable files to read-only stubs
+                self._cmd_read_only_base(
+                    "",
+                    source_set=self.coder.abs_read_only_fnames,
+                    target_set=self.coder.abs_read_only_stubs_fnames,
+                    source_mode="read-only",
+                    target_mode="read-only (stub)",
+                )
+                return
+            selected_files = run_fzf(addable_files, multi=True)
+            if not selected_files:
+                # If user didn't select any files, convert all editable files to read-only stubs
+                self._cmd_read_only_base(
+                    "",
+                    source_set=self.coder.abs_read_only_fnames,
+                    target_set=self.coder.abs_read_only_stubs_fnames,
+                    source_mode="read-only",
+                    target_mode="read-only (stub)",
+                )
+                return
+            args = " ".join([self.quote_fname(f) for f in selected_files])
+
+        self._cmd_read_only_base(
+            args,
+            source_set=self.coder.abs_read_only_fnames,
+            target_set=self.coder.abs_read_only_stubs_fnames,
+            source_mode="read-only",
+            target_mode="read-only (stub)",
+        )
+
+    def cmd_map(self, args):
+        "Print out the current repository map"
+        repo_map = self.coder.get_repo_map()
+        if repo_map:
+            self.io.tool_output(repo_map)
+        else:
+            self.io.tool_output("No repository map available.")
+
+    def cmd_map_refresh(self, args):
+        "Force a refresh of the repository map"
+        repo_map = self.coder.get_repo_map(force_refresh=True)
+        if repo_map:
+            self.io.tool_output("The repo map has been refreshed, use /map to view it.")
+
+    def cmd_settings(self, args):
+        "Print out the current settings"
+        settings = format_settings(self.parser, self.args)
+        announcements = "\n".join(self.coder.get_announcements())
+
+        # Build metadata for the active models (main, editor, weak)
+        model_sections = []
+        active_models = [
+            ("Main model", self.coder.main_model),
+            ("Editor model", getattr(self.coder.main_model, "editor_model", None)),
+            ("Weak model", getattr(self.coder.main_model, "weak_model", None)),
+        ]
+        for label, model in active_models:
+            if not model:
+                continue
+            info = getattr(model, "info", {}) or {}
+            if not info:
+                continue
+            model_sections.append(f"{label} ({model.name}):")
+            for k, v in sorted(info.items()):
+                model_sections.append(f"  {k}: {v}")
+            model_sections.append("")  # blank line between models
+
+        model_metadata = "\n".join(model_sections)
+
+        output = f"{announcements}\n{settings}"
+        if model_metadata:
+            output += "\n" + model_metadata
+        self.io.tool_output(output)
+
+    def completions_raw_load(self, document, complete_event):
+        return self.completions_raw_read_only(document, complete_event)
+
+    async def cmd_load(self, args):
+        "Load and execute commands from a file"
+        if not args.strip():
+            self.io.tool_error("Please provide a filename containing commands to load.")
+            return
+
+        try:
+            with open(args.strip(), "r", encoding=self.io.encoding, errors="replace") as f:
+                commands = f.readlines()
+        except FileNotFoundError:
+            self.io.tool_error(f"File not found: {args}")
+            return
+        except Exception as e:
+            self.io.tool_error(f"Error reading file: {e}")
+            return
+
+        for cmd in commands:
+            cmd = cmd.strip()
+            if not cmd or cmd.startswith("#"):
+                continue
+
+            self.io.tool_output(f"\nExecuting: {cmd}")
+            try:
+                await self.run(cmd)
+            except SwitchCoder:
+                self.io.tool_error(
+                    f"Command '{cmd}' is only supported in interactive mode, skipping."
+                )
+
+    def completions_raw_save(self, document, complete_event):
+        return self.completions_raw_read_only(document, complete_event)
+
+    def cmd_save(self, args):
+        "Save commands to a file that can reconstruct the current chat session's files"
+        if not args.strip():
+            self.io.tool_error("Please provide a filename to save the commands to.")
+            return
+
+        try:
+            with open(args.strip(), "w", encoding=self.io.encoding) as f:
+                f.write("/drop\n")
+                # Write commands to add editable files
+                for fname in sorted(self.coder.abs_fnames):
+                    rel_fname = self.coder.get_rel_fname(fname)
+                    f.write(f"/add       {rel_fname}\n")
+
+                # Write commands to add read-only files
+                for fname in sorted(self.coder.abs_read_only_fnames):
+                    # Use absolute path for files outside repo root, relative path for files inside
+                    if Path(fname).is_relative_to(self.coder.root):
+                        rel_fname = self.coder.get_rel_fname(fname)
+                        f.write(f"/read-only {rel_fname}\n")
+                    else:
+                        f.write(f"/read-only {fname}\n")
+                # Write commands to add read-only stubs files
+                for fname in sorted(self.coder.abs_read_only_stubs_fnames):
+                    # Use absolute path for files outside repo root, relative path for files inside
+                    if Path(fname).is_relative_to(self.coder.root):
+                        rel_fname = self.coder.get_rel_fname(fname)
+                        f.write(f"/read-only-stub {rel_fname}\n")
+                    else:
+                        f.write(f"/read-only-stub {fname}\n")
+
+            self.io.tool_output(f"Saved commands to {args.strip()}")
+        except Exception as e:
+            self.io.tool_error(f"Error saving commands to file: {e}")
+
+    def cmd_multiline_mode(self, args):
+        "Toggle multiline mode (swaps behavior of Enter and Meta+Enter)"
+        self.io.toggle_multiline_mode()
+
+    def cmd_copy(self, args):
+        "Copy the last assistant message to the clipboard"
+        all_messages = self.coder.done_messages + self.coder.cur_messages
+        assistant_messages = [msg for msg in reversed(all_messages) if msg["role"] == "assistant"]
+
+        if not assistant_messages:
+            self.io.tool_error("No assistant messages found to copy.")
+            return
+
+        last_assistant_message = assistant_messages[0]["content"]
+
+        try:
+            if pyperclip:
+                pyperclip.copy(last_assistant_message)
+                preview = (
+                    last_assistant_message[:50] + "..."
+                    if len(last_assistant_message) > 50
+                    else last_assistant_message
+                )
+                self.io.tool_output(f"Copied last assistant message to clipboard. Preview: {preview}")
+            else:
+                self.io.tool_error("pyperclip is not installed.")
+                self.io.tool_output(
+                    "You may need to install xclip or xsel on Linux, or pbcopy on macOS."
+                )
+
+        except pyperclip.PyperclipException as e:
+            self.io.tool_error(f"Failed to copy to clipboard: {str(e)}")
+            self.io.tool_output(
+                "You may need to install xclip or xsel on Linux, or pbcopy on macOS."
+            )
+        except Exception as e:
+            self.io.tool_error(f"An unexpected error occurred while copying to clipboard: {str(e)}")
+
+    def cmd_report(self, args):
+        "Report a problem by opening a GitHub Issue"
+        from aider.report import report_github_issue
+
+        announcements = "\n".join(self.coder.get_announcements())
+        issue_text = announcements
+
+        if args.strip():
+            title = args.strip()
+        else:
+            title = None
+
+        report_github_issue(issue_text, title=title, confirm=False)
+
+    def cmd_editor(self, initial_content=""):
+        "Open an editor to write a prompt"
+
+        user_input = pipe_editor(initial_content, suffix="md", editor=self.editor)
+        if user_input.strip():
+            self.io.set_placeholder(user_input.rstrip())
+
+    def cmd_edit(self, args=""):
+        "Alias for /editor: Open an editor to write a prompt"
+        return self.cmd_editor(args)
+
+    def cmd_history_search(self, args):
+        "Fuzzy search in history and paste it in the prompt"
+        history_lines = self.io.get_input_history()
+        selected_lines = run_fzf(history_lines)
+        if selected_lines:
+            self.io.set_placeholder("".join(selected_lines))
+
+    def cmd_think_tokens(self, args):
+        """Set the thinking token budget, eg: 8096, 8k, 10.5k, 0.5M, or 0 to disable."""
+        model = self.coder.main_model
+
+        if not args.strip():
+            # Display current value if no args are provided
+            formatted_budget = model.get_thinking_tokens()
+            if formatted_budget is None:
+                self.io.tool_output("Thinking tokens are not currently set.")
+            else:
+                budget = model.get_raw_thinking_tokens()
+                self.io.tool_output(
+                    f"Current thinking token budget: {budget:,} tokens ({formatted_budget})."
+                )
+            return
+
+        value = args.strip()
+        model.set_thinking_tokens(value)
+
+        # Handle the special case of 0 to disable thinking tokens
+        if value == "0":
+            self.io.tool_output("Thinking tokens disabled.")
+        else:
+            formatted_budget = model.get_thinking_tokens()
+            budget = model.get_raw_thinking_tokens()
+            self.io.tool_output(
+                f"Set thinking token budget to {budget:,} tokens ({formatted_budget})."
+            )
+
+        self.io.tool_output()
+
+        # Output announcements
+        announcements = "\n".join(self.coder.get_announcements())
+        self.io.tool_output(announcements)
+
+    def cmd_reasoning_effort(self, args):
+        "Set the reasoning effort level (values: number or low/medium/high depending on model)"
+        model = self.coder.main_model
+
+        if not args.strip():
+            # Display current value if no args are provided
+            reasoning_value = model.get_reasoning_effort()
+            if reasoning_value is None:
+                self.io.tool_output("Reasoning effort is not currently set.")
+            else:
+                self.io.tool_output(f"Current reasoning effort: {reasoning_value}")
+            return
+
+        value = args.strip()
+        model.set_reasoning_effort(value)
+        reasoning_value = model.get_reasoning_effort()
+        self.io.tool_output(f"Set reasoning effort to {reasoning_value}")
+        self.io.tool_output()
+
+        # Output announcements
+        announcements = "\n".join(self.coder.get_announcements())
+        self.io.tool_output(announcements)
+
+    def cmd_copy_context(self, args=None):
+        """Copy the current chat context as markdown, suitable to paste into a web UI"""
+
+        chunks = self.coder.format_chat_chunks()
+
+        markdown = ""
+
+        # Only include specified chunks in order
+        for messages in [chunks.repo, chunks.readonly_files, chunks.chat_files]:
+            for msg in messages:
+                # Only include user messages
+                if msg["role"] != "user":
+                    continue
+
+                content = msg["content"]
+
+                # Handle image/multipart content
+                if isinstance(content, list):
+                    for part in content:
+                        if part.get("type") == "text":
+                            markdown += part["text"] + "\n\n"
+                else:
+                    markdown += content + "\n\n"
+
+        args = args or ""
+        markdown += f"""
+Just tell me how to edit the files to make the changes.
+Don't give me back entire files.
+Just show me the edits I need to make.
+
+{args}
+"""
+
+        try:
+            if pyperclip:
+                pyperclip.copy(markdown)
+                self.io.tool_output("Copied code context to clipboard.")
+            else:
+                self.io.tool_error("pyperclip is not installed.")
+                self.io.tool_output(
+                    "You may need to install xclip or xsel on Linux, or pbcopy on macOS."
+                )
+
+        except pyperclip.PyperclipException as e:
+            self.io.tool_error(f"Failed to copy to clipboard: {str(e)}")
+            self.io.tool_output(
+                "You may need to install xclip or xsel on Linux, or pbcopy on macOS."
+            )
+        except Exception as e:
+            self.io.tool_error(f"An unexpected error occurred while copying to clipboard: {str(e)}")
+
     def cmd_ls(self, args):
         "List files and directories, optionally with a pattern"
         if not args:
@@ -1205,29 +1888,61 @@ class Commands:
         self.io.tool_output(await run_cmd(args))
 
     async def cmd_help(self, args):
-        "Show help about a command"
+        "Ask questions about aider"
+
+        if not args.strip():
+            self.basic_help()
+            return
+
+        self.coder.event("interactive help")
+        from aider.coders.base_coder import Coder
+
         if not self.help:
-            self.help = Help(self.get_commands(), self.io)
+            res = await install_help_extra(self.io)
+            if not res:
+                self.io.tool_error("Unable to initialize interactive help.")
+                return
 
-        if not args:
-            self.help.show_help()
-            return
+            self.help = Help()
 
-        if not args.startswith("/"):
-            args = "/" + args
+        coder = await Coder.create(
+            io=self.io,
+            from_coder=self.coder,
+            edit_format="help",
+            summarize_from_coder=False,
+            map_tokens=512,
+            map_mul_no_files=1,
+        )
+        user_msg = self.help.ask(args)
+        user_msg += """
+# Announcement lines from when this session of aider was launched:
 
-        if args not in self.get_commands():
-            self.io.tool_error(f"unknown command: {args}")
-            return
+"""
+        user_msg += "\n".join(self.coder.get_announcements()) + "\n"
 
-        self.help.show_command_help(args)
+        await coder.run(user_msg, preproc=False)
 
-        if args == "/help":
-            await install_help_extra(self.io)
+        if self.coder.repo_map:
+            map_tokens = self.coder.repo_map.max_map_tokens
+            map_mul_no_files = self.coder.repo_map.map_mul_no_files
+        else:
+            map_tokens = 0
+            map_mul_no_files = 1
+
+        raise SwitchCoder(
+            edit_format=self.coder.edit_format,
+            summarize_from_coder=False,
+            from_coder=coder,
+            show_announcements=False,
+        )
 
     def cmd_info(self, args):
         "Show system information"
         self.io.tool_output(format_settings(self.parser, self.args))
+
+    def cmd_multiline_mode(self, args):
+        "Toggle multiline mode (swaps behavior of Enter and Meta+Enter)"
+        self.io.toggle_multiline_mode()
 
     def cmd_save_session(self, args):
         "Save the chat session to a file"
@@ -1241,9 +1956,6 @@ class Commands:
         "Load a chat session from a file"
         self.get_session_manager().load_session(args)
 
-    def cmd_toggle_multiline(self, args):
-        "Toggle multiline input mode"
-        self.io.toggle_multiline_mode()
 
     def cmd_speak(self, args):
         "Speak the given text aloud"
@@ -1269,6 +1981,22 @@ class Commands:
         with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as fp:
             im.save(fp.name)
             self.cmd_add(fp.name)
+
+    def basic_help(self):
+        commands = sorted(self.get_commands())
+        pad = max(len(cmd) for cmd in commands)
+        pad = "{cmd:" + str(pad) + "}"
+        for cmd in commands:
+            cmd_method_name = f"cmd_{cmd[1:]}".replace("-", "_")
+            cmd_method = getattr(self, cmd_method_name, None)
+            cmd = pad.format(cmd=cmd)
+            if cmd_method:
+                description = cmd_method.__doc__
+                self.io.tool_output(f"{cmd} {description}")
+            else:
+                self.io.tool_output(f"{cmd} No description available.")
+        self.io.tool_output()
+        self.io.tool_output("Use `/help <question>` to ask questions about how to use aider.")
 
     def cmd_agent(self, args):
         "Switch to the agent coder"
