@@ -1211,7 +1211,7 @@ class Commands:
     def completions_context(self):
         raise CommandCompletionException()
 
-    def completions_navigator(self):
+    def completions_agent(self):
         raise CommandCompletionException()
 
     async def cmd_ask(self, args):
@@ -1230,16 +1230,14 @@ class Commands:
         """Enter context mode to see surrounding code context. If no prompt provided, switches to context mode."""  # noqa
         return await self._generic_chat_command(args, "context", placeholder=args.strip() or None)
 
-    async def cmd_navigator(self, args):
-        """Enter navigator mode to autonomously discover and manage relevant files. If no prompt provided, switches to navigator mode."""  # noqa
-        # Enable context management when entering navigator mode
+    async def cmd_agent(self, args):
+        """Enter agent mode to autonomously discover and manage relevant files. If no prompt provided, switches to agent mode."""  # noqa
+        # Enable context management when entering agent mode
         if hasattr(self.coder, "context_management_enabled"):
             self.coder.context_management_enabled = True
             self.io.tool_output("Context management enabled for large files")
 
-        return await self._generic_chat_command(
-            args, "navigator", placeholder=args.strip() or None
-        )
+        return await self._generic_chat_command(args, "agent", placeholder=args.strip() or None)
 
     async def _generic_chat_command(self, args, edit_format, placeholder=None):
         if not args.strip():
