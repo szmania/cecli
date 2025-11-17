@@ -1865,11 +1865,30 @@ Just show me the edits I need to make.
         self.cmd_exit(args)
 
     def cmd_git(self, args):
-        "Run a git command"
-        if not self.coder.repo:
-            self.io.tool_error("No git repository found.")
+        "Run a git command (output excluded from chat)"
+        combined_output = None
+        try:
+            args = "git " + args
+            env = dict(subprocess.os.environ)
+            env["GIT_EDITOR"] = "true"
+            result = subprocess.run(
+                args,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                env=env,
+                shell=True,
+                encoding=self.io.encoding,
+                errors="replace",
+            )
+            combined_output = result.stdout
+        except Exception as e:
+            self.io.tool_error(f"Error running /git command: {e}")
+
+        if combined_output is None:
             return
-        self.coder.repo.run_git_command(args)
+
+        self.io.tool_output(combined_output)
 
     async def cmd_test(self, args):
         "Run a shell command and add the output to the chat on non-zero exit code"
