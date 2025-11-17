@@ -1860,10 +1860,6 @@ Just show me the edits I need to make.
         "Exit the application"
         self.cmd_exit(args)
 
-    def cmd_bye(self, args):
-        "Exit the application"
-        self.cmd_exit(args)
-
     def cmd_git(self, args):
         "Run a git command (output excluded from chat)"
         combined_output = None
@@ -2011,88 +2007,9 @@ Just show me the edits I need to make.
             show_announcements=False,
         )
 
-    def cmd_info(self, args):
-        "Show system information"
-        self.io.tool_output(format_settings(self.parser, self.args))
-
     def cmd_multiline_mode(self, args):
         "Toggle multiline mode (swaps behavior of Enter and Meta+Enter)"
         self.io.toggle_multiline_mode()
-
-    def cmd_save_session(self, args):
-        "Save the chat session to a file"
-        self.get_session_manager().save_session(args)
-
-    def cmd_list_sessions(self, args):
-        "List available chat sessions"
-        self.get_session_manager().list_sessions()
-
-    def cmd_load_session(self, args):
-        "Load a chat session from a file"
-        self.get_session_manager().load_session(args)
-
-    def cmd_files(self, args):
-        "List all known files and indicate which are included in the chat session"
-
-        files = self.coder.get_all_relative_files()
-
-        other_files = []
-        chat_files = []
-        read_only_files = []
-        read_only_stub_files = []
-        for file in files:
-            abs_file_path = self.coder.abs_root_path(file)
-            if abs_file_path in self.coder.abs_fnames:
-                chat_files.append(file)
-            else:
-                other_files.append(file)
-
-        # Add read-only files
-        for abs_file_path in self.coder.abs_read_only_fnames:
-            rel_file_path = self.coder.get_rel_fname(abs_file_path)
-            read_only_files.append(rel_file_path)
-
-        # Add read-only stub files
-        for abs_file_path in self.coder.abs_read_only_stubs_fnames:
-            rel_file_path = self.coder.get_rel_fname(abs_file_path)
-            read_only_stub_files.append(rel_file_path)
-
-        if not chat_files and not other_files and not read_only_files and not read_only_stub_files:
-            self.io.tool_output("\nNo files in chat, git repo, or read-only list.")
-            return
-
-        if other_files:
-            self.io.tool_output("Repo files not in the chat:\n")
-        for file in other_files:
-            self.io.tool_output(f"  {file}")
-
-        # Read-only files:
-        if read_only_files or read_only_stub_files:
-            self.io.tool_output("\nRead-only files:\n")
-        for file in read_only_files:
-            self.io.tool_output(f"  {file}")
-        for file in read_only_stub_files:
-            self.io.tool_output(f"  {file} (stub)")
-
-        if chat_files:
-            self.io.tool_output("\nFiles in chat:\n")
-        for file in chat_files:
-            self.io.tool_output(f"  {file}")
-
-
-    def cmd_speak(self, args):
-        "Speak the given text aloud"
-        if not self.voice:
-            self.voice = voice.Voice(self.io, self.voice_language)
-        self.voice.speak(args)
-
-    def cmd_listen(self, args):
-        "Listen for voice input"
-        if not self.voice:
-            self.voice = voice.Voice(
-                self.io, self.voice_language, self.voice_input_device, self.voice_format
-            )
-        return self.voice.listen()
 
     def cmd_paste(self, args):
         """Paste image/text from the clipboard into the chat.        Optionally provide a name for the image."""
@@ -2143,13 +2060,6 @@ Just show me the edits I need to make.
         except Exception as e:
             self.io.tool_error(f"Error processing clipboard content: {e}")
 
-    async def cmd_screenshot(self, args):
-        "Add a screenshot to the chat"
-        im = ImageGrab.grab()
-        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as fp:
-            im.save(fp.name)
-            await self.cmd_add(fp.name)
-
     def basic_help(self):
         commands = sorted(self.get_commands())
         pad = max(len(cmd) for cmd in commands)
@@ -2166,80 +2076,6 @@ Just show me the edits I need to make.
         self.io.tool_output()
         self.io.tool_output("Use `/help <question>` to ask questions about how to use aider.")
 
-    def cmd_agent(self, args):
-        "Switch to the agent coder"
-        raise SwitchCoder(edit_format="agent")
-
-    def cmd_tools_create(self, args):
-        "Create a new tool with AI assistance"
-
-        scope = "local"
-        args_list = args.strip().split()
-        if "--global" in args_list:
-            scope = "global"
-            args_list.remove("--global")
-        elif "--local" in args_list:
-            scope = "local"
-            args_list.remove("--local")
-
-        file_name = args_list[0] if args_list else None
-        description = " ".join(args_list[1:]) if len(args_list) > 1 else None
-
-        if not file_name or not description:
-            self.io.tool_error(
-                "Usage: /tools-create [--local|--global] <file_name.py> <description>"
-            )
-            return
-
-        if not hasattr(self.coder, "tool_create"):
-            self.io.tool_error("This command is only available in agent mode.")
-            return
-
-        self.coder.tool_create(file_name=file_name, description=description, scope=scope)
-
-    def cmd_tools_move(self, args):
-        "Move a custom tool between the local and global tool directories"
-        paths_str = args.strip()
-        if not paths_str:
-            self.io.tool_error(
-                "Please provide the path(s) to Python files or directories containing tools to"
-                " move."
-            )
-            return
-
-        if not hasattr(self.coder, "tool_move"):
-            self.io.tool_error("This command is only available in agent mode.")
-            return
-
-        self.coder.tool_move(paths_str)
-
-    def cmd_tools_add(self, args):
-        "Add a tool to the agent's tool belt"
-        if not hasattr(self.coder, "tool_add_from_path"):
-            self.io.tool_error("This command is only available in agent mode.")
-            return
-        self.coder.tool_add_from_path(args)
-
-    def cmd_tools_remove(self, args):
-        "Remove a tool from the agent's tool belt"
-        if not hasattr(self.coder, "tool_remove"):
-            self.io.tool_error("This command is only available in agent mode.")
-            return
-        self.coder.tool_remove(args)
-
-    def cmd_tools_list(self, args):
-        "List the tools in the agent's tool belt"
-        if not hasattr(self.coder, "tool_list"):
-            self.io.tool_error("This command is only available in agent mode.")
-            return
-        self.coder.tool_list()
-
-    def cmd_granular_editing(self, args):
-        "Toggle granular editing mode"
-        if not hasattr(self.coder, "toggle_granular_editing"):
-            self.io.tool_error("This command is only available in agent mode.")
-            return
-        self.coder.toggle_granular_editing()
 
 
 def expand_subdir(path):
