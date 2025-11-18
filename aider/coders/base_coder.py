@@ -519,6 +519,8 @@ class Coder:
         self.commands = commands or Commands(self.io, self)
         self.commands.coder = self
 
+        self.data_cache = {"repo": {"last_key": ""}, "relative_files": None}
+
         self.repo = repo
         if use_git and self.repo is None:
             try:
@@ -980,41 +982,63 @@ class Coder:
         self.io.update_spinner("Updating repo map")
 
         cur_msg_text = self.get_cur_message_text()
-        mentioned_fnames = self.get_file_mentions(cur_msg_text)
-        mentioned_idents = self.get_ident_mentions(cur_msg_text)
-
-        mentioned_fnames.update(self.get_ident_filename_matches(mentioned_idents))
-
-        all_abs_files = set(self.get_all_abs_files())
-
-        # Exclude metadata/docs from repo map inputs to reduce parsing overhead
-        def _include_in_map(abs_path):
-            try:
-                rel = self.get_rel_fname(abs_path)
-            except Exception:
-                rel = str(abs_path)
-            parts = Path(rel).parts
-            if ".meta" in parts or ".docs" in parts:
-                return False
-            if ".min." in parts[-1]:
-                return False
-            if self.repo.git_ignored_file(abs_path):
-                return False
-            return True
-
-        all_abs_files = {p for p in all_abs_files if _include_in_map(p)}
-        repo_abs_read_only_fnames = set(self.abs_read_only_fnames) & all_abs_files
-        repo_abs_read_only_stubs_fnames = set(self.abs_read_only_stubs_fnames) & all_abs_files
-        chat_files = (
-            set(self.abs_fnames) | repo_abs_read_only_fnames | repo_abs_read_only_stubs_fnames
+        staged_files_hash = hash(str([item.a_path for item in self.repo.repo.index.diff("HEAD")]))
+        read_only_count = len(set(self.abs_read_only_fnames)) + len(
+            set(self.abs_read_only_stubs_fnames)
         )
-        other_files = all_abs_files - chat_files
+        self.data_cache["repo"]["mentioned_idents"] = self.get_ident_mentions(cur_msg_text)
+
+        if (
+            staged_files_hash != self.data_cache["repo"]["last_key"]
+            or read_only_count != self.data_cache["repo"].get("read_only_count")
+        ):
+            self.data_cache["repo"]["last_key"] = staged_files_hash
+
+            mentioned_idents = self.data_cache["repo"]["mentioned_idents"]
+            mentioned_fnames = self.get_file_mentions(cur_msg_text)
+            mentioned_fnames.update(self.get_ident_filename_matches(mentioned_idents))
+
+            all_abs_files = set(self.get_all_abs_files())
+
+            # Exclude metadata/docs from repo map inputs to reduce parsing overhead
+            def _include_in_map(abs_path):
+                try:
+                    rel = self.get_rel_fname(abs_path)
+                except Exception:
+                    rel = str(abs_path)
+                parts = Path(rel).parts
+                if ".meta" in parts or ".docs" in parts:
+                    return False
+                if ".min." in parts[-1]:
+                    return False
+                if self.repo.git_ignored_file(abs_path):
+                    return False
+                return True
+
+            all_abs_files = {p for p in all_abs_files if _include_in_map(p)}
+            repo_abs_read_only_fnames = set(self.abs_read_only_fnames) & all_abs_files
+            repo_abs_read_only_stubs_fnames = set(self.abs_read_only_stubs_fnames) & all_abs_files
+            chat_files = (
+                set(self.abs_fnames) | repo_abs_read_only_fnames | repo_abs_read_only_stubs_fnames
+            )
+            other_files = all_abs_files - chat_files
+
+            self.data_cache["repo"].update(
+                {
+                    "chat_files": chat_files,
+                    "other_files": other_files,
+                    "mentioned_fnames": mentioned_fnames,
+                    "all_abs_files": all_abs_files,
+                    "read_only_count": len(set(self.abs_read_only_fnames))
+                    + len(set(self.abs_read_only_stubs_fnames)),
+                }
+            )
 
         repo_content = self.repo_map.get_repo_map(
-            chat_files,
-            other_files,
-            mentioned_fnames=mentioned_fnames,
-            mentioned_idents=mentioned_idents,
+            self.data_cache["repo"]["chat_files"],
+            self.data_cache["repo"]["other_files"],
+            mentioned_fnames=self.data_cache["repo"]["mentioned_fnames"],
+            mentioned_idents=self.data_cache["repo"]["mentioned_idents"],
             force_refresh=force_refresh,
         )
 
@@ -1022,16 +1046,16 @@ class Coder:
         if not repo_content:
             repo_content = self.repo_map.get_repo_map(
                 set(),
-                all_abs_files,
-                mentioned_fnames=mentioned_fnames,
-                mentioned_idents=mentioned_idents,
+                self.data_cache["repo"]["all_abs_files"],
+                mentioned_fnames=self.data_cache["repo"]["mentioned_fnames"],
+                mentioned_idents=self.data_cache["repo"]["mentioned_idents"],
             )
 
         # fall back to completely unhinted repo
         if not repo_content:
             repo_content = self.repo_map.get_repo_map(
                 set(),
-                all_abs_files,
+                self.data_cache["repo"]["all_abs_files"],
             )
 
         self.io.update_spinner(self.io.last_spinner_text)
@@ -2140,6 +2164,8 @@ class Coder:
                 self.live_incremental_response(True)
             self.mdstream = None
 
+            self.io.start_spinner("Processing Answer...")
+
             self.partial_response_content = self.get_multi_response_content_in_progress(True)
             self.remove_reasoning_content()
             self.multi_response_content = ""
@@ -2829,6 +2855,7 @@ class Coder:
             if await self.io.confirm_ask(
                 "Add file to the chat?", subject=rel_fname, group=group, allow_never=True
             ):
+                await self.io.recreate_input()
                 self.add_rel_fname(rel_fname)
                 added_fnames.append(rel_fname)
             else:
@@ -2836,6 +2863,21 @@ class Coder:
 
         if added_fnames:
             return prompts.added_files.format(fnames=", ".join(added_fnames))
+
+    def preprocess_response(self):
+        if len(self.partial_response_tool_calls):
+            tool_list = []
+            tool_id_set = set()
+
+            for tool_call_dict in self.partial_response_tool_calls:
+                # LLM APIs sometimes return duplicates and that's annoying part 2
+                if tool_call_dict.get("id") in tool_id_set:
+                    continue
+
+                tool_id_set.add(tool_call_dict.get("id"))
+                tool_list.append(tool_call_dict)
+
+            self.partial_response_tool_calls = tool_list
 
     async def send(self, messages, model=None, functions=None, tools=None):
         self.got_reasoning_content = False
@@ -2889,6 +2931,7 @@ class Coder:
             self.keyboard_interrupt()
             raise kbi
         finally:
+            self.preprocess_response()
             self.io.log_llm_history(
                 "LLM RESPONSE",
                 format_content("ASSISTANT", self.partial_response_content),
@@ -3324,6 +3367,13 @@ class Coder:
             return
 
     def get_all_relative_files(self):
+        staged_files_hash = hash(str([item.a_path for item in self.repo.repo.index.diff("HEAD")]))
+        if (
+            staged_files_hash == self.data_cache["repo"]["last_key"]
+            and self.data_cache["relative_files"]
+        ):
+            return self.data_cache["relative_files"]
+
         if self.repo:
             files = self.repo.get_tracked_files()
         else:
@@ -3332,7 +3382,9 @@ class Coder:
         # This is quite slow in large repos
         # files = [fname for fname in files if self.is_file_safe(fname)]
 
-        return sorted(set(files))
+        self.data_cache["relative_files"] = sorted(set(files))
+
+        return self.data_cache["relative_files"]
 
     def get_all_abs_files(self):
         files = self.get_all_relative_files()

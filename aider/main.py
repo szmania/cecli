@@ -489,7 +489,9 @@ async def sanity_check_repo(repo, io):
         io.tool_error("Aider only works with git repos with version number 1 or 2.")
         io.tool_output("You may be able to convert your repo: git update-index --index-version=2")
         io.tool_output("Or run aider --no-git to proceed without using git.")
-        await io.offer_url(urls.git_index_version, "Open documentation url for more info?")
+        await io.offer_url(
+            urls.git_index_version, "Open documentation url for more info?", acknowledge=True
+        )
         return False
 
     io.tool_error("Unable to read git repository, it may be corrupt?")
@@ -988,7 +990,9 @@ async def main_async(argv=None, input=None, output=None, force_git_root=None, re
             io.tool_error(
                 f"Unable to proceed without an OpenRouter API key for model '{args.model}'."
             )
-            await io.offer_url(urls.models_and_keys, "Open documentation URL for more info?")
+            await io.offer_url(
+                urls.models_and_keys, "Open documentation URL for more info?", acknowledge=True
+            )
             analytics.event(
                 "exit",
                 reason="OpenRouter key missing for specified model and OAuth failed/declined",
@@ -1316,6 +1320,7 @@ async def main_async(argv=None, input=None, output=None, force_git_root=None, re
             urls.release_notes,
             "Would you like to see what's new in this version?",
             allow_never=False,
+            acknowledge=True,
         )
 
     if git_root and Path.cwd().resolve() != Path(git_root).resolve():
@@ -1471,7 +1476,9 @@ async def check_and_load_imports(io, is_first_run, verbose=False):
             except Exception as err:
                 io.tool_error(str(err))
                 io.tool_output("Error loading required imports. Did you install aider properly?")
-                await io.offer_url(urls.install_properly, "Open documentation url for more info?")
+                await io.offer_url(
+                    urls.install_properly, "Open documentation url for more info?", acknowledge=True
+                )
                 sys.exit(1)
 
             if verbose:
