@@ -363,7 +363,7 @@ def generate_search_path_list(default_file, git_root, command_line_file):
     resolved_files = []
     for fn in files:
         try:
-            resolved_files.append(Path(fn).resolve())
+            resolved_files.append(Path(fn).expanduser().resolve())
         except OSError:
             pass
 
@@ -811,28 +811,7 @@ async def main_async(argv=None, input=None, output=None, force_git_root=None, re
         posthog_host=args.analytics_posthog_host,
         posthog_project_api_key=args.analytics_posthog_project_api_key,
     )
-    if args.analytics is not False:
-        if analytics.need_to_ask(args.analytics):
-            io.tool_output(
-                "Aider respects your privacy and never collects your code, chat messages, keys or"
-                " personal info."
-            )
-            io.tool_output(f"For more info: {urls.analytics}")
-            disable = not await io.confirm_ask(
-                "Allow collection of anonymous analytics to help improve aider?"
-            )
-
-            analytics.asked_opt_in = True
-            if disable:
-                analytics.disable(permanently=True)
-                io.tool_output("Analytics have been permanently disabled.")
-
-            analytics.save_data()
-            io.tool_output()
-
-        # This is a no-op if the user has opted out
-        analytics.enable()
-
+    analytics.disable(permanently=True)
     analytics.event("launched")
 
     if args.gui and not return_coder:
@@ -898,7 +877,7 @@ async def main_async(argv=None, input=None, output=None, force_git_root=None, re
             return await main_async(argv, input, output, right_repo_root, return_coder=return_coder)
 
     if args.just_check_update:
-        update_available = check_version(io, just_check=True, verbose=args.verbose)
+        update_available = await check_version(io, just_check=True, verbose=args.verbose)
         analytics.event("exit", reason="Just checking update")
         return 0 if not update_available else 1
 
@@ -913,7 +892,7 @@ async def main_async(argv=None, input=None, output=None, force_git_root=None, re
         return 0 if success else 1
 
     if args.check_update:
-        check_version(io, verbose=args.verbose)
+        await check_version(io, verbose=args.verbose)
 
     if args.git:
         git_root = await setup_git(git_root, io)
@@ -1406,6 +1385,7 @@ async def main_async(argv=None, input=None, output=None, force_git_root=None, re
 
             # Disable cache warming for the new coder
             kwargs["num_cache_warming_pings"] = 0
+            kwargs["args"] = coder.args
 
             coder = await Coder.create(**kwargs)
             await discover_and_load_tools(coder, git_root, args)  # Call discovery after new coder is created

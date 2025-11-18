@@ -34,7 +34,16 @@
 !/requirements.txt
 
 # Ignore specific files
+
+# Python cache
 *.pyc
+__pycache__/
+.pytest_cache/
+
+# Environment variables
+.env
+
+# Aider-generated files
 .aider.input.history
 .aider.chat.history.md
 .aider.llm.history
