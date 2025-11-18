@@ -1880,18 +1880,21 @@ Just show me the edits I need to make.
         for file in chat_files:
             self.io.tool_output(f"  {file}")
 
-    def cmd_exit(self, args):
+    async def cmd_exit(self, args):
         "Exit the application"
         self.coder.event("exit", reason="/exit")
-        sys.exit()
+        if hasattr(self.coder, "mcp_servers") and self.coder.mcp_servers:
+            tasks = [server.disconnect() for server in self.coder.mcp_servers]
+            await asyncio.gather(*tasks)
+        sys.exit(0)
 
-    def cmd_quit(self, args):
+    async def cmd_quit(self, args):
         "Exit the application"
-        self.cmd_exit(args)
+        await self.cmd_exit(args)
 
-    def cmd_bye(self, args):
+    async def cmd_bye(self, args):
         "Exit the application"
-        self.cmd_exit(args)
+        await self.cmd_exit(args)
 
     def cmd_git(self, args):
         "Run a git command (output excluded from chat)"
