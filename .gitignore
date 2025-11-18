@@ -51,6 +51,7 @@ __pycache__/
 .aider.db
 .aider.db-journal
 .aider.todo.txt
+.aider.plans.md
 .aider*
 aider/__version__.py
 aider/_version.py
