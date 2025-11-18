@@ -1,4 +1,4 @@
-import shlex
+import oslex
 import shutil
 from pathlib import Path
 
@@ -103,6 +103,9 @@ class Grep(BaseAiderTool):
                 cmd_args.append("-n")  # Line numbers for rg and grep
             # ag includes line numbers by default
 
+            if tool_name in ["rg"]:
+                cmd_args.append("--heading")  # Filename above output for ripgrep
+
             # Context lines (Before and After)
             if context_before > 0:
                 # All tools use -B for lines before
@@ -152,7 +155,7 @@ class Grep(BaseAiderTool):
             cmd_args.extend([pattern, str(search_dir_path)])
 
             # Convert list to command string for run_cmd_subprocess
-            command_string = shlex.join(cmd_args)
+            command_string = oslex.join(cmd_args)
 
             self.coder.io.tool_output(f"⚙️ Executing {tool_name}: {command_string}")
 
@@ -175,8 +178,12 @@ class Grep(BaseAiderTool):
                 if len(output_lines) > max_output_lines:
                     truncated_output = "\n".join(output_lines[:max_output_lines])
                     result_message = (
-                        f"Found matches (truncated):\n```text\n{truncated_output}\n..."
-                        f" ({len(output_lines) - max_output_lines} more lines)\n```"
+                        "Found matches (truncated):\n"
+                        "```text\n"
+                        f"{truncated_output}\n"
+                        "...\n"
+                        f" ({len(output_lines) - max_output_lines} more lines)\n"
+                        "```"
                     )
                 elif not output_content:
                     # Should not happen if return code is 0, but handle defensively

@@ -93,6 +93,7 @@ async def offer_openrouter_oauth(io, analytics):
     if await io.confirm_ask(
         "Login to OpenRouter or create a free account?",
         default="y",
+        acknowledge=True,
     ):
         analytics.event("oauth_flow_initiated", provider="openrouter")
         openrouter_key = start_openrouter_oauth_flow(io, analytics)
@@ -228,7 +229,7 @@ def start_openrouter_oauth_flow(io, analytics):
 
     class OAuthCallbackHandler(http.server.SimpleHTTPRequestHandler):
         def do_GET(self):
-            nonlocal auth_code
+            nonlocal auth_code, server_error
             parsed_path = urlparse(self.path)
             if parsed_path.path == "/callback/aider":
                 query_params = parse_qs(parsed_path.query)
@@ -242,7 +243,6 @@ def start_openrouter_oauth_flow(io, analytics):
                         b"<p>Aider has received the authentication code. "
                         b"You can close this browser tab.</p></body></html>"
                     )
-                    # Signal the main thread to shut down the server
                     # Signal the main thread to shut down the server
                     shutdown_server.set()
                 else:

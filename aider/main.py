@@ -166,7 +166,7 @@ async def setup_git(git_root, io):
         )
         return
     elif cwd and await io.confirm_ask(
-        "No git repo found, create one to track aider's changes (recommended)?"
+        "No git repo found, create one to track aider's changes (recommended)?", acknowledge=True
     ):
         git_root = str(cwd.resolve())
         repo = await make_new_repo(git_root, io)
@@ -234,7 +234,10 @@ async def check_gitignore(git_root, io, ask=True):
 
     if ask:
         io.tool_output("You can skip this check with --no-gitignore")
-        if not await io.confirm_ask(f"Add {', '.join(patterns_to_add)} to .gitignore (recommended)?"):
+        if not await io.confirm_ask(
+            f"Add {', '.join(patterns_to_add)} to .gitignore (recommended)?",
+            acknowledge=True,
+        ):
             return
 
     content += "\n".join(patterns_to_add) + "\n"
@@ -1071,7 +1074,11 @@ async def main_async(argv=None, input=None, output=None, force_git_root=None, re
             io.tool_output("You can skip this check with --no-show-model-warnings")
 
             try:
-                await io.offer_url(urls.model_warnings, "Open documentation url for more info?")
+                await io.offer_url(
+                    urls.model_warnings,
+                    "Open documentation url for more info?",
+                    acknowledge=True,
+                )
                 io.tool_output()
             except KeyboardInterrupt:
                 analytics.event("exit", reason="Keyboard interrupt during model warnings")

@@ -34,8 +34,6 @@
 !/requirements.txt
 
 # Ignore specific files
-aider/__version__.py
-aider/_version.py
 *.pyc
 .aider.input.history
 .aider.chat.history.md
@@ -45,3 +43,5 @@ aider/_version.py
 .aider.db-journal
 .aider.todo.txt
 .aider*
+aider/__version__.py
+aider/_version.py
