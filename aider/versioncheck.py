@@ -32,7 +32,7 @@ async def install_upgrade(io, latest_version=None):
     """
 
     if latest_version:
-        new_ver_text = f"Newer aider version v{latest_version} is available."
+        new_ver_text = f"Newer aider-ce version v{latest_version} is available."
     else:
         new_ver_text = "Install latest version of aider?"
 

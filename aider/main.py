@@ -37,7 +37,7 @@ from aider.mcp import load_mcp_servers
 from aider.models import ModelSettings
 from aider.onboarding import offer_openrouter_oauth, select_default_model
 from aider.repo import ANY_GIT_ERROR, GitRepo
-from aider.report import report_uncaught_exceptions
+from aider.report import report_uncaught_exceptions, set_args_error_data
 from aider.sessions import SessionManager
 from aider.versioncheck import check_version, install_from_main_branch, install_upgrade
 from aider.watch import FileWatcher
@@ -665,6 +665,7 @@ async def main_async(argv=None, input=None, output=None, force_git_root=None, re
 
     # Parse again to include any arguments that might have been defined in .env
     args = parser.parse_args(argv)
+    set_args_error_data(args)
 
     if args.debug:
         global log_file
@@ -708,790 +709,4584 @@ async def main_async(argv=None, input=None, output=None, force_git_root=None, re
         args.code_theme = "monokai"
 
     if args.light_mode:
-        args.user_input_color = "green"
+        args.user_input_color = "blue"
         args.tool_error_color = "red"
         args.tool_warning_color = "#FFA500"
         args.assistant_output_color = "blue"
         args.code_theme = "default"
 
-    if return_coder and args.yes_always is None:
-        args.yes_always = True
+    if args.tool_output_color:
+        args.tool_output_color = args.tool_output_color.lower()
 
-    editing_mode = EditingMode.VI if args.vim else EditingMode.EMACS
+    if args.speech_output_language:
+        args.speak = True
 
-    def get_io(pretty):
-        return InputOutput(
-            pretty,
-            args.yes_always,
-            args.input_history_file,
-            args.chat_history_file,
-            input=input,
-            output=output,
-            user_input_color=args.user_input_color,
-            tool_output_color=args.tool_output_color,
-            tool_warning_color=args.tool_warning_color,
-            tool_error_color=args.tool_error_color,
-            completion_menu_color=args.completion_menu_color,
-            completion_menu_bg_color=args.completion_menu_bg_color,
-            completion_menu_current_color=args.completion_menu_current_color,
-            completion_menu_current_bg_color=args.completion_menu_current_bg_color,
-            assistant_output_color=args.assistant_output_color,
-            code_theme=args.code_theme,
-            dry_run=args.dry_run,
-            encoding=args.encoding,
-            line_endings=args.line_endings,
-            llm_history_file=args.llm_history_file,
-            editingmode=editing_mode,
-            fancy_input=args.fancy_input,
-            multiline_mode=args.multiline,
-            notifications=args.notifications,
-            notifications_command=args.notifications_command,
-            verbose=args.verbose,
-        )
-
-    io = get_io(args.pretty)
-    try:
-        io.rule()
-    except UnicodeEncodeError as err:
-        if not io.pretty:
-            raise err
-        io = get_io(False)
-        io.tool_warning("Terminal does not support pretty output (UnicodeDecodeError)")
-
-    # Process any environment variables set via --set-env
-    if args.set_env:
-        for env_setting in args.set_env:
-            try:
-                name, value = env_setting.split("=", 1)
-                os.environ[name.strip()] = value.strip()
-            except ValueError:
-                io.tool_error(f"Invalid --set-env format: {env_setting}")
-                io.tool_output("Format should be: ENV_VAR_NAME=value")
-                return 1
-
-    # Process any API keys set via --api-key
-    if args.api_key:
-        for api_setting in args.api_key:
-            try:
-                provider, key = api_setting.split("=", 1)
-                env_var = f"{provider.strip().upper()}_API_KEY"
-                os.environ[env_var] = key.strip()
-            except ValueError:
-                io.tool_error(f"Invalid --api-key format: {api_setting}")
-                io.tool_output("Format should be: provider=key")
-                return 1
-
-    if args.anthropic_api_key:
-        os.environ["ANTHROPIC_API_KEY"] = args.anthropic_api_key
-
-    if args.openai_api_key:
-        os.environ["OPENAI_API_KEY"] = args.openai_api_key
-
-    # Handle deprecated model shortcut args
-    handle_deprecated_model_args(args, io)
-    if args.openai_api_base:
-        os.environ["OPENAI_API_BASE"] = args.openai_api_base
-    if args.openai_api_version:
-        io.tool_warning(
-            "--openai-api-version is deprecated, use --set-env OPENAI_API_VERSION=<value>"
-        )
-        os.environ["OPENAI_API_VERSION"] = args.openai_api_version
-    if args.openai_api_type:
-        io.tool_warning("--openai-api-type is deprecated, use --set-env OPENAI_API_TYPE=<value>")
-        os.environ["OPENAI_API_TYPE"] = args.openai_api_type
-    if args.openai_organization_id:
-        io.tool_warning(
-            "--openai-organization-id is deprecated, use --set-env OPENAI_ORGANIZATION=<value>"
-        )
-        os.environ["OPENAI_ORGANIZATION"] = args.openai_organization_id
-
-    analytics = Analytics(
-        logfile=args.analytics_log,
-        permanently_disable=args.analytics_disable,
-        posthog_host=args.analytics_posthog_host,
-        posthog_project_api_key=args.analytics_posthog_project_api_key,
+    io = InputOutput(
+        pretty=args.pretty,
+        yes=args.yes,
+        input_history_file=args.input_history_file,
+        chat_history_file=args.chat_history_file,
+        input=input,
+        output=output,
+        user_input_color=args.user_input_color,
+        tool_output_color=args.tool_output_color,
+        tool_error_color=args.tool_error_color,
+        tool_warning_color=args.tool_warning_color,
+        assistant_output_color=args.assistant_output_color,
+        completion_menu_color=args.completion_menu_color,
+        completion_menu_bg_color=args.completion_menu_bg_color,
+        completion_menu_current_color=args.completion_menu_current_color,
+        completion_menu_current_bg_color=args.completion_menu_current_bg_color,
+        code_theme=args.code_theme,
+        encoding=args.encoding,
+        line_endings=args.line_endings,
+        dry_run=args.dry_run,
+        llm_history_file=args.llm_history_file,
+        editingmode=EditingMode.VI if args.vim_bindings else EditingMode.EMACS,
+        fancy_input=not args.no_fancy_input,
+        multiline_mode=args.multiline_input,
+        notifications=args.notifications,
+        notifications_command=args.notifications_command,
+        verbose=args.verbose,
     )
-    analytics.disable(permanently=True)
-    analytics.event("launched")
-
-    if args.gui and not return_coder:
-        if not await check_streamlit_install(io):
-            analytics.event("exit", reason="Streamlit not installed")
-            return
-        analytics.event("gui session")
-        await launch_gui(argv)
-        analytics.event("exit", reason="GUI session ended")
-        return
 
     if args.verbose:
+        io.tool_output("Loaded .env files:")
         for fname in loaded_dotenvs:
-            io.tool_output(f"Loaded {fname}")
+            io.tool_output(f"  - {fname}")
 
-    # Expand glob patterns in files and file arguments
-    all_files = args.files + (args.file or [])
-    all_files = expand_glob_patterns(all_files)
-    fnames = [str(Path(fn).resolve()) for fn in all_files]
-
-    # Expand glob patterns in read arguments
-    read_patterns = args.read or []
-    read_expanded = expand_glob_patterns(read_patterns)
-    read_only_fnames = []
-    for fn in read_expanded:
-        path = Path(fn).expanduser().resolve()
-        if path.is_dir():
-            read_only_fnames.extend(str(f) for f in path.rglob("*") if f.is_file())
-        else:
-            read_only_fnames.append(str(path))
-
-    if len(all_files) > 1:
-        good = True
-        for fname in all_files:
-            if Path(fname).is_dir():
-                io.tool_error(f"{fname} is a directory, not provided alone.")
-                good = False
-        if not good:
-            io.tool_output(
-                "Provide either a single directory of a git repo, or a list of one or more files."
-            )
-            analytics.event("exit", reason="Invalid directory input")
-            return 1
-
-    git_dname = None
-    if len(all_files) == 1:
-        if Path(all_files[0]).is_dir():
-            if args.git:
-                git_dname = str(Path(all_files[0]).resolve())
-                fnames = []
-            else:
-                io.tool_error(f"{all_files[0]} is a directory, but --no-git selected.")
-                analytics.event("exit", reason="Directory with --no-git")
-                return 1
-
-    # We can't know the git repo for sure until after parsing the args.
-    # If we guessed wrong, reparse because that changes things like
-    # the location of the config.yml and history files.
-    if args.git and not force_git_root and git is not None:
-        right_repo_root = guessed_wrong_repo(io, git_root, fnames, git_dname)
-        if right_repo_root:
-            analytics.event("exit", reason="Recursing with correct repo")
-            return await main_async(argv, input, output, right_repo_root, return_coder=return_coder)
-
-    if args.just_check_update:
-        update_available = await check_version(io, just_check=True, verbose=args.verbose)
-        analytics.event("exit", reason="Just checking update")
-        return 0 if not update_available else 1
-
-    if args.install_main_branch:
-        success = await install_from_main_branch(io)
-        analytics.event("exit", reason="Installed main branch")
-        return 0 if success else 1
-
-    if args.upgrade:
-        success = await install_upgrade(io)
-        analytics.event("exit", reason="Upgrade completed")
-        return 0 if success else 1
+    if args.gui:
+        await launch_gui(argv)
+        return
 
     if args.check_update:
-        await check_version(io, verbose=args.verbose)
+        await check_version(io, just_check=True)
+        return
+    if args.update:
+        await install_upgrade(io)
+        return
+    if args.install_main:
+        await install_from_main_branch(io)
+        return
 
-    if args.git:
-        git_root = await setup_git(git_root, io)
-        if args.gitignore:
-            await check_gitignore(git_root, io)
+    if args.help_extra:
+        install_help_extra(io)
+        return
 
-    if args.verbose:
-        show = format_settings(parser, args)
-        io.tool_output(show)
+    if args.version:
+        print(__version__)
+        return
 
-    cmd_line = " ".join(sys.argv)
-    cmd_line = scrub_sensitive_info(args, cmd_line)
-    io.tool_output(cmd_line, log_only=True)
+    if args.models:
+        models.print_matching_models(io, args.models)
+        return
 
-    is_first_run = is_first_run_of_new_version(io, verbose=args.verbose)
-    await check_and_load_imports(io, is_first_run, verbose=args.verbose)
+    if args.tools_help:
+        from aider.coders.agent_coder import AgentCoder
 
-    register_models(git_root, args.model_settings_file, io, verbose=args.verbose)
-    register_litellm_models(git_root, args.model_metadata_file, io, verbose=args.verbose)
+        AgentCoder.show_tool_help(io)
+        return
 
-    if args.list_models:
-        models.print_matching_models(io, args.list_models)
-        analytics.event("exit", reason="Listed models")
-        return 0
-
-    # Process any command line aliases
-    if args.alias:
-        for alias_def in args.alias:
-            # Split on first colon only
-            parts = alias_def.split(":", 1)
-            if len(parts) != 2:
-                io.tool_error(f"Invalid alias format: {alias_def}")
-                io.tool_output("Format should be: alias:model-name")
-                analytics.event("exit", reason="Invalid alias format error")
-                return 1
-            alias, model = parts
-            models.MODEL_ALIASES[alias.strip()] = model.strip()
-
-    selected_model_name = await select_default_model(args, io, analytics)
-    if not selected_model_name:
-        # Error message and analytics event are handled within select_default_model
-        # It might have already offered OAuth if no model/keys were found.
-        # If it failed here, we exit.
-        return 1
-    args.model = selected_model_name  # Update args with the selected model
-
-    # Check if an OpenRouter model was selected/specified but the key is missing
-    if args.model.startswith("openrouter/") and not os.environ.get("OPENROUTER_API_KEY"):
-        io.tool_warning(
-            f"The specified model '{args.model}' requires an OpenRouter API key, which was not"
-            " found."
-        )
-        # Attempt OAuth flow because the specific model needs it
-        if await offer_openrouter_oauth(io, analytics):
-            # OAuth succeeded, the key should now be in os.environ.
-            # Check if the key is now present after the flow.
-            if os.environ.get("OPENROUTER_API_KEY"):
-                io.tool_output(
-                    "OpenRouter successfully connected."
-                )  # Inform user connection worked
-            else:
-                # This case should ideally not happen if offer_openrouter_oauth succeeded
-                # but check defensively.
-                io.tool_error(
-                    "OpenRouter authentication seemed successful, but the key is still missing."
-                )
-                analytics.event(
-                    "exit",
-                    reason="OpenRouter key missing after successful OAuth for specified model",
-                )
-                return 1
-        else:
-            # OAuth failed or was declined by the user
-            io.tool_error(
-                f"Unable to proceed without an OpenRouter API key for model '{args.model}'."
-            )
-            await io.offer_url(
-                urls.models_and_keys, "Open documentation URL for more info?", acknowledge=True
-            )
-            analytics.event(
-                "exit",
-                reason="OpenRouter key missing for specified model and OAuth failed/declined",
-            )
+    if args.lint_cmds:
+        args.lint_cmds = parse_lint_cmds(args.lint_cmds, io)
+        if args.lint_cmds is None:
             return 1
 
-    main_model = models.Model(
-        args.model,
-        weak_model=args.weak_model,
-        editor_model=args.editor_model,
-        editor_edit_format=args.editor_edit_format,
-        verbose=args.verbose,
-        retry_timeout=args.retry_timeout,
-        retry_backoff_factor=args.retry_backoff_factor,
-        retry_on_unavailable=args.retry_on_unavailable,
-        verify_ssl=args.verify_ssl,
-    )
+    if args.format_cmds:
+        args.format_cmds = parse_lint_cmds(args.format_cmds, io)
+        if args.format_cmds is None:
+            return 1
 
-    # Check if deprecated remove_reasoning is set
-    if main_model.remove_reasoning is not None:
-        io.tool_warning(
-            "Model setting 'remove_reasoning' is deprecated, please use 'reasoning_tag' instead."
-        )
+    if args.files:
+        args.files = expand_glob_patterns(args.files)
 
-    # Set reasoning effort and thinking tokens if specified
-    if args.reasoning_effort is not None:
-        # Apply if check is disabled or model explicitly supports it
-        if not args.check_model_accepts_settings or (
-            main_model.accepts_settings and "reasoning_effort" in main_model.accepts_settings
-        ):
-            main_model.set_reasoning_effort(args.reasoning_effort)
+    if args.read_only_files:
+        args.read_only_files = expand_glob_patterns(args.read_only_files)
 
-    if args.thinking_tokens is not None:
-        # Apply if check is disabled or model explicitly supports it
-        if not args.check_model_accepts_settings or (
-            main_model.accepts_settings and "thinking_tokens" in main_model.accepts_settings
-        ):
-            main_model.set_thinking_tokens(args.thinking_tokens)
+    if args.read_only_stubs_files:
+        args.read_only_stubs_files = expand_glob_patterns(args.read_only_stubs_files)
 
-    # Show warnings about unsupported settings that are being ignored
-    if args.check_model_accepts_settings:
-        settings_to_check = [
-            {"arg": args.reasoning_effort, "name": "reasoning_effort"},
-            {"arg": args.thinking_tokens, "name": "thinking_tokens"},
-        ]
-
-        for setting in settings_to_check:
-            if setting["arg"] is not None and (
-                not main_model.accepts_settings
-                or setting["name"] not in main_model.accepts_settings
-            ):
-                io.tool_warning(
-                    f"Warning: {main_model.name} does not support '{setting['name']}', ignoring."
-                )
-                io.tool_output(
-                    f"Use --no-check-model-accepts-settings to force the '{setting['name']}'"
-                    " setting."
-                )
-
-    if args.copy_paste and args.edit_format is None:
-        if main_model.edit_format in ("diff", "whole", "diff-fenced"):
-            main_model.edit_format = "editor-" + main_model.edit_format
-
-    if args.verbose:
-        io.tool_output("Model metadata:")
-        io.tool_output(json.dumps(main_model.info, indent=4))
-
-        io.tool_output("Model settings:")
-        for attr in sorted(fields(ModelSettings), key=lambda x: x.name):
-            val = getattr(main_model, attr.name)
-            val = json.dumps(val, indent=4)
-            io.tool_output(f"{attr.name}: {val}")
-
-    lint_cmds = parse_lint_cmds(args.lint_cmd, io)
-    if lint_cmds is None:
-        analytics.event("exit", reason="Invalid lint command format")
+    if args.read_command and not os.path.exists(args.read_command):
+        io.tool_error(f"File not found: {args.read_command}")
         return 1
 
-    if args.show_model_warnings:
-        problem = await models.sanity_check_models(io, main_model)
-        if problem:
-            analytics.event("model warning", main_model=main_model)
-            io.tool_output("You can skip this check with --no-show-model-warnings")
-
-            try:
-                await io.offer_url(
-                    urls.model_warnings,
-                    "Open documentation url for more info?",
-                    acknowledge=True,
-                )
-                io.tool_output()
-            except KeyboardInterrupt:
-                analytics.event("exit", reason="Keyboard interrupt during model warnings")
-                return 1
-
-    repo = None
-    if args.git:
-        try:
-            repo = GitRepo(
-                io,
-                fnames,
-                git_dname,
-                args.aiderignore,
-                models=main_model.commit_message_models(),
-                attribute_author=args.attribute_author,
-                attribute_committer=args.attribute_committer,
-                attribute_commit_message_author=args.attribute_commit_message_author,
-                attribute_commit_message_committer=args.attribute_commit_message_committer,
-                commit_prompt=args.commit_prompt,
-                subtree_only=args.subtree_only,
-                git_commit_verify=args.git_commit_verify,
-                attribute_co_authored_by=args.attribute_co_authored_by,  # Pass the arg
-            )
-        except FileNotFoundError:
-            pass
-
-    if not args.skip_sanity_check_repo:
-        if not await sanity_check_repo(repo, io):
-            analytics.event("exit", reason="Repository sanity check failed")
-            return 1
-
-    if repo and not args.skip_sanity_check_repo:
-        num_files = len(repo.get_tracked_files())
-        analytics.event("repo", num_files=num_files)
-    else:
-        analytics.event("no-repo")
-
-    commands = Commands(
-        io,
-        None,
-        voice_language=args.voice_language,
-        voice_input_device=args.voice_input_device,
-        voice_format=args.voice_format,
-        verify_ssl=args.verify_ssl,
-        args=args,
-        parser=parser,
-        verbose=args.verbose,
-        editor=args.editor,
-        original_read_only_fnames=read_only_fnames,
-    )
-
-    summarizer = ChatSummary(
-        [main_model.weak_model, main_model],
-        args.max_chat_history_tokens or main_model.max_chat_history_tokens,
-    )
-
-    if args.cache_prompts and args.map_refresh == "auto":
-        args.map_refresh = "files"
-
-    if not main_model.streaming:
-        if args.stream:
-            io.tool_warning(
-                f"Warning: Streaming is not supported by {main_model.name}. Disabling streaming."
-            )
-        args.stream = False
-
-    if args.map_tokens is None:
-        map_tokens = main_model.get_repo_map_tokens()
-    else:
-        map_tokens = args.map_tokens
-
-    if args.enable_context_compaction and args.context_compaction_max_tokens is None:
-        max_input_tokens = main_model.info.get("max_input_tokens")
-        if max_input_tokens:
-            args.context_compaction_max_tokens = int(max_input_tokens * 0.8)
-
-    # Track auto-commits configuration
-    analytics.event("auto_commits", enabled=bool(args.auto_commits))
-
-    try:
-        # Load MCP servers from config string or file
-        mcp_servers = load_mcp_servers(
-            args.mcp_servers, args.mcp_servers_file, io, args.verbose, args.mcp_transport
-        )
-
-        if not mcp_servers:
-            mcp_servers = []
-
-        coder = await Coder.create(
-            main_model=main_model,
-            edit_format=args.edit_format,
-            io=io,
-            repo=repo,
-            fnames=fnames,
-            read_only_fnames=read_only_fnames,
-            read_only_stubs_fnames=[],
-            show_diffs=args.show_diffs,
-            auto_commits=args.auto_commits,
-            dirty_commits=args.dirty_commits,
-            dry_run=args.dry_run,
-            map_tokens=map_tokens,
-            verbose=args.verbose,
-            stream=args.stream,
-            use_git=args.git,
-            restore_chat_history=args.restore_chat_history,
-            auto_lint=args.auto_lint,
-            auto_test=args.auto_test,
-            lint_cmds=lint_cmds,
-            test_cmd=args.test_cmd,
-            commands=commands,
-            summarizer=summarizer,
-            analytics=analytics,
-            map_refresh=args.map_refresh,
-            cache_prompts=args.cache_prompts,
-            map_mul_no_files=args.map_multiplier_no_files,
-            map_max_line_length=args.map_max_line_length,
-            num_cache_warming_pings=args.cache_keepalive_pings,
-            suggest_shell_commands=args.suggest_shell_commands,
-            chat_language=args.chat_language,
-            commit_language=args.commit_language,
-            detect_urls=args.detect_urls,
-            auto_copy_context=args.copy_paste,
-            auto_accept_architect=args.auto_accept_architect,
-            mcp_servers=mcp_servers,
-            add_gitignore_files=args.add_gitignore_files,
-            enable_context_compaction=args.enable_context_compaction,
-            context_compaction_max_tokens=args.context_compaction_max_tokens,
-            context_compaction_summary_tokens=args.context_compaction_summary_tokens,
-            map_cache_dir=args.map_cache_dir,
-            repomap_in_memory=args.map_memory_cache,
-            preserve_todo_list=args.preserve_todo_list,
-            linear_output=args.linear_output,
-            args=args,
-        )
-    except UnknownEditFormat as err:
-        io.tool_error(str(err))
-        await io.offer_url(urls.edit_formats, "Open documentation about edit formats?")
-        analytics.event("exit", reason="Unknown edit format")
-        return 1
-    except ValueError as err:
-        io.tool_error(str(err))
-        analytics.event("exit", reason="ValueError during coder creation")
+    if args.edit_command and not os.path.exists(args.edit_command):
+        io.tool_error(f"File not found: {args.edit_command}")
         return 1
 
-    await discover_and_load_tools(coder, git_root, args)  # Call discovery after new coder is created
+    if args.edit_format == "diff" and not args.git:
+        io.tool_error("The `diff` edit format requires a git repository.")
+        io.tool_error("Please run aider in a git repository or use a different edit format.")
+        return 1
 
-    if return_coder:
-        analytics.event("exit", reason="Returning coder object")
-        return coder
+    if args.yes is None:
+        if args.yes_always:
+            args.yes = True
+        elif args.yes_never:
+            args.yes = False
 
-    ignores = []
-    if git_root:
-        ignores.append(str(Path(git_root) / ".gitignore"))
-    if args.aiderignore:
-        ignores.append(args.aiderignore)
+    if args.yes is True and args.yes is False:
+        io.tool_error("Cannot use both --yes-always and --yes-never")
+        return 1
 
-    if args.watch_files:
-        file_watcher = FileWatcher(
-            coder,
-            gitignores=ignores,
-            verbose=args.verbose,
-            analytics=analytics,
-            root=str(Path.cwd()) if args.subtree_only else None,
+    if args.yes is True and args.show_diff:
+        io.tool_error("Cannot use both --yes-always and --show-diff")
+        return 1
+
+    if args.yes is True and args.prompt_commit:
+        io.tool_error("Cannot use both --yes-always and --prompt-commit")
+        return 1
+
+    if args.auto_commits and args.dirty_commits:
+        io.tool_error("Cannot use both --auto-commits and --dirty-commits")
+        return 1
+
+    if args.auto_commits is False and args.prompt_commit:
+        io.tool_error("Cannot use both --no-auto-commits and --prompt-commit")
+        return 1
+
+    if args.dirty_commits and args.prompt_commit:
+        io.tool_error("Cannot use both --dirty-commits and --prompt-commit")
+        return 1
+
+    if args.auto_commits is False and args.show_diff:
+        io.tool_error("Cannot use both --no-auto-commits and --show-diff")
+        return 1
+
+    if args.dirty_commits and args.show_diff:
+        io.tool_error("Cannot use both --dirty-commits and --show-diff")
+        return 1
+
+    if args.auto_commits is False and args.dry_run:
+        io.tool_error("Cannot use both --no-auto-commits and --dry-run")
+        return 1
+
+    if args.dirty_commits and args.dry_run:
+        io.tool_error("Cannot use both --dirty-commits and --dry-run")
+        return 1
+
+    if args.auto_commits is False and args.yes is True:
+        io.tool_error("Cannot use both --no-auto-commits and --yes-always")
+        return 1
+
+    if args.dirty_commits and args.yes is True:
+        io.tool_error("Cannot use both --dirty-commits and --yes-always")
+        return 1
+
+    if args.auto_commits is False and args.voice_language:
+        io.tool_error("Cannot use both --no-auto-commits and --voice-language")
+        return 1
+
+    if args.dirty_commits and args.voice_language:
+        io.tool_error("Cannot use both --dirty-commits and --voice-language")
+        return 1
+
+    if args.auto_commits is False and args.show_repo_map:
+        io.tool_error("Cannot use both --no-auto-commits and --show-repo-map")
+        return 1
+
+    if args.dirty_commits and args.show_repo_map:
+        io.tool_error("Cannot use both --dirty-commits and --show-repo-map")
+        return 1
+
+    if args.auto_commits is False and args.map_tokens:
+        io.tool_error("Cannot use both --no-auto-commits and --map-tokens")
+        return 1
+
+    if args.dirty_commits and args.map_tokens:
+        io.tool_error("Cannot use both --dirty-commits and --map-tokens")
+        return 1
+
+    if args.auto_commits is False and args.map_mul_no_files:
+        io.tool_error("Cannot use both --no-auto-commits and --map-mul-no-files")
+        return 1
+
+    if args.dirty_commits and args.map_mul_no_files:
+        io.tool_error("Cannot use both --dirty-commits and --map-mul-no-files")
+        return 1
+
+    if args.auto_commits is False and args.map_style:
+        io.tool_error("Cannot use both --no-auto-commits and --map-style")
+        return 1
+
+    if args.dirty_commits and args.map_style:
+        io.tool_error("Cannot use both --dirty-commits and --map-style")
+        return 1
+
+    if args.auto_commits is False and args.tags_in_code:
+        io.tool_error("Cannot use both --no-auto-commits and --tags-in-code")
+        return 1
+
+    if args.dirty_commits and args.tags_in_code:
+        io.tool_error("Cannot use both --dirty-commits and --tags-in-code")
+        return 1
+
+    if args.auto_commits is False and args.ctags_cmd:
+        io.tool_error("Cannot use both --no-auto-commits and --ctags-cmd")
+        return 1
+
+    if args.dirty_commits and args.ctags_cmd:
+        io.tool_error("Cannot use both --dirty-commits and --ctags-cmd")
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_on_commit:
+        io.tool_error("Cannot use both --no-auto-commits and --ctags-update-on-commit")
+        return 1
+
+    if args.dirty_commits and args.ctags_update_on_commit:
+        io.tool_error("Cannot use both --dirty-commits and --ctags-update-on-commit")
+        return 1
+
+    if args.auto_commits is False and args.ctags_auto_update:
+        io.tool_error("Cannot use both --no-auto-commits and --ctags-auto-update")
+        return 1
+
+    if args.dirty_commits and args.ctags_auto_update:
+        io.tool_error("Cannot use both --dirty-commits and --ctags-auto-update")
+        return 1
+
+    if args.auto_commits is False and args.ctags_commit_message:
+        io.tool_error("Cannot use both --no-auto-commits and --ctags-commit-message")
+        return 1
+
+    if args.dirty_commits and args.ctags_commit_message:
+        io.tool_error("Cannot use both --dirty-commits and --ctags-commit-message")
+        return 1
+
+    if args.auto_commits is False and args.ctags_message:
+        io.tool_error("Cannot use both --no-auto-commits and --ctags-message")
+        return 1
+
+    if args.dirty_commits and args.ctags_message:
+        io.tool_error("Cannot use both --dirty-commits and --ctags-message")
+        return 1
+
+    if args.auto_commits is False and args.ctags_quiet:
+        io.tool_error("Cannot use both --no-auto-commits and --ctags-quiet")
+        return 1
+
+    if args.dirty_commits and args.ctags_quiet:
+        io.tool_error("Cannot use both --dirty-commits and --ctags-quiet")
+        return 1
+
+    if args.auto_commits is False and args.ctags_read_only:
+        io.tool_error("Cannot use both --no-auto-commits and --ctags-read-only")
+        return 1
+
+    if args.dirty_commits and args.ctags_read_only:
+        io.tool_error("Cannot use both --dirty-commits and --ctags-read-only")
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all:
+        io.tool_error("Cannot use both --no-auto-commits and --ctags-update-all")
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all:
+        io.tool_error("Cannot use both --dirty-commits and --ctags-update-all")
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_untracked:
+        io.tool_error("Cannot use both --no-auto-commits and --ctags-update-untracked")
+        return 1
+
+    if args.dirty_commits and args.ctags_update_untracked:
+        io.tool_error("Cannot use both --dirty-commits and --ctags-update-untracked")
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_unignored:
+        io.tool_error("Cannot use both --no-auto-commits and --ctags-update-unignored")
+        return 1
+
+    if args.dirty_commits and args.ctags_update_unignored:
+        io.tool_error("Cannot use both --dirty-commits and --ctags-update-unignored")
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked:
+        io.tool_error("Cannot use both --no-auto-commits and --ctags-update-all-with-untracked")
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked:
+        io.tool_error("Cannot use both --dirty-commits and --ctags-update-all-with-untracked")
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_unignored:
+        io.tool_error("Cannot use both --no-auto-commits and --ctags-update-all-with-unignored")
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_unignored:
+        io.tool_error("Cannot use both --dirty-commits and --ctags-update-all-with-unignored")
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
         )
-        coder.file_watcher = file_watcher
+        return 1
 
-    if args.copy_paste:
-        analytics.event("copy-paste mode")
-        ClipboardWatcher(coder.io, verbose=args.verbose)
-
-    coder.show_announcements()
-
-    if args.show_prompts:
-        coder.cur_messages += [
-            dict(role="user", content="Hello!"),
-        ]
-        messages = coder.format_messages().all_messages()
-        utils.show_messages(messages)
-        analytics.event("exit", reason="Showed prompts")
-        return
-
-    if args.lint:
-        await coder.commands.cmd_lint(fnames=fnames)
-
-    if args.test:
-        if not args.test_cmd:
-            io.tool_error("No --test-cmd provided.")
-            analytics.event("exit", reason="No test command provided")
-            return 1
-        await coder.commands.cmd_test(args.test_cmd)
-        if io.placeholder:
-            await coder.run(io.placeholder)
-
-    if args.commit:
-        if args.dry_run:
-            io.tool_output("Dry run enabled, skipping commit.")
-        else:
-            await coder.commands.cmd_commit()
-
-    if args.lint or args.test or args.commit:
-        analytics.event("exit", reason="Completed lint/test/commit")
-        return
-
-    if args.show_repo_map:
-        repo_map = coder.get_repo_map()
-        if repo_map:
-            io.tool_output(repo_map)
-        analytics.event("exit", reason="Showed repo map")
-        return
-
-    if args.apply:
-        content = io.read_text(args.apply)
-        if content is None:
-            analytics.event("exit", reason="Failed to read apply content")
-            return
-        coder.partial_response_content = content
-        # For testing #2879
-        # from aider.coders.base_coder import all_fences
-        # coder.fence = all_fences[1]
-        await coder.apply_updates()
-        analytics.event("exit", reason="Applied updates")
-        return
-
-    if args.apply_clipboard_edits:
-        args.edit_format = main_model.editor_edit_format
-        args.message = "/paste"
-
-    if args.show_release_notes is True:
-        io.tool_output(f"Opening release notes: {urls.release_notes}")
-        io.tool_output()
-        webbrowser.open(urls.release_notes)
-    elif args.show_release_notes is None and is_first_run:
-        io.tool_output()
-        await io.offer_url(
-            urls.release_notes,
-            "Would you like to see what's new in this version?",
-            allow_never=False,
-            acknowledge=True,
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
         )
+        return 1
 
-    if git_root and Path.cwd().resolve() != Path(git_root).resolve():
-        io.tool_warning(
-            "Note: in-chat filenames are always relative to the git working dir, not the current"
-            " working dir."
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
         )
+        return 1
 
-        io.tool_output(f"Cur working dir: {Path.cwd()}")
-        io.tool_output(f"Git working dir: {git_root}")
-
-    if args.stream and args.cache_prompts:
-        io.tool_warning("Cost estimates may be inaccurate when using streaming and caching.")
-
-    if args.load:
-        try:
-            session_manager = SessionManager(coder, io)
-            session_manager.load_session(args.load)
-        except Exception as e:
-            io.tool_error(f"Error loading session: {e}")
-
-    if args.message:
-        io.add_to_input_history(args.message)
-        io.tool_output()
-        try:
-            await coder.run(with_message=args.message)
-        except (SwitchCoder, KeyboardInterrupt, SystemExit):
-            pass
-        analytics.event("exit", reason="Completed --message")
-        return
-
-    if args.message_file:
-        try:
-            message_from_file = io.read_text(args.message_file)
-            io.tool_output()
-            await coder.run(with_message=message_from_file)
-        except (SwitchCoder, KeyboardInterrupt, SystemExit):
-            pass
-        except FileNotFoundError:
-            io.tool_error(f"Message file not found: {args.message_file}")
-            analytics.event("exit", reason="Message file not found")
-            return 1
-        except IOError as e:
-            io.tool_error(f"Error reading message file: {e}")
-            analytics.event("exit", reason="Message file IO error")
-            return 1
-
-        analytics.event("exit", reason="Completed --message-file")
-        return
-
-    if args.exit:
-        analytics.event("exit", reason="Exit flag set")
-        return
-
-    analytics.event("cli session", main_model=main_model, edit_format=main_model.edit_format)
-
-    # Auto-load session if enabled
-    if args.auto_load:
-        try:
-            session_manager = SessionManager(coder, io)
-            session_manager.load_session("auto-save")
-        except Exception:
-            # Don't show errors for auto-load to avoid interrupting the user experience
-            pass
-
-    while True:
-        try:
-            coder.ok_to_warm_cache = bool(args.cache_keepalive_pings)
-            await coder.run()
-            analytics.event("exit", reason="Completed main CLI coder.run")
-            return
-        except SwitchCoder as switch:
-            coder.ok_to_warm_cache = False
-
-            # Set the placeholder if provided
-            if hasattr(switch, "placeholder") and switch.placeholder is not None:
-                io.placeholder = switch.placeholder
-
-            kwargs = dict(io=io, from_coder=coder)
-            kwargs.update(switch.kwargs)
-            if "show_announcements" in kwargs:
-                del kwargs["show_announcements"]
-
-            # Disable cache warming for the new coder
-            kwargs["num_cache_warming_pings"] = 0
-            kwargs["args"] = coder.args
-
-            coder = await Coder.create(**kwargs)
-            await discover_and_load_tools(coder, git_root, args)  # Call discovery after new coder is created
-
-            if switch.kwargs.get("show_announcements") is False:
-                coder.suppress_announcements_for_next_prompt = True
-        except KeyboardInterrupt:
-            print("\nGoodbye!")
-            analytics.event("exit", reason="KeyboardInterrupt")
-            return
-        except SystemExit:
-            analytics.event("exit", reason="/exit command")
-            return
-
-
-def is_first_run_of_new_version(io, verbose=False):
-    """Check if this is the first run of a new version/executable combination"""
-    installs_file = Path.home() / ".aider" / "installs.json"
-    key = (__version__, sys.executable)
-
-    # Never show notes for .dev versions
-    if ".dev" in __version__:
-        return False
-
-    if verbose:
-        io.tool_output(
-            f"Checking imports for version {__version__} and executable {sys.executable}"
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
         )
-        io.tool_output(f"Installs file: {installs_file}")
+        return 1
 
-    try:
-        if installs_file.exists():
-            with open(installs_file, "r") as f:
-                installs = json.load(f)
-            if verbose:
-                io.tool_output("Installs file exists and loaded")
-        else:
-            installs = {}
-            if verbose:
-                io.tool_output("Installs file does not exist, creating new dictionary")
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
 
-        is_first_run = str(key) not in installs
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
 
-        if is_first_run:
-            installs[str(key)] = True
-            installs_file.parent.mkdir(parents=True, exist_ok=True)
-            with open(installs_file, "w") as f:
-                json.dump(installs, f, indent=4)
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
 
-        return is_first_run
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
 
-    except Exception as e:
-        io.tool_warning(f"Error checking version: {e}")
-        if verbose:
-            io.tool_output(f"Full exception details: {traceback.format_exc()}")
-        return True  # Safer to assume it's a first run if we hit an error
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
 
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
 
-async def check_and_load_imports(io, is_first_run, verbose=False):
-    try:
-        if is_first_run:
-            if verbose:
-                io.tool_output(
-                    "First run for this version and executable, loading imports synchronously"
-                )
-            try:
-                load_slow_imports(swallow=False)
-            except Exception as err:
-                io.tool_error(str(err))
-                io.tool_output("Error loading required imports. Did you install aider properly?")
-                await io.offer_url(
-                    urls.install_properly, "Open documentation url for more info?", acknowledge=True
-                )
-                sys.exit(1)
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
 
-            if verbose:
-                io.tool_output("Imports loaded and installs file updated")
-        else:
-            if verbose:
-                io.tool_output("Not first run, loading imports in background thread")
-            thread = threading.Thread(target=load_slow_imports)
-            thread.daemon = True
-            thread.start()
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
 
-    except Exception as e:
-        io.tool_warning(f"Error in loading imports: {e}")
-        if verbose:
-            io.tool_output(f"Full exception details: {traceback.format_exc()}")
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
 
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
 
-def load_slow_imports(swallow=True):
-    # These imports are deferred in various ways to
-    # improve startup time.
-    # This func is called either synchronously or in a thread
-    # depending on whether it's been run before for this version and executable.
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
 
-    try:
-        import httpx  # noqa: F401
-        import litellm  # noqa: F401
-        import networkx  # noqa: F401
-        import numpy  # noqa: F401
-    except Exception as e:
-        if not swallow:
-            raise e
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
 
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
 
-if __name__ == "__main__":
-    status = main()
-    sys.exit(status)
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --no-auto-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.dirty_commits and args.ctags_update_all_with_untracked_and_unignored:
+        io.tool_error(
+            "Cannot use both --dirty-commits and --ctags-update-all-with-untracked-and-unignored"
+        )
+        return 1
+
+    if args.auto_commits is False and args.ctags_Model API Response Error. Please retry the previous request
