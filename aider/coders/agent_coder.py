@@ -28,6 +28,7 @@ from aider.repo import ANY_GIT_ERROR
 from aider.tools import (
     command,
     command_interactive,
+    create_tool,
     delete_block,
     delete_line,
     delete_lines,
