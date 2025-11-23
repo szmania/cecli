@@ -146,11 +146,10 @@ class AgentCoder(Coder):
         self.agent_finished = False
         self._get_agent_config()
 
-        # Initialize and load custom tools only for AgentCoder
-        self.tool_manager = ToolManager(self.io, self.repo)
-        self.tool_manager.load_tools()
-
         super().__init__(*args, **kwargs)
+
+        # Initialize and load custom tools only for AgentCoder
+        self.tool_manager = ToolManager(self)
 
     def _build_tool_registry(self):
         """
