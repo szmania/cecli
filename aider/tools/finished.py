@@ -1,7 +1,7 @@
 schema = {
     "type": "function",
     "function": {
-        "name": "Finished",
+        "name": "finished",
         "description": (
             "Declare that we are done with every single sub goal and no further work is needed."
         ),
