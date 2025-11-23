@@ -126,6 +126,36 @@ def is_image_file(file_name):
     return any(file_name.endswith(ext) for ext in IMAGE_EXTENSIONS)
 
 
+def strip_fenced_code(text):
+    """
+    Strips the fenced code block from a string.
+    """
+    lines = text.splitlines()
+    in_fence = False
+    code_lines = []
+    found_fence = False
+
+    for line in lines:
+        if line.strip().startswith("```"):
+            found_fence = True
+            if in_fence:
+                # End of fence
+                in_fence = False
+                break
+            else:
+                # Start of fence
+                in_fence = True
+                continue
+        if in_fence:
+            code_lines.append(line)
+
+    if not found_fence:
+        # No fences, return original text
+        return text
+
+    return "\n".join(code_lines)
+
+
 def safe_abs_path(res):
     "Gives an abs path, which safely returns a full (not 8.3) windows path"
     res = Path(res).resolve()
