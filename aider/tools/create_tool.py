@@ -103,7 +103,7 @@ def _execute(coder, description: str, file_name: str, scope: str = "local"):
         if hasattr(coder, "tool_manager"):
             coder.tool_manager.load_tool(file_path)
 
-        return f"Successfully created tool '{file_name}' in {scope} scope. It will be available in the next chat session."
+        return f"Successfully created tool '{file_name}' in {scope} scope. It is now loaded and available for use."
 
     except Exception as e:
         return f"Error during tool creation: {e}"

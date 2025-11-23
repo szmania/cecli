@@ -64,6 +64,7 @@ from aider.tools import (
 from .agent_prompts import AgentPrompts
 from .base_coder import ChatChunks, Coder
 from .editblock_coder import do_replace, find_original_update_blocks, find_similar_lines
+from aider.tool_manager import ToolManager
 
 
 class AgentCoder(Coder):
@@ -144,6 +145,11 @@ class AgentCoder(Coder):
 
         self.agent_finished = False
         self._get_agent_config()
+
+        # Initialize and load custom tools only for AgentCoder
+        self.tool_manager = ToolManager(self.io, self.repo)
+        self.tool_manager.load_tools()
+
         super().__init__(*args, **kwargs)
 
     def _build_tool_registry(self):
@@ -266,13 +272,13 @@ class AgentCoder(Coder):
         return config
 
     def get_local_tool_schemas(self):
-        """Returns the JSON schemas for all local tools using the tool registry."""
+        """Returns the JSON schemas for all custom tools."""
         schemas = []
 
-        # Get schemas from the tool registry
-        for tool_module in self._tool_registry.values():
-            if hasattr(tool_module, "schema"):
-                schemas.append(tool_module.schema)
+        if hasattr(self, "tool_manager") and self.tool_manager:
+            for tool_name, tool_info in self.tool_manager.tools.items():
+                if "schema" in tool_info:
+                    schemas.append(tool_info["schema"])
 
         return schemas
 

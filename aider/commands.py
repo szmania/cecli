@@ -2201,31 +2201,20 @@ Just show me the edits I need to make.
 
     def cmd_tools_create(self, args):
         "Create a new custom tool"
-        if not hasattr(self.coder, "tool_manager") or not self.coder.tool_manager:
-            self.io.tool_error("Tool manager not initialized.")
-            return
-
         parts = args.split(maxsplit=1)
         if len(parts) < 2:
             self.io.tool_error("Usage: /tools-create <file_name.py> <description>")
             return
 
         file_name, description = parts
+        tool_call_params = {
+            "description": description,
+            "file_name": file_name,
+            "scope": "local",
+        }
 
-        # CreateTool is a built-in tool, not a custom tool, so we get it from the coder
-        if not hasattr(self.coder, "get_tool"):
-            self.io.tool_error("The current coder does not support tool creation.")
-            return
-
-        create_tool = self.coder.get_tool("CreateTool")
-        if not create_tool or "execute" not in create_tool:
-            self.io.tool_error("CreateTool is not available.")
-            return
-
-        result = create_tool["execute"](
-            self.coder, description=description, file_name=file_name, scope="local"
-        )
-        self.io.tool_output(result)
+        create_tool_result = create_tool._execute(self.coder, **tool_call_params)
+        self.io.tool_output(create_tool_result)
 
     def cmd_tools_load(self, args):
         "Load a tool from a file or glob pattern"
@@ -2238,13 +2227,22 @@ Just show me the edits I need to make.
             self.io.tool_error("Please provide a file path or glob pattern to load tools from.")
             return
 
+        # Expand user and environment variables
+        pattern = os.path.expanduser(os.path.expandvars(pattern))
+
+        # Use glob to find all matching file paths
         file_paths = glob.glob(pattern, recursive=True)
+
         if not file_paths:
             self.io.tool_error(f"No files found matching pattern: {pattern}")
             return
 
         for file_path in file_paths:
-            self.coder.tool_manager.load_tool(file_path)
+            # Make sure we are dealing with a file
+            if os.path.isfile(file_path):
+                self.coder.tool_manager.load_tool(file_path)
+            else:
+                self.io.tool_warning(f"Skipping non-file path: {file_path}")
 
     def cmd_tools_unload(self, args):
         "Unload a custom tool"
