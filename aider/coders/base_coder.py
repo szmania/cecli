@@ -61,6 +61,7 @@ from aider.repo import ANY_GIT_ERROR, GitRepo
 from aider.repomap import RepoMap
 from aider.run_cmd import run_cmd
 from aider.sessions import SessionManager
+from aider.tool_manager import ToolManager
 from aider.utils import format_tokens, is_image_file
 
 from ..dump import dump  # noqa: F401
