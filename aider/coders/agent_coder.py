@@ -159,6 +159,7 @@ class AgentCoder(Coder):
         tool_modules = [
             command,
             command_interactive,
+            create_tool,
             delete_block,
             delete_line,
             delete_lines,
