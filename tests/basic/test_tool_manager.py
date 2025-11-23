@@ -63,3 +63,52 @@ class TestToolManager(TestCase):
         # 7. Load from global scope
         coder.tool_manager.load_tools()
         self.assertIn("list_files", coder.tool_manager.tools)
+
+    async def test_create_tool_invalid_name(self):
+        io = InputOutput(pretty=False, fancy_input=False, yes=True)
+        coder = await Coder.create(self.GPT35, None, io)
+        commands = Commands(io, coder)
+
+        with mock.patch.object(io, "tool_error") as mock_tool_error:
+            commands.cmd_tools_create("invalid-name.py a tool")
+            mock_tool_error.assert_called_with("Invalid tool name. Use snake_case.")
+
+    async def test_load_non_existent_tool(self):
+        io = InputOutput(pretty=False, fancy_input=False, yes=True)
+        coder = await Coder.create(self.GPT35, None, io)
+        commands = Commands(io, coder)
+
+        with mock.patch.object(io, "tool_error") as mock_tool_error:
+            commands.cmd_tools_load("non_existent_tool.py")
+            mock_tool_error.assert_called_with("Tool file not found: non_existent_tool.py")
+
+    async def test_unload_non_loaded_tool(self):
+        io = InputOutput(pretty=False, fancy_input=False, yes=True)
+        coder = await Coder.create(self.GPT35, None, io)
+        commands = Commands(io, coder)
+
+        with mock.patch.object(io, "tool_error") as mock_tool_error:
+            commands.cmd_tools_unload("non_loaded_tool")
+            mock_tool_error.assert_called_with("Tool not found: non_loaded_tool")
+
+    async def test_move_non_loaded_tool(self):
+        io = InputOutput(pretty=False, fancy_input=False, yes=True)
+        coder = await Coder.create(self.GPT35, None, io)
+        commands = Commands(io, coder)
+
+        with mock.patch.object(io, "tool_error") as mock_tool_error:
+            commands.cmd_tools_move("non_loaded_tool global")
+            mock_tool_error.assert_called_with("Tool not found: non_loaded_tool")
+
+    async def test_move_tool_invalid_scope(self):
+        io = InputOutput(pretty=False, fancy_input=False, yes=True)
+        coder = await Coder.create(self.GPT35, None, io)
+        commands = Commands(io, coder)
+
+        commands.cmd_tools_create("my_tool.py a tool")
+
+        with mock.patch.object(io, "tool_error") as mock_tool_error:
+            commands.cmd_tools_move("my_tool invalid_scope")
+            mock_tool_error.assert_called_with(
+                "Invalid scope: invalid_scope. Use 'local' or 'global'."
+            )
