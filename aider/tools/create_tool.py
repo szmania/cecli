@@ -2,7 +2,7 @@ import os
 from pathlib import Path
 import litellm
 import importlib.resources
-from aider.utils import strip_fenced_code
+
 
 def get_tool_definition():
     return {
@@ -34,6 +34,7 @@ def get_tool_definition():
     }
 
 def _execute(coder, description: str, file_name: str, scope: str = "local"):
+    from aider.utils import strip_fenced_code
     """
     Creates a new custom tool based on the provided description and filename.
     The new tool is then automatically loaded into the current session.
