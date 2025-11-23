@@ -17,6 +17,7 @@ from pathlib import Path
 from litellm import experimental_mcp_client
 
 from aider import urls, utils
+from aider.dump import dump
 
 # Import the change tracker
 from aider.change_tracker import ChangeTracker
