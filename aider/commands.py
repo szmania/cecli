@@ -23,6 +23,7 @@ from aider.llm import litellm
 from aider.repo import ANY_GIT_ERROR
 from aider.run_cmd import run_cmd
 from aider.scrape import Scraper, install_playwright
+from aider.tools import create_tool
 from aider.utils import is_image_file, run_fzf
 
 from .dump import dump  # noqa: F401
