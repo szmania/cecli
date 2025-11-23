@@ -228,6 +228,7 @@ class Coder:
         for coder in coders.__all__:
             if hasattr(coder, "edit_format") and coder.edit_format == edit_format:
                 res = coder(main_model, io, args=args, **kwargs)
+                res.tool_manager = ToolManager(res)
                 await res.initialize_mcp_tools()
                 res.original_kwargs = dict(kwargs)
                 return res
