@@ -2176,6 +2176,93 @@ Just show me the edits I need to make.
             return
 
         file_name, description = parts
+
+        # CreateTool is a built-in tool, not a custom tool, so we get it from the coder
+        if not hasattr(self.coder, "get_tool"):
+            self.io.tool_error("The current coder does not support tool creation.")
+            return
+
+        create_tool = self.coder.get_tool("CreateTool")
+        if not create_tool or "execute" not in create_tool:
+            self.io.tool_error("CreateTool is not available.")
+            return
+
+        result = create_tool["execute"](
+            self.coder, description=description, file_name=file_name, scope="local"
+        )
+        self.io.tool_output(result)
+
+    def cmd_tools_load(self, args):
+        "Load a tool from a file"
+        if not hasattr(self.coder, "tool_manager") or not self.coder.tool_manager:
+            self.io.tool_error("Tool manager not initialized.")
+            return
+
+        file_path = args.strip()
+        if not file_path:
+            self.io.tool_error("Please provide a file path to load the tool from.")
+            return
+
+        self.coder.tool_manager.load_tool(file_path)
+
+    def cmd_tools_unload(self, args):
+        "Unload a custom tool"
+        if not hasattr(self.coder, "tool_manager") or not self.coder.tool_manager:
+            self.io.tool_error("Tool manager not initialized.")
+            return
+
+        tool_name = args.strip()
+        if not tool_name:
+            self.io.tool_error("Please provide the name of the tool to unload.")
+            return
+
+        if self.coder.tool_manager.unload_tool(tool_name):
+            self.io.tool_output(f"Tool '{tool_name}' unloaded.")
+        else:
+            self.io.tool_error(f"Tool '{tool_name}' not found.")
+
+    def cmd_tools_move(self, args):
+        "Move a tool to a different scope (local or global)"
+        if not hasattr(self.coder, "tool_manager") or not self.coder.tool_manager:
+            self.io.tool_error("Tool manager not initialized.")
+            return
+
+        parts = args.split()
+        if len(parts) != 2:
+            self.io.tool_error("Usage: /tools-move <tool_name> <local|global>")
+            return
+
+        tool_name, scope = parts
+        result = self.coder.tool_manager.move_tool(tool_name, scope)
+        self.io.tool_output(result)
+
+    def cmd_tools(self, args):
+        "List available custom tools"
+        if not hasattr(self.coder, "tool_manager") or not self.coder.tool_manager:
+            self.io.tool_error("Tool manager not initialized.")
+            return
+
+        tools = self.coder.tool_manager.list_tools()
+        if not tools:
+            self.io.tool_output("No custom tools available.")
+            return
+
+        self.io.tool_output("Available custom tools:")
+        for tool_name in tools:
+            self.io.tool_output(f"- {tool_name}")
+
+    def cmd_tools_create(self, args):
+        "Create a new custom tool"
+        if not hasattr(self.coder, "tool_manager") or not self.coder.tool_manager:
+            self.io.tool_error("Tool manager not initialized.")
+            return
+
+        parts = args.split(maxsplit=1)
+        if len(parts) < 2:
+            self.io.tool_error("Usage: /tools-create <file_name.py> <description>")
+            return
+
+        file_name, description = parts
         create_tool_execute = self.coder.tool_manager.tools.get("CreateTool", {}).get("execute")
         if not create_tool_execute:
             self.io.tool_error("CreateTool is not available.")
