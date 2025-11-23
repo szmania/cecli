@@ -2276,6 +2276,27 @@ Just show me the edits I need to make.
         result = self.coder.tool_manager.move_tool(tool_name, scope)
         self.io.tool_output(result)
 
+    async def cmd_tools_fix(self, args):
+        "Tell the agent to fix a tool file"
+        from aider.coders.agent_coder import AgentCoder
+
+        if not isinstance(self.coder, AgentCoder):
+            self.io.tool_error("The /tools-fix command is only available in agent mode.")
+            return
+
+        file_path = args.strip()
+        if not file_path:
+            self.io.tool_error("Usage: /tools-fix <path_to_tool_file>")
+            return
+
+        # Add the file to the chat
+        await self.cmd_add(file_path)
+
+        # Prepare the prompt for the agent
+        prompt = f"Fix the tool in the file `{file_path}`."
+
+        # Set the prompt in the input area for the user to send
+        self.io.set_placeholder(prompt)
 
 
 def expand_subdir(file_path):
