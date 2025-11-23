@@ -2150,19 +2150,54 @@ Just show me the edits I need to make.
             self.io.tool_error(f"An unexpected error occurred while copying to clipboard: {str(e)}")
 
     def cmd_tools(self, args):
-        "List available custom tools"
-        if not hasattr(self.coder, "tool_manager") or not self.coder.tool_manager:
-            self.io.tool_error("Tool manager not initialized.")
+        "List available standard and custom tools."
+
+        # 1. Standard tools
+        standard_tools = []
+        if hasattr(self.coder, "_tool_registry"):
+            standard_tools = sorted(list(self.coder._tool_registry.keys()))
+
+        # 2. Custom tools
+        local_tools = []
+        if self.coder.repo:
+            local_tool_dir = os.path.join(self.coder.repo.root, ".aider", "tools")
+            if os.path.isdir(local_tool_dir):
+                for f in os.listdir(local_tool_dir):
+                    if f.endswith(".py"):
+                        local_tools.append(os.path.splitext(f)[0])
+        local_tools.sort()
+
+        global_tool_dir = os.path.join(Path.home(), ".aider", "tools")
+        global_tools = []
+        if os.path.isdir(global_tool_dir):
+            for f in os.listdir(global_tool_dir):
+                if f.endswith(".py"):
+                    global_tools.append(os.path.splitext(f)[0])
+        global_tools.sort()
+
+        if not standard_tools and not local_tools and not global_tools:
+            self.io.tool_output("No tools available.")
             return
 
-        tools = self.coder.tool_manager.list_tools()
-        if not tools:
-            self.io.tool_output("No custom tools available.")
-            return
+        self.io.tool_output("Available tools:")
 
-        self.io.tool_output("Available custom tools:")
-        for tool_name in tools:
-            self.io.tool_output(f"- {tool_name}")
+        if standard_tools:
+            self.io.tool_output("\nStandard tools:")
+            for tool_name in standard_tools:
+                self.io.tool_output(f"- {tool_name}")
+
+        if local_tools:
+            self.io.tool_output("\nCustom tools (local):")
+            for tool_name in local_tools:
+                self.io.tool_output(f"- {tool_name}")
+
+        if global_tools:
+            self.io.tool_output("\nCustom tools (global):")
+            for tool_name in global_tools:
+                self.io.tool_output(f"- {tool_name}")
+
+        if not local_tools and not global_tools:
+            self.io.tool_output("\nNo custom tools found.")
 
     def cmd_tools_create(self, args):
         "Create a new custom tool"
@@ -2193,17 +2228,23 @@ Just show me the edits I need to make.
         self.io.tool_output(result)
 
     def cmd_tools_load(self, args):
-        "Load a tool from a file"
+        "Load a tool from a file or glob pattern"
         if not hasattr(self.coder, "tool_manager") or not self.coder.tool_manager:
             self.io.tool_error("Tool manager not initialized.")
             return
 
-        file_path = args.strip()
-        if not file_path:
-            self.io.tool_error("Please provide a file path to load the tool from.")
+        pattern = args.strip()
+        if not pattern:
+            self.io.tool_error("Please provide a file path or glob pattern to load tools from.")
             return
 
-        self.coder.tool_manager.load_tool(file_path)
+        file_paths = glob.glob(pattern, recursive=True)
+        if not file_paths:
+            self.io.tool_error(f"No files found matching pattern: {pattern}")
+            return
+
+        for file_path in file_paths:
+            self.coder.tool_manager.load_tool(file_path)
 
     def cmd_tools_unload(self, args):
         "Unload a custom tool"
@@ -2236,84 +2277,6 @@ Just show me the edits I need to make.
         result = self.coder.tool_manager.move_tool(tool_name, scope)
         self.io.tool_output(result)
 
-    def cmd_tools(self, args):
-        "List available custom tools"
-        if not hasattr(self.coder, "tool_manager") or not self.coder.tool_manager:
-            self.io.tool_error("Tool manager not initialized.")
-            return
-
-        tools = self.coder.tool_manager.list_tools()
-        if not tools:
-            self.io.tool_output("No custom tools available.")
-            return
-
-        self.io.tool_output("Available custom tools:")
-        for tool_name in tools:
-            self.io.tool_output(f"- {tool_name}")
-
-    def cmd_tools_create(self, args):
-        "Create a new custom tool"
-        if not hasattr(self.coder, "tool_manager") or not self.coder.tool_manager:
-            self.io.tool_error("Tool manager not initialized.")
-            return
-
-        parts = args.split(maxsplit=1)
-        if len(parts) < 2:
-            self.io.tool_error("Usage: /tools-create <file_name.py> <description>")
-            return
-
-        file_name, description = parts
-        create_tool_execute = self.coder.tool_manager.tools.get("CreateTool", {}).get("execute")
-        if not create_tool_execute:
-            self.io.tool_error("CreateTool is not available.")
-            return
-
-        result = create_tool_execute(self.coder, description=description, file_name=file_name)
-        self.io.tool_output(result)
-
-    def cmd_tools_load(self, args):
-        "Load a tool from a file"
-        if not hasattr(self.coder, "tool_manager") or not self.coder.tool_manager:
-            self.io.tool_error("Tool manager not initialized.")
-            return
-
-        file_path = args.strip()
-        if not file_path:
-            self.io.tool_error("Please provide a file path to load the tool from.")
-            return
-
-        self.coder.tool_manager.load_tool(file_path)
-
-    def cmd_tools_unload(self, args):
-        "Unload a custom tool"
-        if not hasattr(self.coder, "tool_manager") or not self.coder.tool_manager:
-            self.io.tool_error("Tool manager not initialized.")
-            return
-
-        tool_name = args.strip()
-        if not tool_name:
-            self.io.tool_error("Please provide the name of the tool to unload.")
-            return
-
-        if self.coder.tool_manager.unload_tool(tool_name):
-            self.io.tool_output(f"Tool '{tool_name}' unloaded.")
-        else:
-            self.io.tool_error(f"Tool '{tool_name}' not found.")
-
-    def cmd_tools_move(self, args):
-        "Move a tool to a different scope (local or global)"
-        if not hasattr(self.coder, "tool_manager") or not self.coder.tool_manager:
-            self.io.tool_error("Tool manager not initialized.")
-            return
-
-        parts = args.split()
-        if len(parts) != 2:
-            self.io.tool_error("Usage: /tools-move <tool_name> <local|global>")
-            return
-
-        tool_name, scope = parts
-        result = self.coder.tool_manager.move_tool(tool_name, scope)
-        self.io.tool_output(result)
 
 
 def expand_subdir(file_path):
