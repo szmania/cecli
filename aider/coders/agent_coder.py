@@ -159,7 +159,7 @@ class AgentCoder(Coder):
         return await super().run(*args, **kwargs)
 
     async def _load_initial_tools_with_fix_loop(self):
-        if not self.tool_manager.discovered_tool_files:
+        if not getattr(self.tool_manager, "discovered_tool_files", None):
             return
 
         self.io.tool_output("Loading custom tools...")
