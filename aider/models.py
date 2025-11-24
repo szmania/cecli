@@ -1000,6 +1000,8 @@ class Model(ModelSettings):
                     dump(kwargs)
                 res = await litellm.acompletion(**kwargs)
                 return hash_object, res
+            except litellm.ContextWindowExceededError as err:
+                raise err
             except litellm_ex.exceptions_tuple() as err:
                 ex_info = litellm_ex.get_ex_info(err)
                 should_retry = ex_info.retry or self.retry_on_unavailable
