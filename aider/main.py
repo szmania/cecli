@@ -618,9 +618,6 @@ async def main_async(argv=None, input=None, output=None, force_git_root=None, re
         # Set verify_ssl on the model_info_manager
         models.model_info_manager.set_verify_ssl(False)
 
-    if args.timeout:
-        models.request_timeout = args.timeout
-
     if args.dark_mode:
         args.user_input_color = "#32FF32"
         args.tool_error_color = "#FF3333"
