@@ -110,6 +110,7 @@ class Coder:
     repo_map = None
     functions = None
     num_exhausted_context_windows = 0
+    max_exhausted_context_windows = 2
     num_malformed_responses = 0
     last_keyboard_interrupt = None
     num_reflections = 0
