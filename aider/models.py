@@ -311,7 +311,15 @@ model_info_manager = ModelInfoManager()
 
 class Model(ModelSettings):
     def __init__(
-        self, model, weak_model=None, editor_model=None, editor_edit_format=None, verbose=False
+        self,
+        model,
+        weak_model=None,
+        editor_model=None,
+        editor_edit_format=None,
+        verbose=False,
+        retry_timeout=None,
+        retry_backoff_factor=None,
+        retry_on_unavailable=None,
     ):
         # Map any alias to its canonical name
         model = MODEL_ALIASES.get(model, model)
@@ -341,6 +349,16 @@ class Model(ModelSettings):
         self.max_chat_history_tokens = min(max(max_input_tokens / 16, 1024), 8192)
 
         self.configure_model_settings(model)
+
+        if self.extra_params is None:
+            self.extra_params = {}
+        if retry_timeout is not None:
+            self.extra_params["timeout"] = retry_timeout
+        if retry_backoff_factor is not None:
+            self.extra_params["retry_backoff_factor"] = retry_backoff_factor
+        if retry_on_unavailable:
+            self.extra_params["retry_on_unavailable"] = retry_on_unavailable
+
         if weak_model is False:
             self.weak_model_name = None
         else:

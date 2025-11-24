@@ -161,6 +161,23 @@ def get_parser(default_config_files, git_root):
         help="Timeout in seconds for API calls (default: None)",
     )
     group.add_argument(
+        "--retry-timeout",
+        type=int,
+        default=600,
+        help="timeout for retrying LLM calls in seconds (default: 600)",
+    )
+    group.add_argument(
+        "--retry-backoff-factor",
+        type=float,
+        default=2.0,
+        help="backoff factor for retrying LLM calls (default: 2.0)",
+    )
+    group.add_argument(
+        "--retry-on-unavailable",
+        action="store_true",
+        help="retry on service unavailable errors",
+    )
+    group.add_argument(
         "--edit-format",
         "--chat-mode",
         metavar="EDIT_FORMAT",
