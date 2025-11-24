@@ -2233,20 +2233,33 @@ Just show me the edits I need to make.
         pattern = os.path.expanduser(os.path.expandvars(pattern))
 
         # Use glob to find all matching file paths
-        file_paths = glob.glob(pattern, recursive=True)
+        potential_paths = glob.glob(pattern, recursive=True)
 
-        if not file_paths:
+        if not potential_paths:
             self.io.tool_error(f"No files found matching pattern: {pattern}")
             return False
 
+        file_paths_to_load = set()
+        for path in potential_paths:
+            if os.path.isdir(path):
+                for root, _, files in os.walk(path):
+                    for file in files:
+                        if file.endswith(".py"):
+                            file_paths_to_load.add(os.path.join(root, file))
+            elif os.path.isfile(path):
+                if path.endswith(".py"):
+                    file_paths_to_load.add(path)
+                else:
+                    self.io.tool_warning(f"Skipping non-python file: {path}")
+
+        if not file_paths_to_load:
+            self.io.tool_error(f"No Python tool files found for pattern: {pattern}")
+            return False
+
         all_successful = True
-        for file_path in file_paths:
-            # Make sure we are dealing with a file
-            if os.path.isfile(file_path):
-                if not self.coder.tool_manager.load_tool(file_path):
-                    all_successful = False
-            else:
-                self.io.tool_warning(f"Skipping non-file path: {file_path}")
+        for file_path in sorted(list(file_paths_to_load)):
+            if not self.coder.tool_manager.load_tool(file_path):
+                all_successful = False
 
         return all_successful
 
