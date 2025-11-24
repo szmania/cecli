@@ -7,7 +7,7 @@ class ToolManager:
     def __init__(self, coder):
         self.coder = coder
         self.tools = {}
-        self.discover_and_load_tools()
+        self.discovered_tool_files = self.discover_tools()
 
     def _get_local_tools_dir(self):
         if not self.coder.repo:
@@ -17,7 +17,7 @@ class ToolManager:
     def _get_global_tools_dir(self):
         return os.path.join(Path.home(), ".aider", "tools")
 
-    def discover_and_load_tools(self):
+    def discover_tools(self):
         local_tools_dir = self._get_local_tools_dir()
         global_tools_dir = self._get_global_tools_dir()
 
@@ -27,11 +27,13 @@ class ToolManager:
         if global_tools_dir and os.path.isdir(global_tools_dir):
             search_dirs.append(global_tools_dir)
 
+        tool_files = []
         for tools_dir in search_dirs:
             for file_name in os.listdir(tools_dir):
                 if file_name.endswith(".py") and not file_name.startswith("_"):
                     file_path = os.path.join(tools_dir, file_name)
-                    self.load_tool(file_path)
+                    tool_files.append(file_path)
+        return tool_files
 
     def load_tool(self, file_path):
         try:
