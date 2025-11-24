@@ -126,7 +126,7 @@ class ToolManager:
     def __init__(self, coder):
         self.coder = coder
         self.tools = {}
-        self.discover_and_load_tools()
+        self.discovered_tool_files = self.discover_tools()
 
     def _get_local_tools_dir(self):
         if not self.coder.repo:
