@@ -110,7 +110,7 @@ google-ai-generativelanguage==0.6.15
     # via
     #   -c requirements/common-constraints.txt
     #   google-generativeai
-google-api-core[grpc]==2.25.1
+google-api-core==2.25.1
     # via
     #   -c requirements/common-constraints.txt
     #   google-ai-generativelanguage
