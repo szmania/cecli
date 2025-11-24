@@ -93,6 +93,8 @@ async def _execute(coder, description: str, file_name: str, scope: str = "local"
         if not generated_code:
             return "Error: LLM did not generate any code for the tool."
 
+        coder.io.tool_output(f"LLM raw response:\n---\n{generated_code}\n---")
+
         cleaned_code = strip_fenced_code(generated_code)
         if not cleaned_code.strip():
             return "Error: Generated tool code is empty after cleaning."
