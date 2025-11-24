@@ -2277,26 +2277,43 @@ Just show me the edits I need to make.
         self.io.tool_output(result)
 
     async def cmd_tools_fix(self, args):
-        "Tell the agent to fix a tool file"
+        "Tell the agent to fix a tool file or all tools in a directory"
         from aider.coders.agent_coder import AgentCoder
+        import os
+        import glob
 
         if not isinstance(self.coder, AgentCoder):
             self.io.tool_error("The /tools-fix command is only available in agent mode.")
             return
 
-        file_path = args.strip()
-        if not file_path:
-            self.io.tool_error("Usage: /tools-fix <path_to_tool_file>")
+        path_arg = args.strip()
+        if not path_arg:
+            self.io.tool_error("Usage: /tools-fix <path_to_tool_file_or_dir>")
             return
 
-        # Add the file to the chat
-        await self.cmd_add(file_path)
+        expanded_path = os.path.expanduser(path_arg)
 
-        # Prepare the prompt for the agent
-        prompt = f"Fix the tool in the file `{file_path}`."
+        if os.path.isdir(expanded_path):
+            py_files = glob.glob(os.path.join(expanded_path, "*.py"))
+            if not py_files:
+                self.io.tool_error(f"No Python tool files found in '{path_arg}'.")
+                return
 
-        # Set the prompt in the input area for the user to send
-        self.io.set_placeholder(prompt)
+            file_paths_str = " ".join([self.quote_fname(f) for f in py_files])
+            await self.cmd_add(file_paths_str)
+
+            file_list_md = "\n- ".join(
+                [f"`{self.coder.get_rel_fname(f)}`" for f in py_files]
+            )
+            prompt = f"Fix the tools in the following files:\n- {file_list_md}"
+            self.io.set_placeholder(prompt)
+
+        elif os.path.isfile(expanded_path):
+            await self.cmd_add(path_arg)
+            prompt = f"Fix the tool in the file `{path_arg}`."
+            self.io.set_placeholder(prompt)
+        else:
+            self.io.tool_error(f"Path not found or is not a file/directory: {path_arg}")
 
 
 def expand_subdir(file_path):
