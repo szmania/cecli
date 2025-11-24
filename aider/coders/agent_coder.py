@@ -191,7 +191,7 @@ class AgentCoder(Coder):
                 edit_format="agent",
             )
 
-            await fix_coder.commands.cmd_add(self.quote_fname(tool_path))
+            await fix_coder.commands.cmd_add(self.commands.quote_fname(tool_path))
 
             prompt = f"Fix the tool in the file `{rel_path}` so that it loads correctly."
             self.io.tool_output("Asking agent to fix the tool...")
