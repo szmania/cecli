@@ -150,6 +150,69 @@ class AgentCoder(Coder):
 
         # Initialize and load custom tools only for AgentCoder
         self.tool_manager = ToolManager(self)
+        self.initial_tools_loaded = False
+
+    async def run(self, *args, **kwargs):
+        if not self.initial_tools_loaded:
+            await self._load_initial_tools_with_fix_loop()
+            self.initial_tools_loaded = True
+        return await super().run(*args, **kwargs)
+
+    async def _load_initial_tools_with_fix_loop(self):
+        if not self.tool_manager.discovered_tool_files:
+            return
+
+        self.io.tool_output("Loading custom tools...")
+        failed_tools = []
+        for tool_path in self.tool_manager.discovered_tool_files:
+            if not self.tool_manager.load_tool(tool_path):
+                failed_tools.append(tool_path)
+
+        if not failed_tools:
+            self.io.tool_output("All custom tools loaded successfully.")
+            return
+
+        self.io.tool_error(f"{len(failed_tools)} tool(s) failed to load.")
+        if not await self.io.confirm_ask("Do you want to try and fix them?", default="y"):
+            return
+
+        for tool_path in failed_tools:
+            await self._interactive_tool_fix(tool_path)
+
+    async def _interactive_tool_fix(self, tool_path):
+        rel_path = self.get_rel_fname(tool_path)
+        self.io.tool_output(f"\n--- Fixing tool: {rel_path} ---")
+
+        while True:
+            fix_coder = await self.clone(
+                cur_messages=[],
+                done_messages=[],
+                fnames=None,
+                edit_format="agent",
+            )
+
+            await fix_coder.commands.cmd_add(self.quote_fname(tool_path))
+
+            prompt = f"Fix the tool in the file `{rel_path}` so that it loads correctly."
+            self.io.tool_output("Asking agent to fix the tool...")
+            await fix_coder.generate(user_message=prompt)
+            self.io.tool_output("Agent has applied a fix.")
+
+            if not await self.io.confirm_ask(
+                f"Attempt to load the fixed tool '{rel_path}'?", default="y"
+            ):
+                self.io.tool_warning(f"Skipping fix for {rel_path}.")
+                break
+
+            if self.tool_manager.load_tool(tool_path):
+                self.io.tool_output(f"Tool '{rel_path}' loaded successfully!")
+                break
+            else:
+                self.io.tool_error(f"Tool '{rel_path}' still failed to load.")
+                if not await self.io.confirm_ask(
+                    f"Attempt to fix '{rel_path}' again?", default="y"
+                ):
+                    break
 
     def _build_tool_registry(self):
         """
