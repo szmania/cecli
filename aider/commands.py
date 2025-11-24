@@ -2312,7 +2312,11 @@ Just show me the edits I need to make.
         expanded_path = os.path.expanduser(path_arg)
 
         if os.path.isdir(expanded_path):
-            py_files = glob.glob(os.path.join(expanded_path, "*.py"))
+            py_files = []
+            for root, _, files in os.walk(expanded_path):
+                for file in files:
+                    if file.endswith(".py"):
+                        py_files.append(os.path.join(root, file))
             if not py_files:
                 self.io.tool_error(f"No Python tool files found in '{path_arg}'.")
                 return
