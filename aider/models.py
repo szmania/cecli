@@ -1004,7 +1004,10 @@ class Model(ModelSettings):
                 raise err
             except litellm_ex.exceptions_tuple() as err:
                 ex_info = litellm_ex.get_ex_info(err)
-                should_retry = ex_info.retry or self.retry_on_unavailable
+                should_retry = ex_info.retry
+                if ex_info.name == "ServiceUnavailableError":
+                    should_retry = should_retry or self.retry_on_unavailable
+
                 if should_retry:
                     retry_delay *= self.retry_backoff_factor
                     if retry_delay > self.retry_timeout:
