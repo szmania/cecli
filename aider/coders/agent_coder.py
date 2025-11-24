@@ -195,7 +195,7 @@ class AgentCoder(Coder):
 
             prompt = f"Fix the tool in the file `{rel_path}` so that it loads correctly."
             self.io.tool_output("Asking agent to fix the tool...")
-            await fix_coder.generate(user_message=prompt)
+            await fix_coder.generate(user_message=prompt, preproc=True)
             self.io.tool_output("Agent has applied a fix.")
 
             if not await self.io.confirm_ask(
