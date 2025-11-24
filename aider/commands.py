@@ -2151,51 +2151,52 @@ Just show me the edits I need to make.
             self.io.tool_error(f"An unexpected error occurred while copying to clipboard: {str(e)}")
 
     def cmd_tools(self, args):
-        "List available standard and custom tools."
+        "List available standard and custom tools with their descriptions."
+
+        def print_tools(title, tools_dict):
+            if not tools_dict:
+                return
+            self.io.tool_output(f"\n{title}:")
+            max_len = max(len(name) for name in tools_dict.keys()) if tools_dict else 0
+            for name, desc in sorted(tools_dict.items()):
+                self.io.tool_output(f"- {name:<{max_len}} : {desc}")
 
         # 1. Standard tools
-        standard_tools = []
+        standard_tools = {}
         if hasattr(self.coder, "_tool_registry"):
-            standard_tools = sorted(list(self.coder._tool_registry.keys()))
+            for norm_name, module in self.coder._tool_registry.items():
+                if hasattr(module, "get_tool_definition"):
+                    definition = module.get_tool_definition()
+                    function_def = definition.get("function", {})
+                    name = function_def.get("name", norm_name)
+                    description = function_def.get("description", "No description.")
+                    standard_tools[name] = description
 
         # 2. Custom tools
-        local_tools = []
-        if self.coder.repo:
-            local_tool_dir = os.path.join(self.coder.repo.root, ".aider", "tools")
-            if os.path.isdir(local_tool_dir):
-                for f in os.listdir(local_tool_dir):
-                    if f.endswith(".py"):
-                        local_tools.append(os.path.splitext(f)[0])
-        local_tools.sort()
+        local_tools = {}
+        global_tools = {}
+        if hasattr(self.coder, "tool_manager"):
+            tm = self.coder.tool_manager
+            local_tools_dir = tm._get_local_tools_dir()
 
-        global_tool_dir = os.path.join(Path.home(), ".aider", "tools")
-        global_tools = []
-        if os.path.isdir(global_tool_dir):
-            for f in os.listdir(global_tool_dir):
-                if f.endswith(".py"):
-                    global_tools.append(os.path.splitext(f)[0])
-        global_tools.sort()
+            for name, tool_info in tm.tools.items():
+                definition = tool_info.get("definition", {})
+                description = definition.get("function", {}).get("description", "No description.")
+                file_path = tool_info.get("file_path", "")
+
+                if local_tools_dir and file_path.startswith(local_tools_dir):
+                    local_tools[name] = description
+                else:
+                    global_tools[name] = description
 
         if not standard_tools and not local_tools and not global_tools:
             self.io.tool_output("No tools available.")
             return
 
         self.io.tool_output("Available tools:")
-
-        if standard_tools:
-            self.io.tool_output("\nStandard tools:")
-            for tool_name in standard_tools:
-                self.io.tool_output(f"- {tool_name}")
-
-        if local_tools:
-            self.io.tool_output("\nCustom tools (local):")
-            for tool_name in local_tools:
-                self.io.tool_output(f"- {tool_name}")
-
-        if global_tools:
-            self.io.tool_output("\nCustom tools (global):")
-            for tool_name in global_tools:
-                self.io.tool_output(f"- {tool_name}")
+        print_tools("Standard tools", standard_tools)
+        print_tools("Custom tools (local)", local_tools)
+        print_tools("Custom tools (global)", global_tools)
 
         if not local_tools and not global_tools:
             self.io.tool_output("\nNo custom tools found.")
