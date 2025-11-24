@@ -58,12 +58,20 @@ class ToolManager:
                         "file_path": file_path,
                     }
                     self.coder.io.tool_output(f"Loaded tool '{tool_name}' from {file_path}")
+                    return True
                 else:
-                    self.coder.io.tool_warning(f"Tool '{file_path}' is missing a name in its definition.")
+                    self.coder.io.tool_warning(
+                        f"Tool '{file_path}' is missing a name in its definition."
+                    )
+                    return False
             else:
-                self.coder.io.tool_warning(f"Tool '{file_path}' is missing get_tool_definition or _execute function.")
+                self.coder.io.tool_warning(
+                    f"Tool '{file_path}' is missing get_tool_definition or _execute function."
+                )
+                return False
         except Exception as e:
             self.coder.io.tool_error(f"Failed to load tool from {file_path}: {e}")
+            return False
 
     def unload_tool(self, tool_name):
         if tool_name in self.tools:

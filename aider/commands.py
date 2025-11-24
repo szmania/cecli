@@ -2221,12 +2221,12 @@ Just show me the edits I need to make.
         "Load a tool from a file or glob pattern"
         if not hasattr(self.coder, "tool_manager") or not self.coder.tool_manager:
             self.io.tool_error("Tool manager not initialized.")
-            return
+            return False
 
         pattern = args.strip()
         if not pattern:
             self.io.tool_error("Please provide a file path or glob pattern to load tools from.")
-            return
+            return False
 
         # Expand user and environment variables
         pattern = os.path.expanduser(os.path.expandvars(pattern))
@@ -2236,14 +2236,18 @@ Just show me the edits I need to make.
 
         if not file_paths:
             self.io.tool_error(f"No files found matching pattern: {pattern}")
-            return
+            return False
 
+        all_successful = True
         for file_path in file_paths:
             # Make sure we are dealing with a file
             if os.path.isfile(file_path):
-                self.coder.tool_manager.load_tool(file_path)
+                if not self.coder.tool_manager.load_tool(file_path):
+                    all_successful = False
             else:
                 self.io.tool_warning(f"Skipping non-file path: {file_path}")
+
+        return all_successful
 
     def cmd_tools_unload(self, args):
         "Unload a custom tool"
