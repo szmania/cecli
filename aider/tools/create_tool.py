@@ -1,7 +1,8 @@
 import os
 from pathlib import Path
-import litellm
 import importlib.resources
+import litellm
+from aider.exceptions import LiteLLMExceptions
 
 
 def get_tool_definition():
@@ -33,8 +34,10 @@ def get_tool_definition():
         },
     }
 
-def _execute(coder, description: str, file_name: str, scope: str = "local"):
+
+async def _execute(coder, description: str, file_name: str, scope: str = "local"):
     from aider.utils import strip_fenced_code
+
     """
     Creates a new custom tool based on the provided description and filename.
     The new tool is then automatically loaded into the current session.
@@ -79,7 +82,7 @@ def _execute(coder, description: str, file_name: str, scope: str = "local"):
 
     # 5. Call LLM
     try:
-        completion = litellm.completion(
+        completion = await litellm.acompletion(
             model=coder.main_model.name,
             messages=messages,
             temperature=0,
@@ -105,5 +108,7 @@ def _execute(coder, description: str, file_name: str, scope: str = "local"):
 
         return f"Successfully created tool '{file_name}' in {scope} scope. It is now loaded and available for use."
 
+    except LiteLLMExceptions as e:
+        return f"Error: Model API call failed: {e}"
     except Exception as e:
-        return f"Error during tool creation: {e}"
+        return f"An unexpected error occurred during tool creation: {e}"
