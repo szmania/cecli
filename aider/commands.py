@@ -2311,31 +2311,37 @@ Just show me the edits I need to make.
 
         expanded_path = os.path.expanduser(path_arg)
 
-        if os.path.isdir(expanded_path):
-            py_files = []
-            for root, _, files in os.walk(expanded_path):
-                for file in files:
-                    if file.endswith(".py"):
-                        py_files.append(os.path.join(root, file))
-            if not py_files:
-                self.io.tool_error(f"No Python tool files found in '{path_arg}'.")
-                return
+        potential_paths = glob.glob(expanded_path, recursive=True)
 
-            file_paths_str = " ".join([self.quote_fname(f) for f in py_files])
-            await self.cmd_add(file_paths_str)
+        if not potential_paths:
+            self.io.tool_error(f"No files or directories found matching: {path_arg}")
+            return
 
-            file_list_md = "\n- ".join(
-                [f"`{self.coder.get_rel_fname(f)}`" for f in py_files]
-            )
-            prompt = f"Fix the tools in the following files:\n- {file_list_md}"
-            self.io.set_placeholder(prompt)
+        py_files_to_fix = set()
+        for path in potential_paths:
+            if os.path.isdir(path):
+                for root, _, files in os.walk(path):
+                    for file in files:
+                        if file.endswith(".py"):
+                            py_files_to_fix.add(os.path.join(root, file))
+            elif os.path.isfile(path):
+                if path.endswith(".py"):
+                    py_files_to_fix.add(path)
+                else:
+                    self.io.tool_warning(f"Skipping non-python file: {path}")
 
-        elif os.path.isfile(expanded_path):
-            await self.cmd_add(path_arg)
-            prompt = f"Fix the tool in the file `{path_arg}`."
-            self.io.set_placeholder(prompt)
-        else:
-            self.io.tool_error(f"Path not found or is not a file/directory: {path_arg}")
+        if not py_files_to_fix:
+            self.io.tool_error(f"No Python tool files found for pattern: {path_arg}")
+            return
+
+        file_paths_str = " ".join([self.quote_fname(f) for f in sorted(list(py_files_to_fix))])
+        await self.cmd_add(file_paths_str)
+
+        file_list_md = "\n- ".join(
+            [f"`{self.coder.get_rel_fname(f)}`" for f in sorted(list(py_files_to_fix))]
+        )
+        prompt = f"Fix the tools in the following files:\n- {file_list_md}"
+        self.io.set_placeholder(prompt)
 
 
 def expand_subdir(file_path):
