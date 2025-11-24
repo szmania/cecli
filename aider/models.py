@@ -25,7 +25,6 @@ from aider.utils import check_pip_install_extra
 
 RETRY_TIMEOUT = 60
 
-request_timeout = 600
 
 DEFAULT_MODEL_NAME = "gpt-4o"
 ANTHROPIC_BETA_HEADER = "prompt-caching-2024-07-31,pdfs-2024-09-25"
@@ -317,15 +316,20 @@ class Model(ModelSettings):
         editor_model=None,
         editor_edit_format=None,
         verbose=False,
-        retry_timeout=None,
-        retry_backoff_factor=None,
-        retry_on_unavailable=None,
+        request_timeout=600,
+        retry_timeout=60,
+        retry_backoff_factor=2.0,
+        retry_on_unavailable=False,
     ):
         # Map any alias to its canonical name
         model = MODEL_ALIASES.get(model, model)
 
         self.name = model
         self.verbose = verbose
+        self.request_timeout = request_timeout
+        self.retry_timeout = retry_timeout
+        self.retry_backoff_factor = retry_backoff_factor
+        self.retry_on_unavailable = retry_on_unavailable
 
         self.max_chat_history_tokens = 1024
         self.weak_model = None
@@ -352,12 +356,6 @@ class Model(ModelSettings):
 
         if self.extra_params is None:
             self.extra_params = {}
-        if retry_timeout is not None:
-            self.extra_params["timeout"] = retry_timeout
-        if retry_backoff_factor is not None:
-            self.extra_params["retry_backoff_factor"] = retry_backoff_factor
-        if retry_on_unavailable:
-            self.extra_params["retry_on_unavailable"] = retry_on_unavailable
 
         if weak_model is False:
             self.weak_model_name = None
@@ -925,6 +923,8 @@ class Model(ModelSettings):
     async def send_completion(
         self, messages, functions, stream, temperature=None, tools=None, max_tokens=None
     ):
+        from aider.exceptions import LiteLLMExceptions
+
         if os.environ.get("AIDER_SANITY_CHECK_TURNS"):
             sanity_check_messages(messages)
 
@@ -952,22 +952,15 @@ class Model(ModelSettings):
 
             kwargs["temperature"] = temperature
 
-        # `tools` is for modern tool usage. `functions` is for legacy/forced calls.
-        # This handles `base_coder` sending both with same content for `agent_coder`.
         effective_tools = tools
-
         if effective_tools is None and functions:
-            # Convert legacy `functions` to `tools` format if `tools` isn't provided.
             effective_tools = [dict(type="function", function=f) for f in functions]
 
         if effective_tools:
             kwargs["tools"] = effective_tools
 
-        # Forcing a function call is for legacy style `functions` with a single function.
-        # This is used by ArchitectCoder and not intended for AgentCoder's tools.
         if functions and len(functions) == 1:
             function = functions[0]
-
             if "name" in function:
                 tool_name = function.get("name")
                 if tool_name:
@@ -986,24 +979,11 @@ class Model(ModelSettings):
             kwargs["num_ctx"] = num_ctx
 
         key = json.dumps(kwargs, sort_keys=True).encode()
-        # dump(kwargs)
-
         hash_object = hashlib.sha1(key)
-        if "timeout" not in kwargs:
-            kwargs["timeout"] = request_timeout
-        if self.verbose:
-            dump(kwargs)
+
         kwargs["messages"] = messages
+        kwargs["timeout"] = self.request_timeout
 
-        # Cache System Prompts When Possible
-        kwargs["cache_control_injection_points"] = [
-            {
-                "location": "message",
-                "role": "system",
-            }
-        ]
-
-        # Are we using github copilot?
         if "GITHUB_COPILOT_TOKEN" in os.environ or self.name.startswith("github_copilot/"):
             if "extra_headers" not in kwargs:
                 kwargs["extra_headers"] = {
@@ -1011,76 +991,86 @@ class Model(ModelSettings):
                     "Copilot-Integration-Id": "vscode-chat",
                 }
 
-        try:
-            res = await litellm.acompletion(**kwargs)
-        except Exception as err:
-            print(f"LiteLLM API Error: {str(err)}")
-            res = self.model_error_response()
+        litellm_ex = LiteLLMExceptions()
+        retry_delay = 0.125
 
-            if self.verbose:
+        while True:
+            try:
+                if self.verbose:
+                    dump(kwargs)
+                res = await litellm.acompletion(**kwargs)
+                return hash_object, res
+            except litellm_ex.exceptions_tuple() as err:
+                ex_info = litellm_ex.get_ex_info(err)
+                should_retry = ex_info.retry or self.retry_on_unavailable
+                if should_retry:
+                    retry_delay *= self.retry_backoff_factor
+                    if retry_delay > self.retry_timeout:
+                        should_retry = False
+
+                if not should_retry:
+                    print(f"LiteLLM API Error: {str(err)}")
+                    if ex_info.description:
+                        print(ex_info.description)
+                    if stream:
+                        return hash_object, self.model_error_response_stream()
+                    else:
+                        return hash_object, self.model_error_response()
+
+                print(f"Retrying in {retry_delay:.1f} seconds...")
+                await asyncio.sleep(retry_delay)
+                continue
+            except Exception as err:
                 print(f"LiteLLM API Error: {str(err)}")
-                raise
-
-        return hash_object, res
+                if self.verbose:
+                    raise
+                if stream:
+                    return hash_object, self.model_error_response_stream()
+                else:
+                    return hash_object, self.model_error_response()
 
     async def simple_send_with_retries(self, messages, max_tokens=None):
-        from aider.exceptions import LiteLLMExceptions
-
-        litellm_ex = LiteLLMExceptions()
         messages = model_request_parser(self, messages)
-        retry_delay = 0.125
 
         if self.verbose:
             dump(messages)
 
-        while True:
-            try:
-                _hash, response = await self.send_completion(
-                    messages=messages,
-                    functions=None,
-                    stream=False,
-                    max_tokens=max_tokens,
+        _hash, response = await self.send_completion(
+            messages=messages,
+            functions=None,
+            stream=False,
+            max_tokens=max_tokens,
+        )
+
+        if (
+            not response
+            or not hasattr(response, "choices")
+            or not response.choices
+            or not response.choices[0].message
+        ):
+            return None
+
+        res = response.choices[0].message.content
+        from aider.reasoning_tags import remove_reasoning_content
+
+        return remove_reasoning_content(res, self.reasoning_tag)
+
+    def model_error_response(self):
+        return litellm.ModelResponse(
+            choices=[
+                litellm.Choices(
+                    finish_reason="stop",
+                    index=0,
+                    message=litellm.Message(
+                        content="Model API Response Error. Please retry the previous request"
+                    ),
                 )
-                if not response or not hasattr(response, "choices") or not response.choices:
-                    return None
-                res = response.choices[0].message.content
-                from aider.reasoning_tags import remove_reasoning_content
+            ],
+            model=self.name,
+        )
 
-                return remove_reasoning_content(res, self.reasoning_tag)
-
-            except litellm_ex.exceptions_tuple() as err:
-                ex_info = litellm_ex.get_ex_info(err)
-                print(str(err))
-                if ex_info.description:
-                    print(ex_info.description)
-                should_retry = ex_info.retry
-                if should_retry:
-                    retry_delay *= 2
-                    if retry_delay > RETRY_TIMEOUT:
-                        should_retry = False
-                if not should_retry:
-                    return None
-                print(f"Retrying in {retry_delay:.1f} seconds...")
-                time.sleep(retry_delay)
-                continue
-            except AttributeError:
-                return None
-
-    async def model_error_response(self):
-        for i in range(1):
-            await asyncio.sleep(0.1)
-            yield litellm.ModelResponse(
-                choices=[
-                    litellm.Choices(
-                        finish_reason="stop",
-                        index=0,
-                        message=litellm.Message(
-                            content="Model API Response Error. Please retry the previous request"
-                        ),  # Provide an empty message object
-                    )
-                ],
-                model=self.name,
-            )
+    async def model_error_response_stream(self):
+        yield self.model_error_response()
 
 
 def register_models(model_settings_fnames):

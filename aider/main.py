@@ -920,6 +920,7 @@ async def main_async(argv=None, input=None, output=None, force_git_root=None, re
         editor_model=args.editor_model,
         editor_edit_format=args.editor_edit_format,
         verbose=args.verbose,
+        request_timeout=args.request_timeout,
         retry_timeout=args.retry_timeout,
         retry_backoff_factor=args.retry_backoff_factor,
         retry_on_unavailable=args.retry_on_unavailable,

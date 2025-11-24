@@ -155,16 +155,16 @@ def get_parser(default_config_files, git_root):
         help="Verify the SSL cert when connecting to models (default: True)",
     )
     group.add_argument(
-        "--timeout",
-        type=float,
-        default=None,
-        help="Timeout in seconds for API calls (default: None)",
+        "--request-timeout",
+        type=int,
+        default=600,
+        help="Timeout for LLM HTTP requests in seconds (default: 600)",
     )
     group.add_argument(
         "--retry-timeout",
         type=int,
-        default=600,
-        help="timeout for retrying LLM calls in seconds (default: 600)",
+        default=60,
+        help="Timeout for retrying LLM calls in seconds (default: 60)",
     )
     group.add_argument(
         "--retry-backoff-factor",
