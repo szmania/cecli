@@ -1008,6 +1008,14 @@ class Model(ModelSettings):
                     if retry_delay > self.retry_timeout:
                         should_retry = False
 
+                # Check for non-retryable RateLimitError within ServiceUnavailableError
+                if (
+                    isinstance(err, litellm.ServiceUnavailableError)
+                    and "RateLimitError" in str(err)
+                    and 'status_code: 429, message: "Resource has been exhausted' in str(err)
+                ):
+                    should_retry = False
+
                 if not should_retry:
                     print(f"LiteLLM API Error: {str(err)}")
                     if ex_info.description:
