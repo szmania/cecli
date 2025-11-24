@@ -16,7 +16,11 @@ try:
 except ImportError:
     git = None
 
-import importlib_resources
+try:
+    import importlib_resources
+except ImportError:
+    pass  # Optional dependency
+
 import shtab
 from dotenv import load_dotenv
 from prompt_toolkit.enums import EditingMode
