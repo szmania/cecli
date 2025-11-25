@@ -1933,11 +1933,6 @@ Just reply with fixed versions of the {blocks} above that failed to match.
             # Sort files to ensure deterministic output
             all_files = sorted(all_files)
 
-            # Filter out .aider files/dirs
-            all_files = [
-                f for f in all_files if not any(part.startswith(".aider") for part in f.split("/"))
-            ]
-
             # Build tree structure
             tree = {}
             for file in all_files:
@@ -2079,10 +2074,6 @@ Just reply with fixed versions of the {blocks} above that failed to match.
 
                         status_code = line[:2]
                         file_path = line[3:]
-
-                        # Skip .aider files/dirs
-                        if any(part.startswith(".aider") for part in file_path.split("/")):
-                            continue
 
                         # Staged changes
                         if status_code[0] == "A":
