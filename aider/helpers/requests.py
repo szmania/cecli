@@ -4,6 +4,10 @@ from ..sendchat import ensure_alternating_roles
 def thought_signature(model, messages):
     # Add thought signatures for Vertex AI and Gemini models
     if model.name.startswith("vertex_ai/") or model.name.startswith("gemini/"):
+        signature = "skip_thought_signature_validator"
+        if "gemini-2.5-pro" in model.name:
+            signature = "context_engineering_is_the_way_to_go"
+
         for msg in messages:
             if "tool_calls" in msg:
                 tool_calls = msg["tool_calls"]
@@ -12,9 +16,7 @@ def thought_signature(model, messages):
                     if "provider_specific_fields" not in call:
                         call["provider_specific_fields"] = {}
                     if "thought_signature" not in call["provider_specific_fields"]:
-                        call["provider_specific_fields"][
-                            "thought_signature"
-                        ] = "skip_thought_signature_validator"
+                        call["provider_specific_fields"]["thought_signature"] = signature
 
             if "function_call" in msg:
                 call = msg["function_call"]
@@ -22,9 +24,7 @@ def thought_signature(model, messages):
                 if "provider_specific_fields" not in call:
                     call["provider_specific_fields"] = {}
                 if "thought_signature" not in call["provider_specific_fields"]:
-                    call["provider_specific_fields"][
-                        "thought_signature"
-                    ] = "skip_thought_signature_validator"
+                    call["provider_specific_fields"]["thought_signature"] = signature
 
     return messages
 
