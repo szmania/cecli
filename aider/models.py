@@ -920,6 +920,9 @@ class Model(ModelSettings):
     def is_ollama(self):
         return self.name.startswith("ollama/") or self.name.startswith("ollama_chat/")
 
+    def is_gemini_2_5_pro(self):
+        return "gemini-2.5-pro" in self.name.lower()
+
     async def send_completion(
         self, messages, functions, stream, temperature=None, tools=None, max_tokens=None
     ):
