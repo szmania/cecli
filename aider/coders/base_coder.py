@@ -61,6 +61,7 @@ from aider.repo import ANY_GIT_ERROR, GitRepo
 from aider.repomap import RepoMap
 from aider.run_cmd import run_cmd
 from aider.sessions import SessionManager
+from aider.tools.utils.output import print_tool_response
 from aider.utils import format_tokens, is_image_file
 
 from ..dump import dump  # noqa: F401
@@ -2359,54 +2360,14 @@ class Coder:
 
         for server, tool_calls in server_tool_calls.items():
             for tool_call in tool_calls:
-                color_start = "[blue]" if self.pretty else ""
-                color_end = "[/blue]" if self.pretty else ""
-
-                self.io.tool_output(
-                    f"{color_start}Tool Call:{color_end} {server.name} • {tool_call.function.name}"
-                )
-                # Parse and format arguments as headers with values
-                if tool_call.function.arguments:
-                    # Only do JSON unwrapping for tools containing "replace" in their name
-                    if tool_call.get("function", {}).get("name") is not None and (
-                        "replace" in tool_call.function.name.lower()
-                        or "insert" in tool_call.function.name.lower()
-                        or "update" in tool_call.function.name.lower()
-                    ):
-                        try:
-                            args_dict = json.loads(tool_call.function.arguments)
-                            first_key = True
-                            for key, value in args_dict.items():
-                                # Convert explicit \\n sequences to actual newlines using regex
-                                # Only match \\n that is not preceded by any other backslashes
-                                if isinstance(value, str):
-                                    value = re.sub(r"(?<!\\)\\n", "\n", value)
-                                # Add extra newline before first key/header
-                                if first_key:
-                                    self.io.tool_output("\n")
-                                    first_key = False
-                                self.io.tool_output(f"{color_start}{key}:{color_end}")
-                                # Split the value by newlines and output each line separately
-                                if isinstance(value, str):
-                                    for line in value.split("\n"):
-                                        self.io.tool_output(f"{line}")
-                                else:
-                                    self.io.tool_output(f"{str(value)}")
-                                self.io.tool_output("")
-                        except json.JSONDecodeError:
-                            # If JSON parsing fails, show raw arguments
-                            raw_args = tool_call.function.arguments
-                            self.io.tool_output(f"{color_start}Arguments:{color_end} {raw_args}")
-                    else:
-                        # For non-replace tools, show raw arguments
-                        raw_args = tool_call.function.arguments
-                        self.io.tool_output(f"{color_start}Arguments:{color_end} {raw_args}")
-
-                if self.verbose:
-                    self.io.tool_output(f"Tool ID: {tool_call.id}")
-                    self.io.tool_output(f"Tool type: {tool_call.type}")
-
-                self.io.tool_output("\n")
+                if hasattr(self, "tool_registry") and self.tool_registry.get(
+                    tool_call.function.name.lower(), None
+                ):
+                    self.tool_registry.get(tool_call.function.name.lower()).format_output(
+                        coder=self, mcp_server=server, tool_response=tool_call
+                    )
+                else:
+                    print_tool_response(coder=self, mcp_server=server, tool_response=tool_call)
 
     def _gather_server_tool_calls(self, tool_calls):
         """Collect all tool calls grouped by server.
@@ -3032,6 +2993,7 @@ class Coder:
                                 self.partial_response_tool_calls[index][
                                     "type"
                                 ] = tool_call_chunk.type
+                                self.io.update_spinner_suffix(tool_call_chunk.type)
 
                             if (
                                 hasattr(tool_call_chunk, "provider_specific_fields")
@@ -3072,6 +3034,7 @@ class Coder:
                                     self.partial_response_tool_calls[index]["function"][
                                         "name"
                                     ] += tool_call_chunk.function.name
+                                    self.io.update_spinner_suffix(tool_call_chunk.function.name)
                                 if tool_call_chunk.function.arguments:
                                     if (
                                         "arguments"
@@ -3083,6 +3046,9 @@ class Coder:
                                     self.partial_response_tool_calls[index]["function"][
                                         "arguments"
                                     ] += tool_call_chunk.function.arguments
+                                    self.io.update_spinner_suffix(
+                                        tool_call_chunk.function.arguments
+                                    )
                 except (AttributeError, IndexError):
                     # Handle cases where the response structure doesn't match expectations
                     pass
@@ -3097,6 +3063,7 @@ class Coder:
                             self.partial_response_function_call[k] += v
                         else:
                             self.partial_response_function_call[k] = v
+                        self.io.update_spinner_suffix(v)
 
                     received_content = True
                 except AttributeError:
@@ -3118,6 +3085,7 @@ class Coder:
                     text += reasoning_content
                     self.got_reasoning_content = True
                     received_content = True
+                    self.io.update_spinner_suffix(reasoning_content)
 
                 try:
                     content = chunk.choices[0].delta.content
@@ -3128,6 +3096,7 @@ class Coder:
 
                         text += content
                         received_content = True
+                        self.io.update_spinner_suffix(content)
                 except AttributeError:
                     pass
 
@@ -3710,7 +3679,7 @@ class Coder:
         if not hasattr(self, "_autosave_future"):
             self._autosave_future = None
 
-        if self._autosave_future and self._autosave_future.done():
+        if self._autosave_future and not self._autosave_future.done():
             return
 
         # Throttle autosave to run at most once every 15 seconds

@@ -42,7 +42,7 @@ EXCEPTIONS = [
         "The API provider has rate limited you. Try again later or check your quotas.",
     ),
     ExInfo("RouterRateLimitError", True, None),
-    ExInfo("ServiceUnavailableError", False, "The API provider's servers are down or overloaded."),
+    ExInfo("ServiceUnavailableError", True, "The API provider's servers are down or overloaded."),
     ExInfo("UnprocessableEntityError", True, None),
     ExInfo("UnsupportedParamsError", True, None),
     ExInfo(
