@@ -100,72 +100,89 @@ class ToolManager:
                     tool_files.append(file_path)
         return tool_files
 
-    def load_tool(self, file_path):
-        try:
-            module_name = Path(file_path).stem
-            if module_name in sys.modules:
-                importlib.reload(sys.modules[module_name])
-                spec = sys.modules[module_name].__spec__
-            else:
-                spec = importlib.util.spec_from_file_location(module_name, file_path)
-
-            if not spec or not spec.loader:
-                raise ImportError(f"Could not create spec for module at {file_path}")
-
-            module = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(module)
-
-            # Check for new class-based tool format
-            if hasattr(module, "Tool") and issubclass(module.Tool, BaseTool):
-                tool_class = module.Tool
-                schema = tool_class.SCHEMA
-                tool_name = schema.get("function", {}).get("name")
-                if tool_name:
-                    self.tools[tool_name] = {
-                        "definition": schema,
-                        "execute": tool_class.execute,
-                        "file_path": file_path,
-                    }
-                    msg = f"Loaded class-based tool '{tool_name}' from {file_path}"
-                    self.coder.io.tool_output(msg)
-                    return True, msg
-                else:
-                    msg = f"Class-based tool '{file_path}' is missing a name in its schema."
-                    self.coder.io.tool_warning(msg)
-                    return False, msg
-            # Check for old function-based tool format
-            elif hasattr(module, "get_tool_definition") and hasattr(module, "_execute"):
-                definition = module.get_tool_definition()
-                tool_name = definition.get("function", {}).get("name")
-                if tool_name:
-                    self.tools[tool_name] = {
-                        "definition": definition,
-                        "execute": module._execute,
-                        "file_path": file_path,
-                    }
-                    msg = f"Loaded tool '{tool_name}' from {file_path}"
-                    self.coder.io.tool_output(msg)
-                    return True, msg
-                else:
-                    msg = f"Tool '{file_path}' is missing a name in its definition."
-                    self.coder.io.tool_warning(msg)
-                    return False, msg
-            else:
-                msg = (
-                    f"Tool '{file_path}' is not a valid tool file. It must either contain a"
-                    " `Tool` class inheriting from `BaseTool` or `get_tool_definition()` and"
-                    " `_execute()` functions."
-                )
-                self.coder.io.tool_warning(msg)
-                return False, msg
-        except Exception as e:
-            msg = f"Failed to load tool from {file_path}: {e}"
-            self.coder.io.tool_error(msg)
-            return False, msg
-
     async def load_tool_async(self, file_path):
-        """Asynchronously loads a tool from a file path."""
-        return self.load_tool(file_path)
+        """Asynchronously loads a tool from a file path, with an option to fix it on failure."""
+        while True:
+            try:
+                module_name = Path(file_path).stem
+                if module_name in sys.modules:
+                    importlib.reload(sys.modules[module_name])
+                    spec = sys.modules[module_name].__spec__
+                else:
+                    spec = importlib.util.spec_from_file_location(module_name, file_path)
+
+                if not spec or not spec.loader:
+                    raise ImportError(f"Could not create spec for module at {file_path}")
+
+                module = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(module)
+
+                # Check for new class-based tool format
+                if hasattr(module, "Tool") and issubclass(module.Tool, BaseTool):
+                    tool_class = module.Tool
+                    schema = tool_class.SCHEMA
+                    tool_name = schema.get("function", {}).get("name")
+                    if tool_name:
+                        self.tools[tool_name] = {
+                            "definition": schema,
+                            "execute": tool_class.execute,
+                            "file_path": file_path,
+                        }
+                        msg = f"Loaded class-based tool '{tool_name}' from {file_path}"
+                        self.coder.io.tool_output(msg)
+                        return True, msg
+                    else:
+                        msg = f"Class-based tool '{file_path}' is missing a name in its schema."
+                        self.coder.io.tool_warning(msg)
+                        return False, msg
+                # Check for old function-based tool format
+                elif hasattr(module, "get_tool_definition") and hasattr(module, "_execute"):
+                    definition = module.get_tool_definition()
+                    tool_name = definition.get("function", {}).get("name")
+                    if tool_name:
+                        self.tools[tool_name] = {
+                            "definition": definition,
+                            "execute": module._execute,
+                            "file_path": file_path,
+                        }
+                        msg = f"Loaded tool '{tool_name}' from {file_path}"
+                        self.coder.io.tool_output(msg)
+                        return True, msg
+                    else:
+                        msg = f"Tool '{file_path}' is missing a name in its definition."
+                        self.coder.io.tool_warning(msg)
+                        return False, msg
+                else:
+                    msg = (
+                        f"Tool '{file_path}' is not a valid tool file. It must either contain a"
+                        " `Tool` class inheriting from `BaseTool` or `get_tool_definition()` and"
+                        " `_execute()` functions."
+                    )
+                    self.coder.io.tool_warning(msg)
+                    return False, msg
+            except Exception as e:
+                msg = f"Failed to load tool from {file_path}: {e}"
+                self.coder.io.tool_error(msg)
+
+                ok = await self.coder.io.confirm_ask(
+                    f"Attempt to fix the failed tool {file_path}?"
+                )
+                if not ok:
+                    return False, msg
+
+                # Add file to context and make it editable
+                self.coder.add_rel_fname(file_path)
+
+                # Formulate a prompt for the LLM to fix the file
+                fix_prompt = (
+                    f"The tool at '{file_path}' failed to load with this error:\n"
+                    f"```\n{e}\n```\n\n"
+                    f"Please fix the code in `{file_path}`."
+                )
+
+                # Run the coder with the fix prompt
+                await self.coder.run(with_message=fix_prompt)
+                # Loop will continue and try to load again
 
     def unload_tool(self, tool_name):
         if tool_name in self.tools:
