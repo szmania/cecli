@@ -2228,6 +2228,8 @@ Just show me the edits I need to make.
 
     async def cmd_tools_create(self, args):
         "Create a new custom tool. Usage: /tools-create <file_name.py> <description> [--scope <local|global>]"
+        from aider.coders.agent_coder import AgentCoder
+
         if not isinstance(self.coder, AgentCoder):
             self.io.tool_error("The /tools-create command is only available in agent mode.")
             return
