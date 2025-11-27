@@ -38,6 +38,8 @@ def get_tool_definition():
 async def _execute(coder, description: str, file_name: str, scope: str = "local"):
     from aider.utils import strip_fenced_code
 
+    coder.io.tool_output("Executing CreateTool from aider/tools/create_tool.py")
+
     """
     Creates a new custom tool based on the provided description and filename.
     The new tool is then automatically loaded into the current session.
