@@ -1115,10 +1115,31 @@ class AgentCoder(Coder):
 
         # Auto-commit any files edited by granular tools
         if self.files_edited_by_tools:
-            saved_message = await self.auto_commit(self.files_edited_by_tools)
-            if not saved_message and hasattr(self.gpt_prompts, "files_content_gpt_edits_no_repo"):
-                saved_message = self.gpt_prompts.files_content_gpt_edits_no_repo
-            self.move_back_cur_messages(saved_message)
+            tool_files_edited = set()
+            other_files_edited = set()
+            if self.repo:
+                local_tools_dir = os.path.join(self.repo.root, ".aider", "tools")
+                for fname in self.files_edited_by_tools:
+                    abs_fname = self.abs_root_path(fname)
+                    if abs_fname.startswith(local_tools_dir):
+                        tool_files_edited.add(fname)
+                    else:
+                        other_files_edited.add(fname)
+            else:
+                other_files_edited = self.files_edited_by_tools
+
+            if tool_files_edited:
+                self.io.tool_output(
+                    f"Skipping commit for tool files: {', '.join(sorted(tool_files_edited))}"
+                )
+
+            if other_files_edited:
+                saved_message = await self.auto_commit(other_files_edited)
+                if not saved_message and hasattr(
+                    self.gpt_prompts, "files_content_gpt_edits_no_repo"
+                ):
+                    saved_message = self.gpt_prompts.files_content_gpt_edits_no_repo
+                self.move_back_cur_messages(saved_message)
 
         self.tool_call_count = 0
         self.files_added_in_exploration = set()
@@ -1813,12 +1834,33 @@ Just reply with fixed versions of the {blocks} above that failed to match.
             # 4. Post-edit actions (commit, lint, test, shell commands)
             if edited_files:
                 self.aider_edited_files.update(edited_files)  # Track edited files
-                self.auto_commit(edited_files)
+
+                tool_files_edited = set()
+                other_files_edited = set()
+                if self.repo:
+                    local_tools_dir = os.path.join(self.repo.root, ".aider", "tools")
+                    for fname in edited_files:
+                        abs_fname = self.abs_root_path(fname)
+                        if abs_fname.startswith(local_tools_dir):
+                            tool_files_edited.add(fname)
+                        else:
+                            other_files_edited.add(fname)
+                else:
+                    other_files_edited = edited_files
+
+                if tool_files_edited:
+                    self.io.tool_output(
+                        f"Skipping commit for tool files: {', '.join(sorted(tool_files_edited))}"
+                    )
+
+                if other_files_edited:
+                    await self.auto_commit(other_files_edited)
                 # We don't use saved_message here as we are not moving history back
 
                 if self.auto_lint:
                     lint_errors = self.lint_edited(edited_files)
-                    self.auto_commit(edited_files, context="Ran the linter")
+                    if other_files_edited:
+                        await self.auto_commit(other_files_edited, context="Ran the linter")
                     if lint_errors and not self.reflected_message:  # Reflect only if no edit errors
                         ok = await self.io.confirm_ask("Attempt to fix lint errors?")
                         if ok:
