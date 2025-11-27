@@ -2173,6 +2173,8 @@ Just show me the edits I need to make.
     def cmd_tools(self, args):
         "List available standard and custom tools with their descriptions."
 
+        from aider.coders.agent_coder import AgentCoder
+
         if not isinstance(self.coder, AgentCoder):
             self.io.tool_error("The /tools command is only available in agent mode.")
             return
