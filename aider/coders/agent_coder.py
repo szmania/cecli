@@ -58,6 +58,7 @@ from aider.tools import (
     view,
     view_files_matching,
     view_files_with_symbol,
+    create_tool,
 )
 
 from .agent_prompts import AgentPrompts
@@ -157,6 +158,7 @@ class AgentCoder(Coder):
 
         # Add tools that have been imported
         tool_modules = [
+            create_tool,
             command,
             command_interactive,
             delete_block,
