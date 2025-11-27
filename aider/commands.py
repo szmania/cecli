@@ -2256,7 +2256,7 @@ Just show me the edits I need to make.
             "scope": scope,
         }
 
-        create_tool_result = await create_tool._execute(self.coder, **tool_call_params)
+        create_tool_result = await create_tool.Tool.execute(coder=self.coder, **tool_call_params)
         self.io.tool_output(create_tool_result)
 
     async def cmd_tools_load(self, args):
