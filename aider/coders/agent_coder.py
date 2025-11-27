@@ -144,7 +144,14 @@ class AgentCoder(Coder):
 
         self.agent_finished = False
         self._get_agent_config()
+        self.tools_loaded = False
         super().__init__(*args, **kwargs)
+
+    async def run(self, *args, **kwargs):
+        if hasattr(self, "tool_manager") and self.tool_manager and not self.tools_loaded:
+            await self.tool_manager.load_discovered_tools_async()
+            self.tools_loaded = True
+        return await super().run(*args, **kwargs)
 
     def _build_tool_registry(self):
         """

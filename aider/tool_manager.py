@@ -12,16 +12,15 @@ class ToolManager:
         self.tools = {}
         self.load_dot_env_files()
         self.discovered_tool_files = self.discover_tools()
-        self.load_discovered_tools()
 
-    def load_discovered_tools(self):
+    async def load_discovered_tools_async(self):
         """Loads all tools discovered in local and global tool directories."""
         if not self.discovered_tool_files:
             return
 
         self.coder.io.tool_output("Loading custom tools...")
         for file_path in self.discovered_tool_files:
-            self.load_tool(file_path)
+            await self.load_tool_async(file_path)
 
     def _get_local_tools_dir(self):
         if not self.coder.repo:

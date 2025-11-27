@@ -179,7 +179,7 @@ class Tool(BaseTool):
                 f.write(cleaned_code)
 
             if hasattr(coder, "tool_manager"):
-                coder.tool_manager.load_tool(file_path)
+                await coder.tool_manager.load_tool_async(file_path)
 
             return f"Successfully created tool '{file_name}' in {scope} scope. It is now loaded and available for use."
 

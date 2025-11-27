@@ -2256,7 +2256,7 @@ Just show me the edits I need to make.
         create_tool_result = await create_tool._execute(self.coder, **tool_call_params)
         self.io.tool_output(create_tool_result)
 
-    def cmd_tools_load(self, args):
+    async def cmd_tools_load(self, args):
         "Load a tool from a file or glob pattern"
         if not isinstance(self.coder, AgentCoder):
             self.io.tool_error("The /tools-load command is only available in agent mode.")
@@ -2300,7 +2300,8 @@ Just show me the edits I need to make.
 
         all_successful = True
         for file_path in sorted(list(file_paths_to_load)):
-            if not self.coder.tool_manager.load_tool(file_path):
+            success, _ = await self.coder.tool_manager.load_tool_async(file_path)
+            if not success:
                 all_successful = False
 
         return all_successful
