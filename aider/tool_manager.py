@@ -7,6 +7,7 @@ class ToolManager:
     def __init__(self, coder):
         self.coder = coder
         self.tools = {}
+        self.load_dot_env_files()
         self.discovered_tool_files = self.discover_tools()
 
     def _get_local_tools_dir(self):
@@ -16,6 +17,58 @@ class ToolManager:
 
     def _get_global_tools_dir(self):
         return os.path.join(Path.home(), ".aider", "tools")
+
+    def load_dotenv(self, dotenv_path, dotenv_vars):
+        if not os.path.exists(dotenv_path):
+            return False
+
+        with open(dotenv_path) as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                key, value = line.split("=", 1)
+                key = key.strip()
+                value = value.strip()
+                # Remove surrounding quotes
+                if (value.startswith('"') and value.endswith('"')) or (
+                    value.startswith("'") and value.endswith("'")
+                ):
+                    value = value[1:-1]
+
+                dotenv_vars[key] = value
+        return True
+
+    def load_dot_env_files(self):
+        local_tools_dir = self._get_local_tools_dir()
+        global_tools_dir = self._get_global_tools_dir()
+
+        dotenv_vars = {}
+        loaded_paths = []
+
+        # Load global first
+        if global_tools_dir and os.path.isdir(global_tools_dir):
+            dotenv_path = os.path.join(global_tools_dir, ".env")
+            if self.load_dotenv(dotenv_path, dotenv_vars):
+                loaded_paths.append(dotenv_path)
+
+        # Load local, overriding global
+        if local_tools_dir and os.path.isdir(local_tools_dir):
+            dotenv_path = os.path.join(local_tools_dir, ".env")
+            if self.load_dotenv(dotenv_path, dotenv_vars):
+                loaded_paths.append(dotenv_path)
+
+        if not dotenv_vars:
+            return
+
+        for key, value in dotenv_vars.items():
+            if key not in os.environ:
+                os.environ[key] = value
+
+        if loaded_paths:
+            self.coder.io.tool_output(
+                f"Loaded environment variables from: {', '.join(loaded_paths)}"
+            )
 
     def discover_tools(self):
         local_tools_dir = self._get_local_tools_dir()
