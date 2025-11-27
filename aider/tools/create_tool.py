@@ -101,7 +101,9 @@ async def _execute(coder, description: str, file_name: str, scope: str = "local"
             if "def get_tool_definition():" in generated_code and "async def _execute(" in generated_code:
                 cleaned_code = generated_code
             else:
-                return "Error: Generated tool code is empty after cleaning."
+                error_msg = "Error: Generated tool code is empty after cleaning."
+                error_msg += f"\n\nLLM Raw Response:\n{generated_code}"
+                return error_msg
 
         # 7. Save and Load
         os.makedirs(tools_dir, exist_ok=True)
