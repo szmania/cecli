@@ -2261,6 +2261,8 @@ Just show me the edits I need to make.
 
     async def cmd_tools_load(self, args):
         "Load a tool from a file or glob pattern"
+        from aider.coders.agent_coder import AgentCoder
+
         if not isinstance(self.coder, AgentCoder):
             self.io.tool_error("The /tools-load command is only available in agent mode.")
             return
