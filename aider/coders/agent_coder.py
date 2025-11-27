@@ -20,6 +20,7 @@ from aider import urls, utils
 
 # Import the change tracker
 from aider.change_tracker import ChangeTracker
+from aider.tool_manager import ToolManager
 from aider.mcp.server import LocalServer
 from aider.repo import ANY_GIT_ERROR
 
