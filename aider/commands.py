@@ -15,7 +15,6 @@ from prompt_toolkit.completion import Completion, PathCompleter
 from prompt_toolkit.document import Document
 
 from aider import models, prompts, sessions, voice
-from aider.coders.agent_coder import AgentCoder
 from aider.editor import pipe_editor
 from aider.format_settings import format_settings
 from aider.help import Help, install_help_extra
