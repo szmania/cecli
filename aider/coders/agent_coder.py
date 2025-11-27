@@ -282,6 +282,12 @@ class AgentCoder(Coder):
         await super().initialize_mcp_tools()
 
         local_tools = self.get_local_tool_schemas()
+
+        # Add custom tools from ToolManager
+        if hasattr(self, "tool_manager") and self.tool_manager:
+            custom_tools = self.tool_manager.get_tool_definitions()
+            local_tools.extend(custom_tools)
+
         if not local_tools:
             return
 

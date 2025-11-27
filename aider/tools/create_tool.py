@@ -62,15 +62,78 @@ class Tool(BaseTool):
                 return "Error: Cannot create local tool without a git repository."
             tools_dir = os.path.join(coder.repo.root, ".aider", "tools")
 
-        # 3. Load Prompt
-        try:
-            tool_creation_prompt_content = (
-                importlib.resources.files("aider.coders.prompts")
-                .joinpath("create_tool_prompt.md")
-                .read_text(encoding="utf-8")
-            )
-        except Exception as e:
-            return f"Error reading tool creation prompt file: {e}"
+        # 3. Define Prompt
+        tool_creation_prompt_content = """You are an expert software engineer. Your task is to generate the complete Python code for a custom tool for the 'aider' coding assistant.
+
+The user will provide a description of the tool. You must generate a single Python script that implements this tool.
+
+The generated tool code MUST follow this structure:
+
+1.  It must be a class named `Tool` that inherits from `aider.tools.utils.base_tool.BaseTool`.
+2.  The `Tool` class must define two class attributes: `NORM_NAME` and `SCHEMA`.
+3.  The `Tool` class must implement an `async` class method `execute(cls, coder, **params)`.
+
+Here is a template:
+
+```python
+from aider.tools.utils.base_tool import BaseTool
+# Add any other necessary imports here
+
+class Tool(BaseTool):
+    \"\"\"
+    A brief description of the tool.
+    \"\"\"
+
+    # NORM_NAME should be the lowercase version of the function name in the SCHEMA
+    NORM_NAME = "my_tool_name"
+    SCHEMA = {
+        "type": "function",
+        "function": {
+            "name": "MyToolName",
+            "description": "A detailed description of what the tool does.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "param1": {
+                        "type": "string",
+                        "description": "Description of parameter 1."
+                    },
+                    "param2": {
+                        "type": "boolean",
+                        "description": "Description of parameter 2."
+                    }
+                },
+                "required": ["param1"]
+            }
+        }
+    }
+
+    @classmethod
+    async def execute(cls, coder, **params):
+        \"\"\"
+        The implementation of the tool.
+
+        Args:
+            coder: The Coder instance, providing access to I/O and other context.
+            **params: A dictionary of parameters matching the SCHEMA.
+
+        Returns:
+            str: A string containing the result of the tool's execution.
+        \"\"\"
+        # Your tool logic goes here.
+        # Access parameters via params['param_name']
+        # Use coder.io.tool_output("message") for printing status messages.
+        # Use coder.io.tool_error("message") for errors.
+        return "Tool logic not implemented yet."
+```
+
+**IMPORTANT INSTRUCTIONS:**
+-   Infer the `name`, `description`, `parameters` (including properties and required fields) for the `SCHEMA` from the user's tool description.
+-   The `NORM_NAME` must be the lowercase version of the `name` in the `SCHEMA`.
+-   The `execute` method must be an `async` class method.
+-   The code should be self-contained in a single script. Do not assume other files are present unless they are standard Python libraries.
+-   Only output the raw Python code inside a single ` ```python ... ``` ` block. Do not include any other text, explanation, or preamble.
+"""
 
         # 4. Construct LLM Request
         messages = [

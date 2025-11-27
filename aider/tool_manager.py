@@ -3,12 +3,25 @@ import sys
 import importlib.util
 from pathlib import Path
 
+from aider.tools.utils.base_tool import BaseTool
+
+
 class ToolManager:
     def __init__(self, coder):
         self.coder = coder
         self.tools = {}
         self.load_dot_env_files()
         self.discovered_tool_files = self.discover_tools()
+        self.load_discovered_tools()
+
+    def load_discovered_tools(self):
+        """Loads all tools discovered in local and global tool directories."""
+        if not self.discovered_tool_files:
+            return
+
+        self.coder.io.tool_output("Loading custom tools...")
+        for file_path in self.discovered_tool_files:
+            self.load_tool(file_path)
 
     def _get_local_tools_dir(self):
         if not self.coder.repo:
@@ -103,7 +116,28 @@ class ToolManager:
             module = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(module)
 
-            if hasattr(module, "get_tool_definition") and hasattr(module, "_execute"):
+            # Check for new class-based tool format
+            if hasattr(module, "Tool") and issubclass(module.Tool, BaseTool):
+                tool_class = module.Tool
+                schema = tool_class.SCHEMA
+                tool_name = schema.get("function", {}).get("name")
+                if tool_name:
+                    self.tools[tool_name] = {
+                        "definition": schema,
+                        "execute": tool_class.execute,
+                        "file_path": file_path,
+                    }
+                    self.coder.io.tool_output(
+                        f"Loaded class-based tool '{tool_name}' from {file_path}"
+                    )
+                    return True
+                else:
+                    self.coder.io.tool_warning(
+                        f"Class-based tool '{file_path}' is missing a name in its schema."
+                    )
+                    return False
+            # Check for old function-based tool format
+            elif hasattr(module, "get_tool_definition") and hasattr(module, "_execute"):
                 definition = module.get_tool_definition()
                 tool_name = definition.get("function", {}).get("name")
                 if tool_name:
@@ -121,7 +155,9 @@ class ToolManager:
                     return False
             else:
                 self.coder.io.tool_warning(
-                    f"Tool '{file_path}' is missing get_tool_definition or _execute function."
+                    f"Tool '{file_path}' is not a valid tool file. It must either contain a"
+                    " `Tool` class inheriting from `BaseTool` or `get_tool_definition()` and"
+                    " `_execute()` functions."
                 )
                 return False
         except Exception as e:
