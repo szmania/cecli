@@ -120,7 +120,6 @@ class AgentCoder(Coder):
 
         # Initialize tool registry
         self.args = kwargs.get("args")
-        self.tool_manager = ToolManager(self)
         self.tool_registry = self._build_tool_registry()
 
         # Track files added during current exploration
@@ -148,6 +147,7 @@ class AgentCoder(Coder):
         self._get_agent_config()
         self.tools_loaded = False
         super().__init__(*args, **kwargs)
+        self.tool_manager = ToolManager(self)
 
     async def run(self, *args, **kwargs):
         if hasattr(self, "tool_manager") and self.tool_manager and not self.tools_loaded:
