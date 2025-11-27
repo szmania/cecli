@@ -120,6 +120,7 @@ class AgentCoder(Coder):
 
         # Initialize tool registry
         self.args = kwargs.get("args")
+        self.tool_manager = ToolManager(self)
         self.tool_registry = self._build_tool_registry()
 
         # Track files added during current exploration
