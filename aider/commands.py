@@ -15,6 +15,7 @@ from prompt_toolkit.completion import Completion, PathCompleter
 from prompt_toolkit.document import Document
 
 from aider import models, prompts, sessions, voice
+from aider.coders.agent_coder import AgentCoder
 from aider.editor import pipe_editor
 from aider.format_settings import format_settings
 from aider.help import Help, install_help_extra
@@ -2169,6 +2170,10 @@ Just show me the edits I need to make.
     def cmd_tools(self, args):
         "List available standard and custom tools with their descriptions."
 
+        if not isinstance(self.coder, AgentCoder):
+            self.io.tool_error("The /tools command is only available in agent mode.")
+            return
+
         def print_tools(title, tools_dict):
             if not tools_dict:
                 return
@@ -2218,6 +2223,10 @@ Just show me the edits I need to make.
 
     async def cmd_tools_create(self, args):
         "Create a new custom tool. Usage: /tools-create <file_name.py> <description> [--scope <local|global>]"
+        if not isinstance(self.coder, AgentCoder):
+            self.io.tool_error("The /tools-create command is only available in agent mode.")
+            return
+
         scope = "local"
         if "--scope global" in args:
             scope = "global"
@@ -2245,6 +2254,10 @@ Just show me the edits I need to make.
 
     def cmd_tools_load(self, args):
         "Load a tool from a file or glob pattern"
+        if not isinstance(self.coder, AgentCoder):
+            self.io.tool_error("The /tools-load command is only available in agent mode.")
+            return
+
         if not hasattr(self.coder, "tool_manager") or not self.coder.tool_manager:
             self.io.tool_error("Tool manager not initialized.")
             return False
@@ -2290,6 +2303,10 @@ Just show me the edits I need to make.
 
     def cmd_tools_unload(self, args):
         "Unload a custom tool"
+        if not isinstance(self.coder, AgentCoder):
+            self.io.tool_error("The /tools-unload command is only available in agent mode.")
+            return
+
         if not hasattr(self.coder, "tool_manager") or not self.coder.tool_manager:
             self.io.tool_error("Tool manager not initialized.")
             return
@@ -2306,6 +2323,10 @@ Just show me the edits I need to make.
 
     def cmd_tools_move(self, args):
         "Move a tool to a different scope (local or global)"
+        if not isinstance(self.coder, AgentCoder):
+            self.io.tool_error("The /tools-move command is only available in agent mode.")
+            return
+
         if not hasattr(self.coder, "tool_manager") or not self.coder.tool_manager:
             self.io.tool_error("Tool manager not initialized.")
             return
@@ -2321,7 +2342,6 @@ Just show me the edits I need to make.
 
     async def cmd_tools_fix(self, args):
         "Tell the agent to fix a tool file or all tools in a directory"
-        from aider.coders.agent_coder import AgentCoder
         import os
         import glob
 
