@@ -2476,7 +2476,7 @@ Just show me the edits I need to make.
             for file_path in sorted(list(py_files_to_fix)):
                 # Make sure to use absolute path for loading
                 abs_file_path = self.coder.abs_root_path(file_path)
-                success, message = self.coder.tool_manager.load_tool(abs_file_path)
+                success, message = await self.coder.tool_manager.load_tool_async(abs_file_path)
                 if not success:
                     loading_errors.append((self.coder.get_rel_fname(abs_file_path), message))
                 else:
