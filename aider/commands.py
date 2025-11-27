@@ -2335,6 +2335,8 @@ Just show me the edits I need to make.
 
     def cmd_tools_move(self, args):
         "Move a tool to a different scope (local or global)"
+        from aider.coders.agent_coder import AgentCoder
+
         if not isinstance(self.coder, AgentCoder):
             self.io.tool_error("The /tools-move command is only available in agent mode.")
             return
