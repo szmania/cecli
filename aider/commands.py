@@ -2179,11 +2179,10 @@ Just show me the edits I need to make.
 
         # 1. Standard tools
         standard_tools = {}
-        if hasattr(self.coder, "_tool_registry"):
-            for norm_name, module in self.coder._tool_registry.items():
-                if hasattr(module, "get_tool_definition"):
-                    definition = module.get_tool_definition()
-                    function_def = definition.get("function", {})
+        if hasattr(self.coder, "tool_registry"):
+            for norm_name, tool_class in self.coder.tool_registry.items():
+                if hasattr(tool_class, "SCHEMA") and tool_class.SCHEMA:
+                    function_def = tool_class.SCHEMA.get("function", {})
                     name = function_def.get("name", norm_name)
                     description = function_def.get("description", "No description.")
                     standard_tools[name] = description
