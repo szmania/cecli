@@ -2344,18 +2344,18 @@ Just show me the edits I need to make.
         result = self.coder.tool_manager.move_tool(tool_name, scope)
         self.io.tool_output(result)
 
-    async def cmd_tools_fix(self, args):
-        "Tell the agent to fix a tool file or all tools in a directory"
+    async def cmd_tools_edit(self, args):
+        "Edit a tool file"
         import os
         import glob
 
         if not isinstance(self.coder, AgentCoder):
-            self.io.tool_error("The /tools-fix command is only available in agent mode.")
+            self.io.tool_error("The /tools-edit command is only available in agent mode.")
             return
 
         path_arg = args.strip()
         if not path_arg:
-            self.io.tool_error("Usage: /tools-fix <path_to_tool_file_or_dir>")
+            self.io.tool_error("Usage: /tools-edit <path_to_tool_file_or_dir>")
             return
 
         expanded_path = os.path.expanduser(path_arg)
@@ -2411,7 +2411,7 @@ Just show me the edits I need to make.
             if prompt_parts:
                 prompt_parts.append("\n---\n")
             prompt_parts.append(
-                "The following tools loaded successfully. What would you like to change?"
+                "The following tools loaded successfully. What would you like to edit?"
             )
             for rel_fname in successful_loads:
                 prompt_parts.append(f"- `{rel_fname}`")
