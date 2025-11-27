@@ -871,21 +871,7 @@ class Commands:
         res = list(map(str, matched_files))
         return res
 
-    async def cmd_add(self, args):
-        "Add files to the chat so aider can edit them or review them in detail"
-
-        if not args.strip():
-            all_files = self.coder.get_all_relative_files()
-            files_in_chat = self.coder.get_inchat_relative_files()
-            addable_files = sorted(set(all_files) - set(files_in_chat))
-            if not addable_files:
-                self.io.tool_output("No files available to add.")
-                return
-            selected_files = run_fzf(addable_files, multi=True)
-            if not selected_files:
-                return
-            args = " ".join([self.quote_fname(f) for f in selected_files])
-
+    async def _add_files(self, args):
         all_matched_files = set()
 
         filenames = parse_quoted_filenames(args)
@@ -999,6 +985,24 @@ class Commands:
                     ):
                         if hasattr(self.coder, "_calculate_context_block_tokens"):
                             self.coder._calculate_context_block_tokens()
+        return all_matched_files
+
+    async def cmd_add(self, args):
+        "Add files to the chat so aider can edit them or review them in detail"
+
+        if not args.strip():
+            all_files = self.coder.get_all_relative_files()
+            files_in_chat = self.coder.get_inchat_relative_files()
+            addable_files = sorted(set(all_files) - set(files_in_chat))
+            if not addable_files:
+                self.io.tool_output("No files available to add.")
+                return
+            selected_files = run_fzf(addable_files, multi=True)
+            if not selected_files:
+                return
+            args = " ".join([self.quote_fname(f) for f in selected_files])
+
+        await self._add_files(args)
 
         if self.coder.repo_map:
             map_tokens = self.coder.repo_map.max_map_tokens
@@ -2380,13 +2384,40 @@ Just show me the edits I need to make.
             return
 
         file_paths_str = " ".join([self.quote_fname(f) for f in sorted(list(py_files_to_fix))])
-        await self.cmd_add(file_paths_str)
+        await self._add_files(file_paths_str)
 
-        file_list_md = "\n- ".join(
-            [f"`{self.coder.get_rel_fname(f)}`" for f in sorted(list(py_files_to_fix))]
-        )
-        prompt = f"Fix the tools in the following files:\n- {file_list_md}"
-        self.io.set_placeholder(prompt)
+        loading_errors = []
+        successful_loads = []
+
+        if hasattr(self.coder, "tool_manager"):
+            for file_path in sorted(list(py_files_to_fix)):
+                # Make sure to use absolute path for loading
+                abs_file_path = self.coder.abs_root_path(file_path)
+                success, message = self.coder.tool_manager.load_tool(abs_file_path)
+                if not success:
+                    loading_errors.append((self.coder.get_rel_fname(abs_file_path), message))
+                else:
+                    successful_loads.append(self.coder.get_rel_fname(abs_file_path))
+
+        prompt_parts = []
+        if loading_errors:
+            prompt_parts.append(
+                "I tried to load the following tools but encountered errors. Please fix them:"
+            )
+            for rel_fname, error_msg in loading_errors:
+                prompt_parts.append(f"\n- `{rel_fname}`:\n  - Error: {error_msg}")
+
+        if successful_loads:
+            if prompt_parts:
+                prompt_parts.append("\n---\n")
+            prompt_parts.append(
+                "The following tools loaded successfully. What would you like to change?"
+            )
+            for rel_fname in successful_loads:
+                prompt_parts.append(f"- `{rel_fname}`")
+
+        if prompt_parts:
+            self.io.set_placeholder("\n".join(prompt_parts))
 
 
 def expand_subdir(file_path):

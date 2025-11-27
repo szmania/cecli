@@ -127,15 +127,13 @@ class ToolManager:
                         "execute": tool_class.execute,
                         "file_path": file_path,
                     }
-                    self.coder.io.tool_output(
-                        f"Loaded class-based tool '{tool_name}' from {file_path}"
-                    )
-                    return True
+                    msg = f"Loaded class-based tool '{tool_name}' from {file_path}"
+                    self.coder.io.tool_output(msg)
+                    return True, msg
                 else:
-                    self.coder.io.tool_warning(
-                        f"Class-based tool '{file_path}' is missing a name in its schema."
-                    )
-                    return False
+                    msg = f"Class-based tool '{file_path}' is missing a name in its schema."
+                    self.coder.io.tool_warning(msg)
+                    return False, msg
             # Check for old function-based tool format
             elif hasattr(module, "get_tool_definition") and hasattr(module, "_execute"):
                 definition = module.get_tool_definition()
@@ -146,23 +144,25 @@ class ToolManager:
                         "execute": module._execute,
                         "file_path": file_path,
                     }
-                    self.coder.io.tool_output(f"Loaded tool '{tool_name}' from {file_path}")
-                    return True
+                    msg = f"Loaded tool '{tool_name}' from {file_path}"
+                    self.coder.io.tool_output(msg)
+                    return True, msg
                 else:
-                    self.coder.io.tool_warning(
-                        f"Tool '{file_path}' is missing a name in its definition."
-                    )
-                    return False
+                    msg = f"Tool '{file_path}' is missing a name in its definition."
+                    self.coder.io.tool_warning(msg)
+                    return False, msg
             else:
-                self.coder.io.tool_warning(
+                msg = (
                     f"Tool '{file_path}' is not a valid tool file. It must either contain a"
                     " `Tool` class inheriting from `BaseTool` or `get_tool_definition()` and"
                     " `_execute()` functions."
                 )
-                return False
+                self.coder.io.tool_warning(msg)
+                return False, msg
         except Exception as e:
-            self.coder.io.tool_error(f"Failed to load tool from {file_path}: {e}")
-            return False
+            msg = f"Failed to load tool from {file_path}: {e}"
+            self.coder.io.tool_error(msg)
+            return False, msg
 
     def unload_tool(self, tool_name):
         if tool_name in self.tools:
