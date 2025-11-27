@@ -97,7 +97,11 @@ async def _execute(coder, description: str, file_name: str, scope: str = "local"
 
         cleaned_code = strip_fenced_code(generated_code)
         if not cleaned_code.strip():
-            return "Error: Generated tool code is empty after cleaning."
+            # Fallback: if no fenced code, maybe the whole response is code
+            if "def get_tool_definition():" in generated_code and "async def _execute(" in generated_code:
+                cleaned_code = generated_code
+            else:
+                return "Error: Generated tool code is empty after cleaning."
 
         # 7. Save and Load
         os.makedirs(tools_dir, exist_ok=True)
