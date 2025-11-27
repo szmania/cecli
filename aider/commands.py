@@ -2260,7 +2260,7 @@ Just show me the edits I need to make.
         self.io.tool_output(create_tool_result)
 
     async def cmd_tools_load(self, args):
-        "Load a tool from a file or glob pattern"
+        "Load a tool from a file or glob pattern, or a standard tool by name."
         from aider.coders.agent_coder import AgentCoder
 
         if not isinstance(self.coder, AgentCoder):
@@ -2273,18 +2273,47 @@ Just show me the edits I need to make.
 
         pattern = args.strip()
         if not pattern:
-            self.io.tool_error("Please provide a file path or glob pattern to load tools from.")
+            self.io.tool_error("Please provide a tool name, file path, or glob pattern to load.")
             return False
 
+        # --- Try to load a standard tool by name ---
+        if hasattr(self.coder, "unloaded_standard_tools"):
+            tool_to_load = None
+            # Check by norm_name and schema name
+            for norm_name, tool_class in self.coder.unloaded_standard_tools.items():
+                schema = tool_class.SCHEMA or {}
+                schema_name = schema.get("function", {}).get("name")
+                if pattern == norm_name or pattern == schema_name:
+                    tool_to_load = (norm_name, schema_name or norm_name)
+                    break
+
+            if tool_to_load:
+                norm_name, display_name = tool_to_load
+                if await self.io.confirm_ask(
+                    f"Are you sure you want to load the standard tool '{display_name}'?"
+                ):
+                    tool_class = self.coder.unloaded_standard_tools.pop(norm_name)
+                    self.coder.tool_registry[norm_name] = tool_class
+                    self.io.tool_output(f"Loaded standard tool '{display_name}'.")
+                return True
+
+        # --- If not a standard tool, load from file/glob ---
         # Expand user and environment variables
-        pattern = os.path.expanduser(os.path.expandvars(pattern))
+        expanded_pattern = os.path.expanduser(os.path.expandvars(pattern))
 
         # Use glob to find all matching file paths
-        potential_paths = glob.glob(pattern, recursive=True)
+        try:
+            potential_paths = glob.glob(expanded_pattern, recursive=True)
+        except Exception as e:
+            self.io.tool_error(f"Error with glob pattern '{expanded_pattern}': {e}")
+            return False
 
-        if not potential_paths:
+        if not potential_paths and not os.path.exists(expanded_pattern):
             self.io.tool_error(f"No files found matching pattern: {pattern}")
             return False
+
+        if not potential_paths and os.path.exists(expanded_pattern):
+            potential_paths = [expanded_pattern]
 
         file_paths_to_load = set()
         for path in potential_paths:
@@ -2311,27 +2340,69 @@ Just show me the edits I need to make.
 
         return all_successful
 
-    def cmd_tools_unload(self, args):
-        "Unload a custom tool"
+    async def cmd_tools_unload(self, args):
+        "Unload a standard or custom tool by name or file path."
         from aider.coders.agent_coder import AgentCoder
 
         if not isinstance(self.coder, AgentCoder):
             self.io.tool_error("The /tools-unload command is only available in agent mode.")
             return
 
-        if not hasattr(self.coder, "tool_manager") or not self.coder.tool_manager:
-            self.io.tool_error("Tool manager not initialized.")
+        arg = args.strip()
+        if not arg:
+            self.io.tool_error("Please provide the name or file path of the tool to unload.")
             return
 
-        tool_name = args.strip()
-        if not tool_name:
-            self.io.tool_error("Please provide the name of the tool to unload.")
+        # --- Try to find it in custom tools ---
+        tool_manager = getattr(self.coder, "tool_manager", None)
+        custom_tool_name = None
+        if tool_manager:
+            if arg in tool_manager.tools:
+                custom_tool_name = arg
+            else:
+                try:
+                    abs_path = os.path.abspath(arg)
+                    for name, tool_info in tool_manager.tools.items():
+                        if os.path.abspath(tool_info.get("file_path")) == abs_path:
+                            custom_tool_name = name
+                            break
+                except Exception:
+                    pass  # Not a valid path
+
+        if custom_tool_name:
+            if await self.io.confirm_ask(
+                f"Are you sure you want to unload the custom tool '{custom_tool_name}'?"
+            ):
+                tool_manager.unload_tool(custom_tool_name)
             return
 
-        if self.coder.tool_manager.unload_tool(tool_name):
-            self.io.tool_output(f"Tool '{tool_name}' unloaded.")
-        else:
-            self.io.tool_error(f"Tool '{tool_name}' not found.")
+        # --- Try to find it in standard tools ---
+        tool_registry = getattr(self.coder, "tool_registry", None)
+        standard_tool_norm_name = None
+        if tool_registry:
+            for norm_name, tool_class in tool_registry.items():
+                schema = tool_class.SCHEMA or {}
+                schema_name = schema.get("function", {}).get("name")
+                if arg == norm_name or arg == schema_name:
+                    standard_tool_norm_name = norm_name
+                    break
+
+        if standard_tool_norm_name:
+            schema_name = tool_registry[standard_tool_norm_name].SCHEMA.get(
+                "function", {}
+            ).get("name", standard_tool_norm_name)
+            if await self.io.confirm_ask(
+                f"Are you sure you want to unload the standard tool '{schema_name}'?"
+            ):
+                if not hasattr(self.coder, "unloaded_standard_tools"):
+                    self.coder.unloaded_standard_tools = {}
+
+                tool_class = tool_registry.pop(standard_tool_norm_name)
+                self.coder.unloaded_standard_tools[standard_tool_norm_name] = tool_class
+                self.io.tool_output(f"Unloaded standard tool '{schema_name}'.")
+            return
+
+        self.io.tool_error(f"Tool '{arg}' not found.")
 
     def cmd_tools_move(self, args):
         "Move a tool to a different scope (local or global)"
