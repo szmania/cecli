@@ -163,6 +163,10 @@ class ToolManager:
             self.coder.io.tool_error(msg)
             return False, msg
 
+    async def load_tool_async(self, file_path):
+        """Asynchronously loads a tool from a file path."""
+        return self.load_tool(file_path)
+
     def unload_tool(self, tool_name):
         if tool_name in self.tools:
             del self.tools[tool_name]

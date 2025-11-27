@@ -2359,6 +2359,8 @@ Just show me the edits I need to make.
         import os
         import glob
 
+        from aider.coders.agent_coder import AgentCoder
+
         if not isinstance(self.coder, AgentCoder):
             self.io.tool_error("The /tools-edit command is only available in agent mode.")
             return
