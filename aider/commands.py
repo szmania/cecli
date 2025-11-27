@@ -2313,6 +2313,8 @@ Just show me the edits I need to make.
 
     def cmd_tools_unload(self, args):
         "Unload a custom tool"
+        from aider.coders.agent_coder import AgentCoder
+
         if not isinstance(self.coder, AgentCoder):
             self.io.tool_error("The /tools-unload command is only available in agent mode.")
             return
