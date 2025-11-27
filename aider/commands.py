@@ -2216,21 +2216,31 @@ Just show me the edits I need to make.
         if not local_tools and not global_tools:
             self.io.tool_output("\nNo custom tools found.")
 
-    def cmd_tools_create(self, args):
-        "Create a new custom tool"
+    async def cmd_tools_create(self, args):
+        "Create a new custom tool. Usage: /tools-create <file_name.py> <description> [--scope <local|global>]"
+        scope = "local"
+        if "--scope global" in args:
+            scope = "global"
+            args = args.replace("--scope global", "").strip()
+        elif "--scope local" in args:
+            scope = "local"
+            args = args.replace("--scope local", "").strip()
+
         parts = args.split(maxsplit=1)
         if len(parts) < 2:
-            self.io.tool_error("Usage: /tools-create <file_name.py> <description>")
+            self.io.tool_error(
+                "Usage: /tools-create <file_name.py> <description> [--scope <local|global>]"
+            )
             return
 
         file_name, description = parts
         tool_call_params = {
             "description": description,
             "file_name": file_name,
-            "scope": "local",
+            "scope": scope,
         }
 
-        create_tool_result = create_tool._execute(self.coder, **tool_call_params)
+        create_tool_result = await create_tool._execute(self.coder, **tool_call_params)
         self.io.tool_output(create_tool_result)
 
     def cmd_tools_load(self, args):
