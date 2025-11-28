@@ -164,11 +164,7 @@ class ToolManager:
                 msg = f"Failed to load tool from {file_path}: {e}"
                 self.coder.io.tool_error(msg)
 
-                ok = await self.coder.io.confirm_ask(
-                    f"Attempt to fix the failed tool {file_path}?"
-                )
-                if not ok:
-                    return False, msg
+                self.coder.io.tool_output(f"Attempting to fix the failed tool {file_path}...")
 
                 # Add file to context and make it editable
                 self.coder.add_rel_fname(file_path)
