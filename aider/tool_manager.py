@@ -180,8 +180,13 @@ class ToolManager:
                     f"Please fix the code in `{file_path}`."
                 )
 
-                # Run the coder with the fix prompt
-                await self.coder.run(with_message=fix_prompt)
+                # Temporarily disable pretty output to avoid nested rich.live issues
+                original_pretty = self.coder.io.args.pretty
+                try:
+                    self.coder.io.args.pretty = False
+                    await self.coder.run(with_message=fix_prompt)
+                finally:
+                    self.coder.io.args.pretty = original_pretty
                 # Loop will continue and try to load again
 
     def unload_tool(self, tool_name):
