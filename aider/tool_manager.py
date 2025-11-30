@@ -15,6 +15,9 @@ class ToolManager:
 
     async def load_discovered_tools_async(self):
         """Loads all tools discovered in local and global tool directories."""
+        if getattr(self.coder, "is_fixing_tool", False):
+            return
+
         if not self.discovered_tool_files:
             return
 
@@ -164,6 +167,12 @@ class ToolManager:
                 msg = f"Failed to load tool from {file_path}: {e}"
                 self.coder.io.tool_error(msg)
 
+                res = await self.coder.io.confirm_ask(
+                    f"The tool at '{file_path}' failed to load. Do you want to try and fix it?"
+                )
+                if not res:
+                    return False, msg
+
                 self.coder.io.tool_output(f"Attempting to fix the failed tool {file_path}...")
 
                 # Add file to context and make it editable
@@ -179,10 +188,12 @@ class ToolManager:
                 # Temporarily disable pretty output to avoid nested rich.live issues
                 original_pretty = self.coder.args.pretty
                 try:
+                    self.coder.is_fixing_tool = True
                     self.coder.args.pretty = False
                     await self.coder.run(with_message=fix_prompt)
                 finally:
                     self.coder.args.pretty = original_pretty
+                    self.coder.is_fixing_tool = False
                 # Loop will continue and try to load again
 
     def unload_tool(self, tool_name):
