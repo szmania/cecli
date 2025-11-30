@@ -179,10 +179,24 @@ class ToolManager:
                 self.coder.add_rel_fname(file_path)
 
                 # Formulate a prompt for the LLM to fix the file
+                try:
+                    # Path to the prompt file
+                    prompt_path = (
+                        Path(__file__).parent / "coders" / "prompts" / "create_tool_prompt.md"
+                    )
+                    with open(prompt_path, "r") as f:
+                        tool_creation_instructions = f.read()
+                except FileNotFoundError:
+                    tool_creation_instructions = (
+                        "Please ensure the tool is a valid Python module with a `Tool` class"
+                        " inheriting from `BaseTool`."
+                    )
+
                 fix_prompt = (
+                    f"{tool_creation_instructions}\n\n"
                     f"The tool at '{file_path}' failed to load with this error:\n"
                     f"```\n{e}\n```\n\n"
-                    f"Please fix the code in `{file_path}`."
+                    f"Please fix the code in `{file_path}` according to the instructions above."
                 )
 
                 # Temporarily disable pretty output to avoid nested rich.live issues
