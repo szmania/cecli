@@ -2359,8 +2359,39 @@ Just show me the edits I need to make.
             self.io.tool_error("Please provide the name or file path of the tool to unload.")
             return
 
-        # --- Try to find it in custom tools ---
         tool_manager = getattr(self.coder, "tool_manager", None)
+
+        # --- Try to unload from a directory ---
+        if tool_manager:
+            expanded_path = os.path.expanduser(arg)
+            abs_path = os.path.abspath(expanded_path)
+
+            if os.path.isdir(abs_path):
+                tools_to_unload = []
+                for name, tool_info in tool_manager.tools.items():
+                    tool_path = tool_info.get("file_path")
+                    if tool_path and os.path.abspath(tool_path).startswith(abs_path):
+                        tools_to_unload.append(name)
+
+                if not tools_to_unload:
+                    self.io.tool_error(f"No loaded tools found in directory: {arg}")
+                    return
+
+                self.io.tool_output(f"Found {len(tools_to_unload)} tools to unload from '{arg}':")
+                for tool_name in sorted(tools_to_unload):
+                    self.io.tool_output(f"- {tool_name}")
+
+                if await self.io.confirm_ask(
+                    f"Are you sure you want to unload these {len(tools_to_unload)} tools?"
+                ):
+                    unloaded_count = 0
+                    for tool_name in tools_to_unload:
+                        if tool_manager.unload_tool(tool_name):
+                            unloaded_count += 1
+                    self.io.tool_output(f"Successfully unloaded {unloaded_count} tools.")
+                return
+
+        # --- Try to find it in custom tools ---
         custom_tool_name = None
         if tool_manager:
             if arg in tool_manager.tools:
@@ -2394,9 +2425,11 @@ Just show me the edits I need to make.
                     break
 
         if standard_tool_norm_name:
-            schema_name = tool_registry[standard_tool_norm_name].SCHEMA.get(
-                "function", {}
-            ).get("name", standard_tool_norm_name)
+            schema_name = (
+                tool_registry[standard_tool_norm_name]
+                .SCHEMA.get("function", {})
+                .get("name", standard_tool_norm_name)
+            )
             if await self.io.confirm_ask(
                 f"Are you sure you want to unload the standard tool '{schema_name}'?"
             ):
