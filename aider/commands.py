@@ -2233,7 +2233,7 @@ Just show me the edits I need to make.
             self.io.tool_output("\nNo custom tools found.")
 
     async def cmd_tools_create(self, args):
-        "Create a new custom tool. Usage: /tools-create <file_name.py> <description> [--scope <local|global>]"
+        "Create a new custom tool. Usage: /tools-create [<file_name.py>] <description> [--scope <local|global>]"
         from aider.coders.agent_coder import AgentCoder
 
         if not isinstance(self.coder, AgentCoder):
@@ -2248,14 +2248,42 @@ Just show me the edits I need to make.
             scope = "local"
             args = args.replace("--scope local", "").strip()
 
-        parts = args.split(maxsplit=1)
-        if len(parts) < 2:
+        if not args:
             self.io.tool_error(
-                "Usage: /tools-create <file_name.py> <description> [--scope <local|global>]"
+                "Usage: /tools-create [<file_name.py>] <description> [--scope <local|global>]"
             )
             return
 
-        file_name, description = parts
+        parts = args.split(maxsplit=1)
+
+        file_name = None
+        description = None
+
+        first_part = parts[0]
+        if first_part.endswith(".py"):
+            if len(parts) < 2:
+                self.io.tool_error("Please provide a description for the tool after the file name.")
+                return
+            file_name = first_part
+            description = parts[1]
+        else:
+            description = args
+            # Generate filename from description
+            temp_desc = description.lower()
+            # More generic prefix removal
+            temp_desc = re.sub(r"^(create|make|build)\s+(a\s+)?tool\s+(that|to)\s+", "", temp_desc)
+
+            # take first 4 words
+            words = re.findall(r"\b\w+\b", temp_desc)
+            file_name_words = words[:4]
+            if not file_name_words:
+                self.io.tool_error("Could not generate a tool name from the description.")
+                return
+
+            file_name_base = "_".join(file_name_words)
+            file_name = file_name_base + ".py"
+            self.io.tool_output(f"Generated tool file name: {file_name}")
+
         tool_call_params = {
             "description": description,
             "file_name": file_name,
