@@ -35,3 +35,4 @@ aider/_version.py
 *.pyc
 .aider*
 env/
+.aider*
