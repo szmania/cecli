@@ -2190,7 +2190,10 @@ Just show me the edits I need to make.
         # 1. Standard tools
         standard_tools = {}
         if hasattr(self.coder, "tool_registry"):
+            unloaded_standard = getattr(self.coder, "unloaded_standard_tools", {})
             for norm_name, tool_class in self.coder.tool_registry.items():
+                if norm_name in unloaded_standard:
+                    continue
                 if hasattr(tool_class, "SCHEMA") and tool_class.SCHEMA:
                     function_def = tool_class.SCHEMA.get("function", {})
                     name = function_def.get("name", norm_name)
@@ -2205,9 +2208,12 @@ Just show me the edits I need to make.
             local_tools_dir = tm._get_local_tools_dir()
 
             for name, tool_info in tm.tools.items():
+                file_path = tool_info.get("file_path", "")
+                if file_path and file_path in tm.unloaded_tools:
+                    continue
+
                 definition = tool_info.get("definition", {})
                 description = definition.get("function", {}).get("description", "No description.")
-                file_path = tool_info.get("file_path", "")
 
                 if local_tools_dir and file_path.startswith(local_tools_dir):
                     local_tools[name] = description
