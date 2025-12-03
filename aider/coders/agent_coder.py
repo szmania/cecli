@@ -285,17 +285,17 @@ class AgentCoder(Coder):
             if hasattr(tool_module, "SCHEMA"):
                 schemas.append(tool_module.SCHEMA)
 
+        # Add custom tools from ToolManager
+        if hasattr(self, "tool_manager") and self.tool_manager:
+            custom_tools = self.tool_manager.get_tool_definitions()
+            schemas.extend(custom_tools)
+
         return schemas
 
     async def initialize_mcp_tools(self):
         await super().initialize_mcp_tools()
 
         local_tools = self.get_local_tool_schemas()
-
-        # Add custom tools from ToolManager
-        if hasattr(self, "tool_manager") and self.tool_manager:
-            custom_tools = self.tool_manager.get_tool_definitions()
-            local_tools.extend(custom_tools)
 
         if not local_tools:
             return
