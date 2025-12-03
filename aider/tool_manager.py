@@ -10,6 +10,7 @@ class ToolManager:
     def __init__(self, coder):
         self.coder = coder
         self.tools = {}
+        self.unloaded_tools = set()
         self.load_dot_env_files()
         self.discovered_tool_files = self.discover_tools()
 
@@ -23,6 +24,8 @@ class ToolManager:
 
         self.coder.io.tool_output("Loading custom tools...")
         for file_path in self.discovered_tool_files:
+            if file_path in self.unloaded_tools:
+                continue
             await self.load_tool_async(file_path)
 
     def _get_local_tools_dir(self):
@@ -105,6 +108,9 @@ class ToolManager:
 
     async def load_tool_async(self, file_path):
         """Asynchronously loads a tool from a file path, with an option to fix it on failure."""
+        if file_path in self.unloaded_tools:
+            self.unloaded_tools.remove(file_path)
+
         while True:
             try:
                 module_name = Path(file_path).stem
@@ -212,6 +218,11 @@ class ToolManager:
 
     def unload_tool(self, tool_name):
         if tool_name in self.tools:
+            tool_info = self.tools[tool_name]
+            file_path = tool_info.get("file_path")
+            if file_path:
+                self.unloaded_tools.add(file_path)
+
             del self.tools[tool_name]
             self.coder.io.tool_output(f"Unloaded tool '{tool_name}'.")
             return True
