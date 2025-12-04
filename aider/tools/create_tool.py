@@ -2,7 +2,12 @@ import os
 from pathlib import Path
 import importlib.resources
 import litellm
+import asyncio
+import re
+import sys
+
 from aider.exceptions import LiteLLMExceptions
+from aider.run_cmd import run_cmd
 from aider.tools.utils.base_tool import BaseTool
 
 
@@ -178,10 +183,72 @@ class Tool(BaseTool):
             with open(file_path, "w", encoding="utf-8") as f:
                 f.write(cleaned_code)
 
+            # 8. Detect and handle dependencies
+            dependencies = []
+            install_comment_pattern = re.compile(r"#.*pip install\s+(.*)", re.IGNORECASE)
+            for line in cleaned_code.splitlines():
+                match = install_comment_pattern.search(line)
+                if match:
+                    packages = match.group(1).strip().split()
+                    dependencies.extend(p for p in packages if p)
+
+            final_message_suffix = " It is now loaded and available for use."
+
+            if dependencies:
+                requirements_path = os.path.join(tools_dir, "requirements.txt")
+                existing_reqs = set()
+                if os.path.exists(requirements_path):
+                    with open(requirements_path, "r", encoding="utf-8") as f:
+                        existing_reqs = set(line.strip() for line in f if line.strip())
+
+                new_deps = set(dependencies) - existing_reqs
+
+                if new_deps:
+                    sorted_new_deps = sorted(list(new_deps))
+                    with open(requirements_path, "a", encoding="utf-8") as f:
+                        for dep in sorted_new_deps:
+                            f.write(f"\n{dep}")
+
+                    deps_str = ", ".join(sorted_new_deps)
+                    coder.io.tool_output(
+                        f"Detected and added new dependencies to {requirements_path}: {deps_str}"
+                    )
+
+                    if await coder.io.confirm_ask("Do you want to install these dependencies now?"):
+                        install_command = (
+                            f'"{sys.executable}" -m pip install -r "{requirements_path}"'
+                        )
+                        coder.io.tool_output(f"Running: {install_command}")
+
+                        exit_code, output = await asyncio.to_thread(run_cmd, install_command)
+
+                        if exit_code == 0:
+                            coder.io.tool_output("Dependencies installed successfully.")
+                            final_message_suffix = (
+                                "\nDependencies installed. The tool is now loaded and available for"
+                                " use."
+                            )
+                        else:
+                            coder.io.tool_error("Dependency installation failed.")
+                            coder.io.tool_error(output)
+                            final_message_suffix = (
+                                "\nSome dependencies failed to install. The tool may not work"
+                                " correctly. You may need to install them manually from"
+                                f" '{requirements_path}'."
+                            )
+                    else:
+                        final_message_suffix = (
+                            "\nDependencies detected but not installed. The tool may fail to load."
+                            f" You can install them later from '{requirements_path}'."
+                        )
+                else:
+                    coder.io.tool_output("Detected dependencies are already in requirements.txt.")
+
             if hasattr(coder, "tool_manager"):
                 await coder.tool_manager.load_tool_async(file_path)
 
-            return f"Successfully created tool '{file_name}' in {scope} scope. It is now loaded and available for use."
+            success_msg = f"Successfully created tool '{file_name}' in {scope} scope."
+            return success_msg + final_message_suffix
 
         except LiteLLMExceptions as e:
             return f"Error: Model API call failed: {e}"
