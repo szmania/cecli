@@ -1,6 +1,7 @@
 import ast
 import asyncio
 import base64
+import difflib
 import json
 import locale
 import os
@@ -314,6 +315,62 @@ class AgentCoder(Coder):
         if "local_tools" not in [name for name, _ in self.mcp_tools]:
             self.mcp_tools.append((local_server.name, local_tools))
 
+    def _find_tool(self, tool_name):
+        """
+        Find a tool by name, with case-insensitive and fuzzy matching.
+        Returns the canonical tool name and its type ('standard' or 'custom').
+        """
+        norm_tool_name = tool_name.lower()
+
+        # 1. Exact match on normalized standard tool name
+        if norm_tool_name in self.tool_registry:
+            return norm_tool_name, "standard"
+
+        # 2. Case-insensitive match on custom tools
+        custom_tools = {}
+        if hasattr(self, "tool_manager") and self.tool_manager:
+            for custom_tool_name in self.tool_manager.tools.keys():
+                custom_tools[custom_tool_name.lower()] = custom_tool_name
+
+        if norm_tool_name in custom_tools:
+            return custom_tools[norm_tool_name], "custom"
+
+        # 3. Fuzzy matching
+        all_tool_names_map = {n.lower(): n for n in self.tool_registry.keys()}
+        all_tool_names_map.update(custom_tools)
+
+        all_tool_names_lower = list(all_tool_names_map.keys())
+
+        # Create variations of user input for better matching
+        user_tool_name_variations = {
+            norm_tool_name,
+            norm_tool_name.replace(" ", ""),
+            norm_tool_name.replace(" ", "_"),
+            norm_tool_name.replace("-", ""),
+            norm_tool_name.replace("-", "_"),
+        }
+
+        best_match_lower = None
+        for variation in user_tool_name_variations:
+            # Use a slightly lower cutoff for more flexibility
+            matches = difflib.get_close_matches(variation, all_tool_names_lower, n=1, cutoff=0.7)
+            if matches:
+                best_match_lower = matches[0]
+                break
+
+        if best_match_lower:
+            canonical_name = all_tool_names_map[best_match_lower]
+            self.io.tool_warning(
+                f"Tool '{tool_name}' not found. Using closest match '{canonical_name}'."
+            )
+            # Now determine if the best_match is standard or custom
+            if canonical_name.lower() in self.tool_registry:
+                return canonical_name.lower(), "standard"
+            else:
+                return canonical_name, "custom"
+
+        return None, None
+
     async def _execute_local_tool_calls(self, tool_calls_list):
         tool_responses = []
         for tool_call in tool_calls_list:
@@ -339,13 +396,12 @@ class AgentCoder(Coder):
                     parsed_args_list.append({})  # For tool calls with no arguments
 
                 all_results_content = []
-                norm_tool_name = tool_name.lower()
+                canonical_tool_name, tool_type = self._find_tool(tool_name)
 
                 tasks = []
 
-                # Use the tool registry for execution
-                if norm_tool_name in self.tool_registry:
-                    tool_module = self.tool_registry[norm_tool_name]
+                if tool_type == "standard":
+                    tool_module = self.tool_registry[canonical_tool_name]
                     for params in parsed_args_list:
                         # Use the process_response function from the tool module
                         result = tool_module.process_response(self, params)
@@ -354,27 +410,38 @@ class AgentCoder(Coder):
                             tasks.append(result)
                         else:
                             tasks.append(asyncio.to_thread(lambda: result))
-                else:
-                    # Handle MCP tools for tools not in registry
+                elif tool_type == "custom":
+                    # Handle custom tools
                     if self.mcp_tools:
+                        server_found = False
                         for server_name, server_tools in self.mcp_tools:
                             if any(
-                                t.get("function", {}).get("name") == norm_tool_name
+                                t.get("function", {}).get("name") == canonical_tool_name
                                 for t in server_tools
                             ):
                                 server = next(
-                                    (s for s in self.mcp_servers if s.name == server_name), None
+                                    (s for s in self.mcp_servers if s.name == server_name),
+                                    None,
                                 )
                                 if server:
                                     for params in parsed_args_list:
                                         tasks.append(
-                                            self._execute_mcp_tool(server, norm_tool_name, params)
+                                            self._execute_mcp_tool(
+                                                server, canonical_tool_name, params
+                                            )
                                         )
+                                    server_found = True
                                     break
-                        else:
-                            all_results_content.append(f"Error: Unknown tool name '{tool_name}'")
+                        if not server_found:
+                            all_results_content.append(
+                                "Error: Could not find server for custom tool"
+                                f" '{canonical_tool_name}'"
+                            )
                     else:
-                        all_results_content.append(f"Error: Unknown tool name '{tool_name}'")
+                        all_results_content.append("Error: No custom tool servers configured.")
+                else:
+                    # Tool not found
+                    all_results_content.append(f"Error: Unknown tool name '{tool_name}'")
 
                 if tasks:
                     task_results = await asyncio.gather(*tasks)
