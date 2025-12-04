@@ -449,6 +449,37 @@ class AgentCoder(Coder):
 
                 result_message = "\n\n".join(all_results_content)
 
+            except (ImportError, ModuleNotFoundError) as e:
+                package_name = self._extract_package_name_from_error(str(e))
+                if package_name:
+                    canonical_tool_name, tool_type = self._find_tool(tool_name)
+                    if tool_type == "custom":
+                        # Assumes tool_manager has a method to get the file path of a tool.
+                        if hasattr(self, "tool_manager") and self.tool_manager:
+                            tool_file_path = self.tool_manager.get_tool_path(canonical_tool_name)
+                            if tool_file_path:
+                                result_message = self._handle_missing_package(
+                                    canonical_tool_name, package_name, tool_file_path
+                                )
+                            else:
+                                result_message = (
+                                    "Error: Could not find file for tool"
+                                    f" '{canonical_tool_name}'."
+                                )
+                        else:
+                            result_message = (
+                                "Error: ToolManager not available to find path for tool"
+                                f" '{canonical_tool_name}'."
+                            )
+                    else:
+                        # It's a standard tool, should not have missing packages unless the
+                        # aider install is broken.
+                        result_message = f"Error executing built-in tool {tool_name}: {e}"
+                else:
+                    result_message = f"Error executing {tool_name}: {e}"
+                self.io.tool_error(
+                    f"Error during {tool_name} execution: {e}\n{traceback.format_exc()}"
+                )
             except Exception as e:
                 result_message = f"Error executing {tool_name}: {e}"
                 self.io.tool_error(
@@ -463,6 +494,64 @@ class AgentCoder(Coder):
                 }
             )
         return tool_responses
+
+    def _extract_package_name_from_error(self, error_message):
+        """
+        Extracts a package name from an ImportError or ModuleNotFoundError message.
+        """
+        # Patterns to find package names in import-related errors
+        # Order matters, more specific should come first if there's overlap.
+        patterns = [
+            r"No module named '([^']*)'",
+            r"cannot import name '[^']*' from '([^']*)'",  # Catches from part
+            r"Missing optional dependency '([^']*)'",
+            r"Could not find module '([^']*)'",
+        ]
+        for pattern in patterns:
+            match = re.search(pattern, error_message)
+            if match:
+                # For "cannot import name '...' from '...'", the second group is the package
+                if " from " in pattern and len(match.groups()) > 1:
+                    return match.group(2).split(".")[0]  # take top level package
+                return match.group(1).split(".")[0]  # take top level package
+        return None
+
+    def _handle_missing_package(self, tool_name, package_name, tool_file_path):
+        """
+        Handles a missing package dependency for a custom tool.
+        """
+        try:
+            tool_dir = os.path.dirname(tool_file_path)
+            requirements_path = os.path.join(tool_dir, "requirements.txt")
+
+            # Read existing requirements if any
+            if os.path.exists(requirements_path):
+                with open(requirements_path, "r") as f:
+                    existing_packages = [line.strip() for line in f.readlines()]
+            else:
+                existing_packages = []
+
+            # Add new package if not already there (case-insensitive check)
+            if not any(p.lower() == package_name.lower() for p in existing_packages):
+                with open(requirements_path, "a") as f:
+                    if existing_packages:  # add newline if file is not empty
+                        f.write("\n")
+                    f.write(package_name)
+
+            # Propose solution to the LLM, so it can ask the user.
+            install_command = f'pip install -r "{requirements_path}"'
+            result_message = (
+                f"Error: Tool '{tool_name}' failed because the required package '{package_name}' is"
+                " not installed. "
+                f"I have updated '{requirements_path}' to include this dependency. "
+                "Please ask the user for confirmation to run the following command to install it,"
+                " then retry the tool call:\n"
+                f"```sh\n{install_command}\n```"
+            )
+            return result_message
+
+        except Exception as e:
+            return f"Error while trying to handle missing package '{package_name}': {e}"
 
     async def _execute_mcp_tool(self, server, tool_name, params):
         """Helper to execute a single MCP tool call, created from legacy format."""
