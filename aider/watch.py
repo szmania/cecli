@@ -70,12 +70,11 @@ class FileWatcher:
         r"(?:#|//|--|;+) *(ai\b.*|ai\b.*|.*\bai[?!]?) *$", re.IGNORECASE
     )
 
-    def __init__(self, coder, gitignores=None, verbose=False, analytics=None, root=None):
+    def __init__(self, coder, gitignores=None, verbose=False, root=None):
         self.coder = coder
         self.io = coder.io
         self.root = Path(root) if root else Path(coder.root)
         self.verbose = verbose
-        self.analytics = analytics
         self.stop_event = None
         self.watcher_thread = None
         self.changed_files = set()
@@ -190,8 +189,6 @@ class FileWatcher:
 
             if fname in self.coder.abs_fnames:
                 continue
-            if self.analytics:
-                self.analytics.event("ai-comments file-add")
             self.coder.abs_fnames.add(fname)
             rel_fname = self.coder.get_rel_fname(fname)
             if not added:
@@ -206,8 +203,6 @@ class FileWatcher:
                 )
             return ""
 
-        if self.analytics:
-            self.analytics.event("ai-comments execute")
         self.io.tool_output("Processing your request...")
 
         if has_action == "!":

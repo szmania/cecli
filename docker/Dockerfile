@@ -70,4 +70,4 @@ RUN uv pip install . && \
 # Switch to appuser
 USER appuser
 
-ENTRYPOINT ["/venv/bin/aider"]
+ENTRYPOINT ["/venv/bin/aider-ce"]

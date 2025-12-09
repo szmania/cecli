@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Ignore everything
 *
 
@@ -16,6 +17,7 @@
 # Specific Files
 !/.dockerignore
 !/.flake8
+!/.gitattributes
 !/.gitignore
 !/.pre-commit-config.yaml
 !/CHANGELOG.md
@@ -30,9 +32,49 @@
 !/requirements.txt
 
 # Ignore specific files
+.aider*
 aider/__version__.py
 aider/_version.py
 *.pyc
-.aider*
 env/
+>>>>>>> b36f2673e0a089faa74baa7daef4f23188a739ff
+=======
+# Ignore everything
+*
+
+# But descend into directories
+!*/
+
+# Recursively allow files under subtree
+!/.github/**
+!/aider/**
+!/benchmark/**
+!/docker/**
+!/requirements/**
+!/scripts/**
+!/tests/**
+
+# Specific Files
+!/.dockerignore
+!/.flake8
+!/.gitattributes
+!/.gitignore
+!/.pre-commit-config.yaml
+!/CHANGELOG.md
+!/CNAME
+!/CONTRIBUTING.metadata
+!/HISTORY.md
+!/LICENSE.txt
+!/MANIFEST.in
+!/pyproject.toml
+!/pytest.ini
+!/README.md
+!/requirements.txt
+
+# Ignore specific files
 .aider*
+aider/__version__.py
+aider/_version.py
+*.pyc
+env/
+>>>>>>> b36f2673e0a089faa74baa7daef4f23188a739ff

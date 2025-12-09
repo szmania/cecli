@@ -55,7 +55,7 @@ async def install_upgrade(io, latest_version=None):
     )
 
     if success:
-        io.tool_output("Re-run aider to use new version.")
+        io.tool_output("Re-run aider-ce to use new version.")
         sys.exit()
 
     return
@@ -84,8 +84,9 @@ async def check_version(io, just_check=False, verbose=False):
             io.tool_output(f"Current version: {current_version}")
             io.tool_output(f"Latest version: {latest_version}")
 
-        is_update_available = packaging.version.parse(latest_version) > packaging.version.parse(
-            current_version
+        is_update_available = (
+            packaging.version.parse(latest_version).release
+            > packaging.version.parse(current_version).release
         )
     except Exception as err:
         io.tool_error(f"Error checking pypi for new version: {err}")

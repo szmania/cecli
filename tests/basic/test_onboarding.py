@@ -19,13 +19,6 @@ from aider.onboarding import (
 )
 
 
-# Mock the Analytics class as it's used in some functions
-class DummyAnalytics:
-    def event(self, *args, **kwargs):
-        pass
-
-
-# Mock the InputOutput class
 class DummyIO:
     def tool_output(self, *args, **kwargs):
         pass
@@ -292,8 +285,7 @@ class TestOnboarding(unittest.TestCase):
         """Test select_default_model returns args.model if provided."""
         args = argparse.Namespace(model="specific-model")
         io_mock = DummyIO()
-        analytics_mock = DummyAnalytics()
-        selected_model = await select_default_model(args, io_mock, analytics_mock)
+        selected_model = await select_default_model(args, io_mock)
         self.assertEqual(selected_model, "specific-model")
         mock_try_select.assert_not_called()
         mock_offer_oauth.assert_not_called()
@@ -305,17 +297,14 @@ class TestOnboarding(unittest.TestCase):
         args = argparse.Namespace(model=None)  # No model specified
         io_mock = DummyIO()
         io_mock.tool_warning = MagicMock()  # Track warnings
-        analytics_mock = DummyAnalytics()
-        analytics_mock.event = MagicMock()  # Track events
 
-        selected_model = await select_default_model(args, io_mock, analytics_mock)
+        selected_model = await select_default_model(args, io_mock)
 
         self.assertEqual(selected_model, "gpt-4o")
         mock_try_select.assert_called_once()
         io_mock.tool_warning.assert_called_once_with(
             "Using gpt-4o model with API key from environment."
         )
-        analytics_mock.event.assert_called_once_with("auto_model_selection", model="gpt-4o")
         mock_offer_oauth.assert_not_called()
 
     @patch(
@@ -330,13 +319,12 @@ class TestOnboarding(unittest.TestCase):
         io_mock = DummyIO()
         io_mock.tool_warning = MagicMock()
         io_mock.offer_url = MagicMock()
-        analytics_mock = DummyAnalytics()
 
-        selected_model = await select_default_model(args, io_mock, analytics_mock)
+        selected_model = await select_default_model(args, io_mock)
 
         self.assertIsNone(selected_model)
         self.assertEqual(mock_try_select.call_count, 2)  # Called before and after oauth attempt
-        mock_offer_oauth.assert_called_once_with(io_mock, analytics_mock)
+        mock_offer_oauth.assert_called_once_with(io_mock)
         io_mock.tool_warning.assert_called_once_with(
             "No LLM model was specified and no API keys were provided."
         )
@@ -356,13 +344,12 @@ class TestOnboarding(unittest.TestCase):
         args = argparse.Namespace(model=None)
         io_mock = DummyIO()
         io_mock.tool_warning = MagicMock()
-        analytics_mock = DummyAnalytics()
 
-        selected_model = await select_default_model(args, io_mock, analytics_mock)
+        selected_model = await select_default_model(args, io_mock)
 
         self.assertEqual(selected_model, "openrouter/deepseek/deepseek-r1:free")
         self.assertEqual(mock_try_select.call_count, 2)  # Called before and after oauth
-        mock_offer_oauth.assert_called_once_with(io_mock, analytics_mock)
+        mock_offer_oauth.assert_called_once_with(io_mock)
         # Only one warning is expected: "No LLM model..."
         self.assertEqual(io_mock.tool_warning.call_count, 1)
         io_mock.tool_warning.assert_called_once_with(
@@ -380,17 +367,13 @@ class TestOnboarding(unittest.TestCase):
         """Test offer_openrouter_oauth when user confirms and OAuth succeeds."""
         io_mock = DummyIO()
         io_mock.confirm_ask = MagicMock(return_value=True)  # User says yes
-        analytics_mock = DummyAnalytics()
-        analytics_mock.event = MagicMock()
 
-        result = await offer_openrouter_oauth(io_mock, analytics_mock)
+        result = await offer_openrouter_oauth(io_mock)
 
         self.assertTrue(result)
         io_mock.confirm_ask.assert_called_once()
-        mock_start_oauth.assert_called_once_with(io_mock, analytics_mock)
+        mock_start_oauth.assert_called_once_with(io_mock)
         self.assertEqual(os.environ.get("OPENROUTER_API_KEY"), "new_or_key")
-        analytics_mock.event.assert_any_call("oauth_flow_initiated", provider="openrouter")
-        analytics_mock.event.assert_any_call("oauth_flow_success")
         # Clean up env var
         del os.environ["OPENROUTER_API_KEY"]
 
@@ -401,35 +384,28 @@ class TestOnboarding(unittest.TestCase):
         io_mock = DummyIO()
         io_mock.confirm_ask = MagicMock(return_value=True)  # User says yes
         io_mock.tool_error = MagicMock()
-        analytics_mock = DummyAnalytics()
-        analytics_mock.event = MagicMock()
 
-        result = await offer_openrouter_oauth(io_mock, analytics_mock)
+        result = await offer_openrouter_oauth(io_mock)
 
         self.assertFalse(result)
         io_mock.confirm_ask.assert_called_once()
-        mock_start_oauth.assert_called_once_with(io_mock, analytics_mock)
+        mock_start_oauth.assert_called_once_with(io_mock)
         self.assertNotIn("OPENROUTER_API_KEY", os.environ)
         io_mock.tool_error.assert_called_once_with(
             "OpenRouter authentication did not complete successfully."
         )
-        analytics_mock.event.assert_any_call("oauth_flow_initiated", provider="openrouter")
-        analytics_mock.event.assert_any_call("oauth_flow_failure")
 
     @patch("aider.onboarding.start_openrouter_oauth_flow")
     async def test_offer_openrouter_oauth_confirm_no(self, mock_start_oauth):
         """Test offer_openrouter_oauth when user declines."""
         io_mock = DummyIO()
         io_mock.confirm_ask = MagicMock(return_value=False)  # User says no
-        analytics_mock = DummyAnalytics()
-        analytics_mock.event = MagicMock()
 
-        result = await offer_openrouter_oauth(io_mock, analytics_mock)
+        result = await offer_openrouter_oauth(io_mock)
 
         self.assertFalse(result)
         io_mock.confirm_ask.assert_called_once()
         mock_start_oauth.assert_not_called()
-        analytics_mock.event.assert_not_called()  # No OAuth events if declined
 
     # --- More complex test for start_openrouter_oauth_flow (simplified) ---
     # This test focuses on the successful path, mocking heavily

@@ -112,7 +112,7 @@ def color_markers(coder):
     Args:
         coder: An instance of base_coder
     """
-    color_start = "[blue]" if coder.pretty else ""
-    color_end = "[/blue]" if coder.pretty else ""
+    color_start = "[bright_cyan]" if coder.pretty else ""
+    color_end = "[/bright_cyan]" if coder.pretty else ""
 
     return color_start, color_end

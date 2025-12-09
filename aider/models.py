@@ -12,7 +12,6 @@ from dataclasses import dataclass, fields
 from pathlib import Path
 from typing import Optional, Union
 
-import json5
 import yaml
 from PIL import Image
 
@@ -957,29 +956,18 @@ class Model(ModelSettings):
             kwargs["temperature"] = temperature
 
         # `tools` is for modern tool usage. `functions` is for legacy/forced calls.
-        # This handles `base_coder` sending both with same content for `navigator_coder`.
-        effective_tools = []
-        if tools:
-            effective_tools.extend(tools)
+        # This handles `base_coder` sending both with same content for `agent_coder`.
+        effective_tools = tools
 
-        if functions:
-            # Convert legacy `functions` to `tools` format and add them
-            effective_tools.extend([dict(type="function", function=f) for f in functions])
+        if effective_tools is None and functions:
+            # Convert legacy `functions` to `tools` format if `tools` isn't provided.
+            effective_tools = [dict(type="function", function=f) for f in functions]
 
         if effective_tools:
-            # Deduplicate tools based on function name
-            seen_tool_names = set()
-            deduped_tools = []
-            for tool in effective_tools:
-                tool_name = tool.get("function", {}).get("name")
-                if tool_name and tool_name not in seen_tool_names:
-                    deduped_tools.append(tool)
-                    seen_tool_names.add(tool_name)
-            effective_tools = deduped_tools
             kwargs["tools"] = effective_tools
 
         # Forcing a function call is for legacy style `functions` with a single function.
-        # This is used by ArchitectCoder and not intended for NavigatorCoder's tools.
+        # This is used by ArchitectCoder and not intended for AgentCoder's tools.
         if functions and len(functions) == 1:
             function = functions[0]
             if "name" in function:
@@ -1005,11 +993,19 @@ class Model(ModelSettings):
         kwargs["messages"] = messages
         kwargs["timeout"] = self.request_timeout
 
-        # Cache System Prompts When Possible
+        # Per this: https://github.com/BerriAI/litellm/issues/10226
+        # The first and second to last messages are cache optimal
+        # Since caches are also written to incrementally and you need
+        # the past and current states to properly append and gain
+        # efficiencies/savings in cache writing
         kwargs["cache_control_injection_points"] = [
             {
                 "location": "message",
-                "role": "system",
+                "index": -1,
+            },
+            {
+                "location": "message",
+                "index": -2,
             },
         ]
 
@@ -1152,7 +1148,7 @@ def register_litellm_models(model_fnames):
             data = Path(model_fname).read_text()
             if not data.strip():
                 continue
-            model_def = json5.loads(data)
+            model_def = json.loads(data)
             if not model_def:
                 continue
 

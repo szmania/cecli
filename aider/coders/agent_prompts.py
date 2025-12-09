@@ -27,7 +27,7 @@ class AgentPrompts(CoderPrompts):
 1.  **Plan**: Determine the necessary changes. Use the `UpdateTodoList` tool to manage your plan. Always begin by the todo list.
 2.  **Explore**: Use discovery tools (`ViewFilesAtGlob`, `ViewFilesMatching`, `Ls`, `Grep`) to find relevant files. These tools add files to context as read-only. Use `Grep` first for broad searches to avoid context clutter. Concisely describe your search strategy with the `Thinking` tool.
 3.  **Think**: Given the contents of your exploration, concisely reason through the edits with the `Thinking` tool that need to be made to accomplish the goal. For complex edits, briefly outline your plan for the user.
-4.  **Execute**: Use the appropriate editing tool. Remember to use `MakeEditable` on a file before modifying it. Break large edits (those greater than 100 lines) into multiple steps
+4.  **Execute**: Use the appropriate editing tool. Remember to use `MakeEditable` on a file before modifying it. Break large edits (those greater than ~100 lines) into multiple smaller steps. Proactively use skills if they are available
 5.  **Verify & Recover**: After every edit, check the resulting diff snippet. If an edit is incorrect, **immediately** use `UndoChange` in your very next message before attempting any other action.
 6.  **Finished**: Use the `Finished` tool when all tasks and changes needed to accomplish the goal are finished
 
@@ -54,21 +54,11 @@ Use these for precision and safety.
 - **Text/Block Manipulation**: `ReplaceText` (Preferred for the majority of edits), `InsertBlock`, `DeleteBlock`, `ReplaceAll` (use with `dry_run=True` for safety).
 - **Line-Based Edits**: `ReplaceLine(s)`, `DeleteLine(s)`, `IndentLines`.
 - **Refactoring & History**: `ExtractLines`, `ListChanges`, `UndoChange`.
+- **Skill Management**: `LoadSkill`, `RemoveSkill`
 
 **MANDATORY Safety Protocol for Line-Based Tools:** Line numbers are fragile. You **MUST** use a two-turn process:
 1.  **Turn 1**: Use `ShowNumberedContext` to get the exact, current line numbers.
-2.  **Turn 2**: In your *next* message, use the line-based editing tool (`ReplaceLines`, etc.) with the verified numbers.
-
-### 2. SEARCH/REPLACE (Last Resort Only)
-Use this format **only** when granular tools are demonstrably insufficient for the task (e.g., a complex, non-contiguous pattern change). Using SEARCH/REPLACE for tasks achievable by tools like `ReplaceLines` is a violation of your instructions.
-
-**You MUST include a justification comment explaining why granular tools cannot be used.**
-
-Justification: I'm using SEARCH/REPLACE because [specific reason granular tools are insufficient].
-path/to/file.ext <<<<<<< SEARCH Original code to be replaced.
-New code to insert.
-
-REPLACE
+2.  **Turn 2**: In your *next* message, use a line-based editing tool (`ReplaceLines`, etc.) with the verified numbers.
 
 </context>
 
@@ -99,9 +89,9 @@ I am working with code in a git repository. Here are summaries of some files:
 <context name="critical_reminders">
 ## Reminders
 - Any tool call automatically continues to the next turn. Provide no tool calls in your final answer.
-- Prioritize granular tools. Using SEARCH/REPLACE unnecessarily is incorrect.
-- For SEARCH/REPLACE, you MUST provide a justification.
 - Use context blocks (directory structure, git status) to orient yourself.
+- Remove files you are done with viewing/editing from the context with the `Remove` tool. It is fine to re-add them later
+- Remove skills if they are not helpful for your current task with `RemoveSkill`
 
 {lazy_prompt}
 {shell_cmd_reminder}

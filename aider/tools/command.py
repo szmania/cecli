@@ -32,6 +32,7 @@ class Tool(BaseTool):
             # Ask for confirmation before executing.
             # allow_never=True enables the 'Always' option.
             # confirm_ask handles remembering the 'Always' choice based on the subject.
+            command_string = coder.format_command_with_prefix(command_string)
 
             confirmed = (
                 True

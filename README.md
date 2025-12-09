@@ -1,10 +1,33 @@
-## Documentation and Other Notes
+## Why `aider-ce`?
+
+`aider-ce` (aka `cecli`, pronounced like "Cecily") is a community-driven fork of the [Aider](https://aider.chat/) AI pair programming tool.
+Aider is a fantastic piece of software with a wonderful community but it has been painfully slow in receiving updates in the quickly evolving AI tooling space.
+
+We aim to foster an open, collaborative ecosystem where new features, experiments, and improvements can be developed and shared rapidly. We believe in genuine FOSS principles and actively welcome contributors of all skill levels.
+
+If you are looking for bleeding-edge features or want to get your hands dirty with the internals of an AI coding agent, here's your sign.
+LLMs are a part of our lives from here on out so join us in learning about and crafting the future.
+
+### Links
+
+[Discord Chat](https://discord.gg/AX9ZEA7nJn) 🞄
+[Changelog](https://github.com/dwash96/aider-ce/blob/main/CHANGELOG.md) 🞄
+[Issue Queue](https://github.com/dwash96/aider-ce/issues)
+
+## Documentation/Other Notes:
+
 * [Agent Mode](https://github.com/dwash96/aider-ce/blob/main/aider/website/docs/config/agent-mode.md)
 * [MCP Configuration](https://github.com/dwash96/aider-ce/blob/main/aider/website/docs/config/mcp.md)
 * [Session Management](https://github.com/dwash96/aider-ce/blob/main/aider/website/docs/sessions.md)
+* [Skills](https://github.com/dwash96/aider-ce/blob/main/aider/website/docs/config/skills.md)
 * [Aider Original Documentation (still mostly applies)](https://aider.chat/)
-* [Changelog](https://github.com/dwash96/aider-ce/blob/main/CHANGELOG.md)
-* [Discord Community](https://discord.gg/McwdCRuqkJ)
+
+You can see a selection of the enhancements and updates by comparing the help output:
+```bash
+aider --help > aider.help.txt
+cecli --help > cecli.help.txt
+diff aider.help.txt cecli.help.txt -uw --color
+```
 
 ## Installation Instructions
 This project can be installed using several methods:
@@ -40,7 +63,7 @@ agent: true
 analytics: false
 auto-commits: true
 auto-save: true
-auto-load: true
+auto-load: false
 cache-prompts: true
 check-update: true
 debug: false
@@ -49,7 +72,7 @@ env-file: .aider.env
 multiline: true
 preserve-todo-list: true
 show-model-warnings: true
-watch-files: true
+watch-files: false
 agent-config: |
   {
     "large_file_token_threshold": 12500,
@@ -62,8 +85,8 @@ mcp-servers: |
         "context7":{
           "transport":"http",
           "url":"https://mcp.context7.com/mcp"
-        }      
-      }   
+        }
+      }
   }
 ```
 
@@ -77,6 +100,23 @@ OPENROUTER_API_KEY="..."
 DEEPSEEK_API_KEY="..."
 ```
 
+### Run Program
+
+If you are in the directory with your .aider.conf.yml file, then simply running `aider-ce` or `cecli` will start the agent with your configuration. If you want additional sandboxing, we publish a docker container that can be ran as follows:
+
+```bash
+docker pull dustinwashington/aider-ce
+docker run \
+  -it \
+  --user $(id -u):$(id -g) \
+  --volume $(pwd):/app dustinwashington/aider-ce \
+  --volume $(pwd)/.aider.conf.yml:/.aider.conf.yml \
+  --volume $(pwd)/.aider.env:/.aider/.env \
+  --config /app/.aider.conf.yml
+```
+
+This command will make sure all commands ran by the coding agent happen in context of the docker container to protect the host file system from any infamous agentic mishap
+
 ## Project Roadmap/Goals
 
 The current priorities are to improve core capabilities and user experience of the Aider project
@@ -87,7 +127,7 @@ The current priorities are to improve core capabilities and user experience of t
 
 2. **Repo Map Accuracy** - [Discussion](https://github.com/dwash96/aider-ce/issues/45)
   * [x] [Bias page ranking toward active/editable files in repo map parsing](https://github.com/Aider-AI/aider/issues/2405)
-  * [x] [Include import information in repo map for richer context](https://github.com/Aider-AI/aider/issues/2688)  
+  * [x] [Include import information in repo map for richer context](https://github.com/Aider-AI/aider/issues/2688)
   * [x] [Handle non-unique symbols that break down in large codebases](https://github.com/Aider-AI/aider/issues/2341)
 
 3. **Context Discovery** - [Discussion](https://github.com/dwash96/aider-ce/issues/46)
@@ -98,7 +138,7 @@ The current priorities are to improve core capabilities and user experience of t
 
 4. **Context Delivery** - [Discussion](https://github.com/dwash96/aider-ce/issues/47)
   * [ ] Use workflow for internal discovery to better target file snippets needed for specific tasks
-  * [ ] Add support for partial files and code snippets in model completion messages   
+  * [ ] Add support for partial files and code snippets in model completion messages
 
 5. **TUI Experience** - [Discussion](https://github.com/dwash96/aider-ce/issues/48)
   * [ ] Add a full TUI (probably using textual) to have a visual interface competitive with the other coding agent terminal programs
@@ -112,7 +152,7 @@ The current priorities are to improve core capabilities and user experience of t
   * [ ] Add a RAG tool for the model to ask questions about the codebase
   * [ ] Make the system prompts more aggressive about removing unneeded files/content from the context
   * [ ] Add a plugin-like system for allowing agent mode to use user-defined tools in simple python files
-  * [ ] Add a dynamic tool discovery tool to allow the system to have only the tools it needs in context
+  * [x] Add a dynamic tool discovery tool to allow the system to have only the tools it needs in context
 
 ### All Contributors (Both Aider Main and Aider-CE)
 
@@ -128,6 +168,7 @@ The current priorities are to improve core capabilities and user experience of t
 <a href="https://github.com/shladnik">@shladnik</a>
 <a href="https://github.com/itlackey">@itlackey</a>
 <a href="https://github.com/tomjuggler">@tomjuggler</a>
+<a href="https://github.com/szmania">@szmania</a>
 <a href="https://github.com/vk4s">@vk4s</a>
 <a href="https://github.com/titusz">@titusz</a>
 <a href="https://github.com/daniel-vainsencher">@daniel-vainsencher</a>
@@ -143,6 +184,6 @@ The current priorities are to improve core capabilities and user experience of t
 <a href="https://github.com/itsmeknt">@itsmeknt</a>
 <a href="https://github.com/cheahjs">@cheahjs</a>
 <a href="https://github.com/youknow04">@youknow04</a>
+<a href="https://github.com/pjcreath">@pjcreath</a>
 <a href="https://github.com/pcamp">@pcamp</a>
-<a href="https://github.com/miradnanali">@miradnanali</a>
-<a href="https://github.com/o-nix">@o-nix</a>
+<a href="https://github.com/ErichBSchulz">@ErichBSchulz</a>

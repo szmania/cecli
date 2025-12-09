@@ -31,6 +31,8 @@ class Tool(BaseTool):
         Execute an interactive shell command using run_cmd (which uses pexpect/PTY).
         """
         try:
+            command_string = coder.format_command_with_prefix(command_string)
+
             confirmed = (
                 True
                 if coder.skip_cli_confirmations

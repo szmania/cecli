@@ -11,7 +11,6 @@ large_repos = "https://aider.chat/docs/faq.html#can-i-use-aider-in-a-large-mono-
 github_issues = "https://github.com/dwash96/aider-ce/issues/new"
 git_index_version = "https://github.com/Aider-AI/aider/issues/211"
 install_properly = "https://aider.chat/docs/troubleshooting/imports.html"
-analytics = "https://aider.chat/docs/more/analytics.html"
 release_notes = "https://github.com/dwash96/aider-ce/releases/latest"
 edit_formats = "https://aider.chat/docs/more/edit-formats.html"
 models_and_keys = "https://aider.chat/docs/troubleshooting/models-and-keys.html"

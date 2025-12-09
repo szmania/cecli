@@ -1,6 +1,9 @@
+import asyncio
+import contextlib
 import importlib
 import os
 import warnings
+from collections.abc import Coroutine
 
 from aider.dump import dump  # noqa: F401
 
@@ -44,10 +47,49 @@ class LazyLiteLLM:
             return
 
         self._lazy_module = importlib.import_module("litellm")
+        self._lazy_module.disable_streaming_logging = True
         self._lazy_module.suppress_debug_info = True
         self._lazy_module.set_verbose = False
         self._lazy_module.drop_params = True
         self._lazy_module._logging._disable_debugging()
+
+        # Patch GLOBAL_LOGGING_WORKER to avoid event loop binding issues
+        # See: https://github.com/BerriAI/litellm/issues/16518
+        # See: https://github.com/BerriAI/litellm/issues/14521
+        try:
+            from litellm.litellm_core_utils import logging_worker
+        except ImportError:
+            # Module didn't exist before litellm 1.76.0
+            # https://github.com/BerriAI/litellm/pull/13905
+            pass
+        else:
+
+            class NoOpLoggingWorker:
+                """No-op worker that executes callbacks immediately without queuing."""
+
+                def start(self) -> None:
+                    pass
+
+                def enqueue(self, coroutine: Coroutine) -> None:
+                    # Execute immediately in current loop instead of queueing,
+                    # and do nothing if there's no current loop
+                    with contextlib.suppress(RuntimeError):
+                        # This logging task is fire-and-forget
+                        asyncio.create_task(coroutine)
+
+                def ensure_initialized_and_enqueue(self, async_coroutine: Coroutine) -> None:
+                    self.enqueue(async_coroutine)
+
+                async def stop(self) -> None:
+                    pass
+
+                async def flush(self) -> None:
+                    pass
+
+                async def clear_queue(self) -> None:
+                    pass
+
+            logging_worker.GLOBAL_LOGGING_WORKER = NoOpLoggingWorker()
 
 
 litellm = LazyLiteLLM()

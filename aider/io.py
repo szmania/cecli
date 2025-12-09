@@ -2,6 +2,7 @@ import asyncio
 import base64
 import functools
 import os
+import re
 import shutil
 import signal
 import subprocess
@@ -32,6 +33,7 @@ from rich.color import ColorParseError
 from rich.columns import Columns
 from rich.console import Console
 from rich.markdown import Markdown
+from rich.markup import escape
 from rich.spinner import SPINNERS
 from rich.style import Style as RichStyle
 from rich.text import Text
@@ -294,6 +296,13 @@ class InputOutput:
     bell_on_next_input = False
     notifications_command = None
     encoding = "utf-8"
+    VALID_STYLES = {"bold", "red", "green", "blue", "bright_cyan"}
+    VALID_OPEN_TAG_PATTERN = re.compile(
+        r"\\\[(" + "|".join(re.escape(s) for s in VALID_STYLES) + r")\]"
+    )
+    VALID_CLOSE_TAG_PATTERN = re.compile(
+        r"\\\[/(?:" + "|".join(re.escape(s) for s in VALID_STYLES) + r"|)]"
+    )
 
     def __init__(
         self,
@@ -1105,6 +1114,24 @@ class InputOutput:
         hist = "\n" + content.strip() + "\n\n"
         self.append_chat_history(hist)
 
+    def edit_in_editor(self, content):
+        import subprocess
+        import tempfile
+
+        with tempfile.NamedTemporaryFile(
+            suffix=".md", mode="w", delete=False, encoding=self.encoding
+        ) as tmpfile:
+            tmpfile.write(content)
+            tmpfile.flush()
+            editor = os.environ.get("EDITOR", "vi")
+            subprocess.call([editor, tmpfile.name])
+
+        with open(tmpfile.name, "r", encoding=self.encoding) as f:
+            edited = f.read()
+
+        os.unlink(tmpfile.name)
+        return edited
+
     async def offer_url(
         self, url, prompt="Open URL for more info?", allow_never=True, acknowledge=False
     ):
@@ -1155,6 +1182,7 @@ class InputOutput:
         group=None,
         group_response=None,
         allow_never=False,
+        allow_tweak=False,
         acknowledge=False,
     ):
         self.num_user_asks += 1
@@ -1173,6 +1201,9 @@ class InputOutput:
             valid_responses = ["yes", "no", "skip", "all"]
             options = " (Y)es/(N)o"
 
+            if allow_tweak:
+                valid_responses.append("tweak")
+                options += "/(T)weak"
             if group or group_response:
                 if not explicit_yes_required or group_response:
                     options += "/(A)ll"
@@ -1258,6 +1289,9 @@ class InputOutput:
                 hist = f"{question.strip()} {res}"
                 self.append_chat_history(hist, linebreak=True, blockquote=True)
                 return False
+
+            if res == "t":
+                return "tweak"
 
             if explicit_yes_required and not group_response:
                 is_yes = res == "y"
@@ -1373,7 +1407,7 @@ class InputOutput:
         if log_only:
             return
 
-        messages = list(map(Text, messages))
+        messages = list(map(lambda message: self.escape(message), messages))
         style = dict()
         if self.pretty:
             if self.tool_output_color:
@@ -1384,6 +1418,28 @@ class InputOutput:
         style = RichStyle(**style)
 
         self.stream_print(*messages, style=style)
+
+    def escape(self, text):
+        """Formats valid Rich tags and prints invalid ones as literal text using a single regex pass."""
+
+        # 1. Escape everything initially using Rich's built-in function
+        escaped_text = escape(text)
+
+        if text == escaped_text:
+            return Text(text)
+
+        # 2. Un-escape ONLY the valid opening tags
+        # Replaces '\[style]' with '[style]'
+        unescaped_text = self.__class__.VALID_OPEN_TAG_PATTERN.sub(
+            lambda m: f"[{m.group(1)}]", escaped_text
+        )
+
+        # 3. Un-escape ONLY the valid closing tags (handles both [/style] and [/] formats)
+        # Replaces '\[/style]' or '\[/]' with '[/]'
+        final_text = self.__class__.VALID_CLOSE_TAG_PATTERN.sub(r"[/]", unescaped_text)
+
+        # 4. Print the result
+        return Text(final_text)
 
     def profile(self, *messages, start=False):
         if not self.verbose:
@@ -1656,7 +1712,7 @@ class InputOutput:
             return "\n".join(lines) + "\n"
 
         output = StringIO()
-        console = Console(file=output, force_terminal=False)
+        console = Console(file=output, force_terminal=False, markup=False)
 
         # Handle read-only files
         if rel_read_only_fnames or rel_read_only_stubs_fnames:

@@ -263,13 +263,24 @@ def get_parser(default_config_files, git_root):
         "--auto-save",
         action=argparse.BooleanOptionalAction,
         default=False,
-        help="Enable/disable automatic saving of sessions as 'auto-save' (default: False)",
+        help=(
+            "Enable/disable automatic saving of sessions as --auto-save-session-name (default:"
+            " False)"
+        ),
+    )
+    group.add_argument(
+        "--auto-save-session-name",
+        help="Specify session name for auto-save and auto-load (default: auto-save)",
+        default="auto-save",
     )
     group.add_argument(
         "--auto-load",
         action=argparse.BooleanOptionalAction,
         default=False,
-        help="Enable/disable automatic loading of 'auto-save' session on startup (default: False)",
+        help=(
+            "Enable/disable automatic loading of --auto-save-session-name session on startup"
+            " (default: False)"
+        ),
     )
     group.add_argument(
         "--mcp-servers",
@@ -693,28 +704,28 @@ def get_parser(default_config_files, git_root):
         "--analytics",
         action=argparse.BooleanOptionalAction,
         default=None,
-        help="Enable/disable analytics for current session (default: random)",
+        help=argparse.SUPPRESS,
     )
     group.add_argument(
         "--analytics-log",
         metavar="ANALYTICS_LOG_FILE",
-        help="Specify a file to log analytics events",
+        help=argparse.SUPPRESS,
     ).complete = shtab.FILE
     group.add_argument(
         "--analytics-disable",
         action="store_true",
-        help="Permanently disable analytics",
+        help=argparse.SUPPRESS,
         default=False,
     )
     group.add_argument(
         "--analytics-posthog-host",
         metavar="ANALYTICS_POSTHOG_HOST",
-        help="Send analytics to custom PostHog instance",
+        help=argparse.SUPPRESS,
     )
     group.add_argument(
         "--analytics-posthog-project-api-key",
         metavar="ANALYTICS_POSTHOG_PROJECT_API_KEY",
-        help="Send analytics to custom PostHog project",
+        help=argparse.SUPPRESS,
     )
 
     #########
@@ -729,7 +740,7 @@ def get_parser(default_config_files, git_root):
         "--check-update",
         action=argparse.BooleanOptionalAction,
         help="Check for new aider versions on launch",
-        default=True,
+        default=False,
     )
     group.add_argument(
         "--show-release-notes",
@@ -781,7 +792,7 @@ def get_parser(default_config_files, git_root):
         "--gui",
         "--browser",
         action=argparse.BooleanOptionalAction,
-        help="Run aider in your browser (default: False)",
+        help=argparse.SUPPRESS,
         default=False,
     )
     group.add_argument(
@@ -857,6 +868,12 @@ def get_parser(default_config_files, git_root):
 
     ######
     group = parser.add_argument_group("Other settings")
+    group.add_argument(
+        "--tweak-responses",
+        action="store_true",
+        help="Allow manual edits to model responses (default: False)",
+        default=False,
+    )
     group.add_argument(
         "--yes-always",
         action="store_true",
@@ -975,6 +992,11 @@ def get_parser(default_config_files, git_root):
             "Specify a command to run for notifications instead of the terminal bell. If not"
             " specified, a default command for your OS may be used."
         ),
+    )
+    group.add_argument(
+        "--command-prefix",
+        default=None,
+        help="Specify a command prefix for all commands (useful for sandboxing)",
     )
     group.add_argument(
         "--detect-urls",

@@ -30,18 +30,11 @@ from typing import List
 
 import httpx
 from litellm import experimental_mcp_client
-from litellm.types.utils import (
-    ChatCompletionMessageToolCall,
-    Choices,
-    Function,
-    Message,
-    ModelResponse,
-)
+from litellm.types.utils import ModelResponse
 from prompt_toolkit.patch_stdout import patch_stdout
 from rich.console import Console
 
 from aider import __version__, models, prompts, urls, utils
-from aider.analytics import Analytics
 from aider.commands import Commands, SwitchCoder
 from aider.exceptions import LiteLLMExceptions
 from aider.helpers import coroutines
@@ -127,6 +120,8 @@ class Coder:
     test_outcome = None
     multi_response_content = ""
     partial_response_content = ""
+    partial_response_reasoning_content = ""
+    partial_response_chunks = []
     partial_response_tool_calls = []
     commit_before_message = []
     message_cost = 0.0
@@ -154,6 +149,8 @@ class Coder:
     large_file_token_threshold = (
         25000  # Files larger than this will be truncated when context management is enabled
     )
+
+    ok_to_warm_cache = False
 
     @classmethod
     async def create(
@@ -195,8 +192,9 @@ class Coder:
             done_messages = from_coder.done_messages
             if edit_format != from_coder.edit_format and done_messages and summarize_from_coder:
                 try:
+                    io.tool_warning("Summarizing messages, please wait...")
                     done_messages = await from_coder.summarizer.summarize_all(done_messages)
-                except ValueError:
+                except (KeyboardInterrupt, ValueError):
                     # If summarization fails, keep the original messages and warn the user
                     io.tool_warning(
                         "Chat history summarization failed, continuing with full history"
@@ -243,100 +241,6 @@ class Coder:
         new_coder = await Coder.create(from_coder=self, **kwargs)
         return new_coder
 
-    def get_announcements(self):
-        lines = []
-        lines.append(f"Aider v{__version__}")
-
-        # Model
-        main_model = self.main_model
-        weak_model = main_model.weak_model
-
-        if weak_model is not main_model:
-            prefix = "Main model"
-        else:
-            prefix = "Model"
-
-        output = f"{prefix}: {main_model.name} with {self.edit_format} edit format"
-
-        # Check for thinking token budget
-        thinking_tokens = main_model.get_thinking_tokens()
-        if thinking_tokens:
-            output += f", {thinking_tokens} think tokens"
-
-        # Check for reasoning effort
-        reasoning_effort = main_model.get_reasoning_effort()
-        if reasoning_effort:
-            output += f", reasoning {reasoning_effort}"
-
-        if self.add_cache_headers or main_model.caches_by_default:
-            output += ", prompt cache"
-        if main_model.info.get("supports_assistant_prefill"):
-            output += ", infinite output"
-
-        lines.append(output)
-
-        if self.edit_format == "architect":
-            output = (
-                f"Editor model: {main_model.editor_model.name} with"
-                f" {main_model.editor_edit_format} edit format"
-            )
-            lines.append(output)
-
-        if weak_model is not main_model:
-            output = f"Weak model: {weak_model.name}"
-            lines.append(output)
-
-        # Repo
-        if self.repo:
-            rel_repo_dir = self.repo.get_rel_repo_dir()
-            num_files = len(self.repo.get_tracked_files())
-
-            lines.append(f"Git repo: {rel_repo_dir} with {num_files:,} files")
-            if num_files > 1000:
-                lines.append(
-                    "Warning: For large repos, consider using --subtree-only and .aiderignore"
-                )
-                lines.append(f"See: {urls.large_repos}")
-        else:
-            lines.append("Git repo: none")
-
-        # Repo-map
-        if self.repo_map:
-            map_tokens = self.repo_map.max_map_tokens
-            if map_tokens > 0:
-                refresh = self.repo_map.refresh
-                lines.append(f"Repo-map: using {map_tokens} tokens, {refresh} refresh")
-                max_map_tokens = self.main_model.get_repo_map_tokens() * 2
-                if map_tokens > max_map_tokens:
-                    lines.append(
-                        f"Warning: map-tokens > {max_map_tokens} is not recommended. Too much"
-                        " irrelevant code can confuse LLMs."
-                    )
-            else:
-                lines.append("Repo-map: disabled because map_tokens == 0")
-        else:
-            lines.append("Repo-map: disabled")
-
-        if self.mcp_tools:
-            mcp_servers = []
-            for server_name, server_tools in self.mcp_tools:
-                mcp_servers.append(server_name)
-            lines.append(f"MCP servers configured: {', '.join(mcp_servers)}")
-
-        for fname in self.abs_read_only_stubs_fnames:
-            rel_fname = self.get_rel_fname(fname)
-            lines.append(f"Added {rel_fname} to the chat (read-only stub).")
-
-        if self.done_messages:
-            lines.append("Restored previous conversation history.")
-
-        if self.io.multiline_mode:
-            lines.append("Multiline mode: Enabled. Enter inserts newline, Alt-Enter submits text")
-
-        return lines
-
-    ok_to_warm_cache = False
-
     def __init__(
         self,
         main_model,
@@ -368,7 +272,6 @@ class Coder:
         commands=None,
         summarizer=None,
         total_cost=0.0,
-        analytics=None,
         map_refresh="auto",
         cache_prompts=False,
         num_cache_warming_pings=0,
@@ -394,10 +297,6 @@ class Coder:
         # initialize from args.map_cache_dir
         self.map_cache_dir = map_cache_dir
 
-        # Fill in a dummy Analytics if needed, but it is never .enable()'d
-        self.analytics = analytics if analytics is not None else Analytics()
-
-        self.event = self.analytics.event
         self.chat_language = chat_language
         self.commit_language = commit_language
         self.commit_before_message = []
@@ -411,6 +310,7 @@ class Coder:
 
         self.ignore_mentions = ignore_mentions
         if not self.ignore_mentions:
+>>>>>>> b36f2673e0a089faa74baa7daef4f23188a739ff
             self.ignore_mentions = set()
 
         self.file_watcher = file_watcher
@@ -642,17 +542,109 @@ class Coder:
                 self.io.tool_output("JSON Schema:")
                 self.io.tool_output(json.dumps(self.functions, indent=4))
 
-    def setup_lint_cmds(self, lint_cmds):
-        if not lint_cmds:
-            return
-        for lang, cmd in lint_cmds.items():
-            self.linter.set_linter(lang, cmd)
+    def get_announcements(self):
+        lines = []
+        lines.append(f"Aider-CE v{__version__}")
+
+        # Model
+        main_model = self.main_model
+        weak_model = main_model.weak_model
+
+        if weak_model is not main_model:
+            prefix = "Main model"
+        else:
+            prefix = "Model"
+
+        output = f"{prefix}: {main_model.name} with {self.edit_format} edit format"
+
+        # Check for thinking token budget
+        thinking_tokens = main_model.get_thinking_tokens()
+        if thinking_tokens:
+            output += f", {thinking_tokens} think tokens"
+
+        # Check for reasoning effort
+        reasoning_effort = main_model.get_reasoning_effort()
+        if reasoning_effort:
+            output += f", reasoning {reasoning_effort}"
+
+        if self.add_cache_headers or main_model.caches_by_default:
+            output += ", prompt cache"
+        if main_model.info.get("supports_assistant_prefill"):
+            output += ", infinite output"
+
+        lines.append(output)
+
+        if self.edit_format == "architect":
+            output = (
+                f"Editor model: {main_model.editor_model.name} with"
+                f" {main_model.editor_edit_format} edit format"
+            )
+            lines.append(output)
+
+        if weak_model is not main_model:
+            output = f"Weak model: {weak_model.name}"
+            lines.append(output)
+
+        # Repo
+        if self.repo:
+            rel_repo_dir = self.repo.get_rel_repo_dir()
+            num_files = len(self.repo.get_tracked_files())
+
+            lines.append(f"Git repo: {rel_repo_dir} with {num_files:,} files")
+            if num_files > 1000:
+                lines.append(
+                    "Warning: For large repos, consider using --subtree-only and .aiderignore"
+                )
+                lines.append(f"See: {urls.large_repos}")
+        else:
+            lines.append("Git repo: none")
+
+        # Repo-map
+        if self.repo_map:
+            map_tokens = self.repo_map.max_map_tokens
+            if map_tokens > 0:
+                refresh = self.repo_map.refresh
+                lines.append(f"Repo-map: using {map_tokens} tokens, {refresh} refresh")
+                max_map_tokens = self.main_model.get_repo_map_tokens() * 2
+                if map_tokens > max_map_tokens:
+                    lines.append(
+                        f"Warning: map-tokens > {max_map_tokens} is not recommended. Too much"
+                        " irrelevant code can confuse LLMs."
+                    )
+            else:
+                lines.append("Repo-map: disabled because map_tokens == 0")
+        else:
+            lines.append("Repo-map: disabled")
+
+        if self.mcp_tools:
+            mcp_servers = []
+            for server_name, server_tools in self.mcp_tools:
+                mcp_servers.append(server_name)
+            lines.append(f"MCP servers configured: {', '.join(mcp_servers)}")
+
+        for fname in self.abs_read_only_stubs_fnames:
+            rel_fname = self.get_rel_fname(fname)
+            lines.append(f"Added {rel_fname} to the chat (read-only stub).")
+
+        if self.done_messages:
+            lines.append("Restored previous conversation history.")
+
+        if self.io.multiline_mode:
+            lines.append("Multiline mode: Enabled. Enter inserts newline, Alt-Enter submits text")
+
+        return lines
 
     def show_announcements(self):
         bold = True
         for line in self.get_announcements():
             self.io.tool_output(line, bold=bold)
             bold = False
+
+    def setup_lint_cmds(self, lint_cmds):
+        if not lint_cmds:
+            return
+        for lang, cmd in lint_cmds.items():
+            self.linter.set_linter(lang, cmd)
 
     def add_rel_fname(self, rel_fname):
         self.abs_fnames.add(self.abs_root_path(rel_fname))
@@ -688,7 +680,13 @@ class Coder:
         return True
 
     def get_abs_fnames_content(self):
-        for fname in list(self.abs_fnames):
+        # Sort files by last modified time (earliest first, latest last)
+        sorted_fnames = sorted(
+            list(filter(lambda f: os.path.exists(f), self.abs_fnames)),
+            key=lambda fname: os.path.getmtime(fname),
+        )
+
+        for fname in sorted_fnames:
             content = self.io.read_text(fname)
 
             if content is None:
@@ -734,57 +732,121 @@ class Coder:
         if not fnames:
             fnames = self.abs_fnames
 
-        prompt = ""
-        for fname, content in self.get_abs_fnames_content():
-            if not is_image_file(fname):
-                relative_fname = self.get_rel_fname(fname)
-                prompt += "\n"
-                prompt += relative_fname
-                prompt += f"\n{self.fence[0]}\n"
+        # If there are files, return a dictionary with chat_files and edit_files
+        if fnames:
+            # Get current time for comparison
+            current_time = time.time()
+            lookback = current_time - 30
 
-                # Apply context management if enabled for large files
-                if self.context_management_enabled:
-                    # Calculate tokens for this file
-                    file_tokens = self.main_model.token_count(content)
+            # Get file modification times and sort by most recent first
+            file_times = []
+            for fname in fnames:
+                try:
+                    if os.path.exists(fname):
+                        mtime = os.path.getmtime(fname)
+                        file_times.append((fname, mtime))
+                except OSError:
+                    # Skip files that can't be accessed
+                    continue
 
-                    if file_tokens > self.large_file_token_threshold:
-                        # Truncate the file content
-                        lines = content.splitlines()
+            # Sort by modification time (most recent first)
+            file_times.sort(key=lambda x: x[1], reverse=True)
 
-                        # Keep the first and last parts of the file with a marker in between
-                        keep_lines = (
-                            self.large_file_token_threshold // 40
-                        )  # Rough estimate of tokens per line
-                        first_chunk = lines[: keep_lines // 2]
-                        last_chunk = lines[-(keep_lines // 2) :]
+            # Determine which files go to edit_files
+            edit_files = set()
+            if file_times:
+                # Always include the most recently edited file
+                most_recent_file, most_recent_time = file_times[0]
+                edit_files.add(most_recent_file)
 
-                        truncated_content = "\n".join(first_chunk)
-                        truncated_content += (
-                            f"\n\n... [File truncated due to size ({file_tokens} tokens). Use"
-                            " /context-management to toggle truncation off] ...\n\n"
-                        )
-                        truncated_content += "\n".join(last_chunk)
+                # Include any files edited within the last minute
+                for fname, mtime in file_times:
+                    if mtime >= lookback:
+                        edit_files.add(fname)
 
-                        # Add message about truncation
-                        self.io.tool_output(
-                            f"⚠️ '{relative_fname}' is very large ({file_tokens} tokens). "
-                            "Use /context-management to toggle truncation off if needed."
-                        )
+            # Build content for chat_files and edit_files
+            chat_files_prompt = ""
+            edit_files_prompt = ""
+            chat_file_names = set()
+            edit_file_names = set()
 
-                        prompt += truncated_content
+            for fname, content in self.get_abs_fnames_content():
+                if not is_image_file(fname):
+                    relative_fname = self.get_rel_fname(fname)
+                    file_prompt = "\n"
+                    file_prompt += relative_fname
+                    file_prompt += f"\n{self.fence[0]}\n"
+
+                    # Apply context management if enabled for large files
+                    if self.context_management_enabled:
+                        # Calculate tokens for this file
+                        file_tokens = self.main_model.token_count(content)
+
+                        if file_tokens > self.large_file_token_threshold:
+                            # Truncate the file content
+                            lines = content.splitlines()
+
+                            # Keep the first and last parts of the file with a marker in between
+                            keep_lines = (
+                                self.large_file_token_threshold // 40
+                            )  # Rough estimate of tokens per line
+                            first_chunk = lines[: keep_lines // 2]
+                            last_chunk = lines[-(keep_lines // 2) :]
+
+                            truncated_content = "\n".join(first_chunk)
+                            truncated_content += (
+                                f"\n\n... [File truncated due to size ({file_tokens} tokens). Use"
+                                " /context-management to toggle truncation off] ...\n\n"
+                            )
+                            truncated_content += "\n".join(last_chunk)
+
+                            # Add message about truncation
+                            self.io.tool_output(
+                                f"⚠️ '{relative_fname}' is very large ({file_tokens} tokens). "
+                                "Use /context-management to toggle truncation off if needed."
+                            )
+
+                            file_prompt += truncated_content
+                        else:
+                            file_prompt += content
                     else:
-                        prompt += content
-                else:
-                    prompt += content
+                        file_prompt += content
 
-                prompt += f"{self.fence[1]}\n"
+                    file_prompt += f"{self.fence[1]}\n"
 
-        return prompt
+                    # Add to appropriate prompt based on edit time
+                    if fname in edit_files:
+                        edit_files_prompt += file_prompt
+                        edit_file_names.add(relative_fname)
+                    else:
+                        chat_files_prompt += file_prompt
+                        chat_file_names.add(relative_fname)
+
+            return {
+                "chat_files": chat_files_prompt,
+                "edit_files": edit_files_prompt,
+                "chat_file_names": chat_file_names,
+                "edit_file_names": edit_file_names,
+            }
+        else:
+            # Return empty dictionary when no files
+            return {
+                "chat_files": "",
+                "edit_files": "",
+                "chat_file_names": set(),
+                "edit_file_names": set(),
+            }
 
     def get_read_only_files_content(self):
         prompt = ""
+        # Sort read-only files by last modified time (earliest first, latest last)
+        sorted_fnames = sorted(
+            list(filter(lambda f: os.path.exists(f), self.abs_read_only_fnames)),
+            key=lambda fname: os.path.getmtime(fname),
+        )
+
         # Handle regular read-only files
-        for fname in self.abs_read_only_fnames:
+        for fname in sorted_fnames:
             content = self.io.read_text(fname)
             if content is not None and not is_image_file(fname):
                 relative_fname = self.get_rel_fname(fname)
@@ -829,8 +891,14 @@ class Coder:
 
                 prompt += f"{self.fence[1]}\n"
 
+        # Sort stub files by last modified time (earliest first, latest last)
+        sorted_stub_fnames = sorted(
+            list(filter(lambda f: os.path.exists(f), self.abs_read_only_stubs_fnames)),
+            key=lambda fname: os.path.getmtime(fname),
+        )
+
         # Handle stub files
-        for fname in self.abs_read_only_stubs_fnames:
+        for fname in sorted_stub_fnames:
             if not is_image_file(fname):
                 relative_fname = self.get_rel_fname(fname)
                 prompt += "\n"
@@ -1019,22 +1087,56 @@ class Coder:
 
     def get_chat_files_messages(self):
         chat_files_messages = []
+        edit_files_messages = []
+        chat_file_names = set()
+        edit_file_names = set()
+
         if self.abs_fnames:
-            files_content = self.gpt_prompts.files_content_prefix
-            files_content += self.get_files_content()
+            files_content_result = self.get_files_content()
+
+            # Get content and file names from dictionary
+            chat_files_content = files_content_result.get("chat_files", "")
+            edit_files_content = files_content_result.get("edit_files", "")
+            chat_file_names = files_content_result.get("chat_file_names", set())
+            edit_file_names = files_content_result.get("edit_file_names", set())
+
             files_reply = self.gpt_prompts.files_content_assistant_reply
+
+            if chat_files_content:
+                chat_files_messages += [
+                    dict(
+                        role="user",
+                        content=self.gpt_prompts.files_content_prefix + chat_files_content,
+                    ),
+                    dict(role="assistant", content=files_reply),
+                ]
+
+            if edit_files_content:
+                edit_files_messages += [
+                    dict(
+                        role="user",
+                        content=self.gpt_prompts.files_content_prefix + edit_files_content,
+                    ),
+                    dict(role="assistant", content=files_reply),
+                ]
         elif self.gpt_prompts.files_no_full_files_with_repo_map:
             files_content = self.gpt_prompts.files_no_full_files_with_repo_map
             files_reply = self.gpt_prompts.files_no_full_files_with_repo_map_reply
+
+            if files_content:
+                chat_files_messages += [
+                    dict(role="user", content=files_content),
+                    dict(role="assistant", content=files_reply),
+                ]
         else:
             files_content = self.gpt_prompts.files_no_full_files
             files_reply = "Ok."
 
-        if files_content:
-            chat_files_messages += [
-                dict(role="user", content=files_content),
-                dict(role="assistant", content=files_reply),
-            ]
+            if files_content:
+                chat_files_messages += [
+                    dict(role="user", content=files_content),
+                    dict(role="assistant", content=files_reply),
+                ]
 
         images_message = self.get_images_message(self.abs_fnames)
         if images_message is not None:
@@ -1043,7 +1145,12 @@ class Coder:
                 dict(role="assistant", content="Ok."),
             ]
 
-        return chat_files_messages
+        return {
+            "chat_files": chat_files_messages,
+            "edit_files": edit_files_messages,
+            "chat_file_names": chat_file_names,
+            "edit_file_names": edit_file_names,
+        }
 
     def get_images_message(self, fnames):
         supports_images = self.main_model.info.get("supports_vision")
@@ -1876,7 +1983,11 @@ class Coder:
 
         chunks.repo = self.get_repo_messages()
         chunks.readonly_files = self.get_readonly_files_messages()
-        chunks.chat_files = self.get_chat_files_messages()
+
+        # Handle the dictionary structure from get_chat_files_messages()
+        chat_files_result = self.get_chat_files_messages()
+        chunks.chat_files = chat_files_result.get("chat_files", [])
+        chunks.edit_files = chat_files_result.get("edit_files", [])
 
         if self.gpt_prompts.system_reminder:
             reminder_message = [
@@ -2019,8 +2130,6 @@ class Coder:
         return True
 
     async def send_message(self, inp):
-        self.event("message_send_starting")
-
         # Notify IO that LLM processing is starting
         self.io.llm_started()
 
@@ -2118,7 +2227,6 @@ class Coder:
                     lines = traceback.format_exception(type(err), err, err.__traceback__)
                     self.io.tool_warning("".join(lines))
                     self.io.tool_error(str(err))
-                    self.event("message_send_exception", exception=str(err))
                     return
         finally:
             if self.mdstream:
@@ -2134,9 +2242,7 @@ class Coder:
             self.multi_response_content = ""
 
         self.io.tool_output()
-
         self.show_usage_report()
-
         self.add_assistant_reply_to_cur_messages()
 
         if exhausted:
@@ -2196,46 +2302,7 @@ class Coder:
             # Process any tools using MCP servers
             try:
                 if self.partial_response_tool_calls:
-                    tool_calls = []
-                    tool_id_set = set()
-
-                    for tool_call_dict in self.partial_response_tool_calls:
-                        # Ensure tool_call_dict is a dict
-                        if hasattr(tool_call_dict, "model_dump"):
-                            tool_call_dict = tool_call_dict.model_dump()
-                        # LLM APIs sometimes return duplicates and that's annoying
-                        if tool_call_dict.get("id") in tool_id_set:
-                            continue
-
-                        tool_id_set.add(tool_call_dict.get("id"))
-
-                        tool_calls.append(
-                            ChatCompletionMessageToolCall(
-                                id=tool_call_dict.get("id"),
-                                function=Function(
-                                    name=tool_call_dict.get("function", {}).get("name"),
-                                    arguments=tool_call_dict.get("function", {}).get(
-                                        "arguments", ""
-                                    ),
-                                ),
-                                type=tool_call_dict.get("type"),
-                            )
-                        )
-
-                    tool_call_response = ModelResponse(
-                        choices=[
-                            Choices(
-                                finish_reason="tool_calls",
-                                index=0,
-                                message=Message(
-                                    content=None,
-                                    role="assistant",
-                                    tool_calls=tool_calls,
-                                ),
-                            )
-                        ]
-                    )
-
+                    tool_call_response, a, b = self.consolidate_chunks()
                     if await self.process_tool_calls(tool_call_response):
                         self.num_tool_calls += 1
                         self.reflected_message = True
@@ -2719,26 +2786,37 @@ class Coder:
         to be `None` when `tool_calls` are present.
         """
         msg = dict(role="assistant")
-        has_tool_calls = self.partial_response_tool_calls or self.partial_response_function_call
+        response = (
+            self.partial_response_chunks[0]
+            if not self.stream
+            else litellm.stream_chunk_builder(self.partial_response_chunks)
+        )
 
-        # If we have tool calls and we're using a Deepseek model, force content to be None.
-        if has_tool_calls and self.main_model.is_deepseek():
-            msg["content"] = None
-        else:
-            # Otherwise, use logic similar to the base implementation.
-            content = self.partial_response_content
-            if content:
-                msg["content"] = content
-            elif has_tool_calls:
-                msg["content"] = None
+        try:
+            # Use response_dict as a regular dictionary
+            response_dict = response.model_dump()
+        except AttributeError:
+            # Option 2: Fall back to dict() or response.dict() (Pydantic V1 style)
+            try:
+                # Note: calling dict(response) works in both V1 and V2 for raw fields,
+                # but response.dict() is the Pydantic V1 method name.
+                response_dict = dict(response)
+            except TypeError:
+                print("Neither model_dump() nor dict() worked as expected.")
+                raise
+
+        msg = response_dict["choices"][0]["message"]
 
         if self.partial_response_tool_calls:
             msg["tool_calls"] = self.partial_response_tool_calls
         elif self.partial_response_function_call:
             msg["function_call"] = self.partial_response_function_call
 
+        if "reasoning_content" not in msg:
+            msg["reasoning_content"] = self.partial_response_reasoning_content
+
         # Only add a message if it's not empty.
-        if msg.get("content") is not None or msg.get("tool_calls") or msg.get("function_call"):
+        if msg is not None:
             self.cur_messages.append(msg)
 
     def get_file_mentions(self, content, ignore_current=False):
@@ -2822,8 +2900,10 @@ class Coder:
             model = self.main_model
 
         self.partial_response_content = ""
-        self.partial_response_function_call = dict()
+        self.partial_response_reasoning_content = ""
+        self.partial_response_chunks = []
         self.partial_response_tool_calls = []
+        self.partial_response_function_call = dict()
 
         completion = None
 
@@ -2879,39 +2959,9 @@ class Coder:
             self.io.tool_error(str(completion))
             return
 
-        show_func_err = None
-        show_content_err = None
-        try:
-            if completion.choices[0].message.tool_calls:
-                self.partial_response_tool_calls = []
-                for tool_call in completion.choices[0].message.tool_calls:
-                    tool_call_dict = tool_call.model_dump()
-                    if hasattr(tool_call, "provider_specific_fields"):
-                        tool_call_dict["provider_specific_fields"] = (
-                            tool_call.provider_specific_fields
-                        )
-                    if hasattr(tool_call, "extra_content"):
-                        tool_call_dict["extra_content"] = tool_call.extra_content
-                    self.partial_response_tool_calls.append(tool_call_dict)
+        self.partial_response_chunks.append(completion)
 
-                self.partial_response_function_call = (
-                    completion.choices[0].message.tool_calls[0].function
-                )
-        except AttributeError as func_err:
-            show_func_err = func_err
-
-        try:
-            reasoning_content = completion.choices[0].message.reasoning_content
-        except AttributeError:
-            try:
-                reasoning_content = completion.choices[0].message.reasoning
-            except AttributeError:
-                reasoning_content = None
-
-        try:
-            self.partial_response_content = completion.choices[0].message.content or ""
-        except AttributeError as content_err:
-            show_content_err = content_err
+        response, func_err, content_err = self.consolidate_chunks()
 
         resp_hash = dict(
             function_call=str(self.partial_response_function_call),
@@ -2920,16 +2970,16 @@ class Coder:
         resp_hash = hashlib.sha1(json.dumps(resp_hash, sort_keys=True).encode())
         self.chat_completion_response_hashes.append(resp_hash.hexdigest())
 
-        if show_func_err and show_content_err:
-            self.io.tool_error(show_func_err)
-            self.io.tool_error(show_content_err)
+        if func_err and content_err:
+            self.io.tool_error(func_err)
+            self.io.tool_error(content_err)
             raise Exception("No data found in LLM response!")
 
         show_resp = self.render_incremental_response(True)
 
-        if reasoning_content:
+        if self.partial_response_reasoning_content:
             formatted_reasoning = format_reasoning_content(
-                reasoning_content, self.reasoning_tag_name
+                self.partial_response_reasoning_content, self.reasoning_tag_name
             )
             show_resp = formatted_reasoning + show_resp
 
@@ -2945,8 +2995,6 @@ class Coder:
 
     async def show_send_output_stream(self, completion):
         received_content = False
-        id_index_dict = dict()
-        self._last_known_tool_index = 0
 
         async for chunk in completion:
             # Check if confirmation is in progress and wait if needed
@@ -2972,6 +3020,7 @@ class Coder:
                         for tool_call_chunk in chunk.choices[0].delta.tool_calls:
                             self.tool_reflection = True
 
+<<<<<<< HEAD
                             index = tool_call_chunk.index
                             # Some models return unique ids, others, indexes for tool calls
                             if tool_call_chunk.id and tool_call_chunk.id not in id_index_dict:
@@ -2989,63 +3038,20 @@ class Coder:
 
                             if tool_call_chunk.id:
                                 self.partial_response_tool_calls[index]["id"] = tool_call_chunk.id
+=======
+>>>>>>> b36f2673e0a089faa74baa7daef4f23188a739ff
                             if tool_call_chunk.type:
-                                self.partial_response_tool_calls[index][
-                                    "type"
-                                ] = tool_call_chunk.type
                                 self.io.update_spinner_suffix(tool_call_chunk.type)
 
-                            if (
-                                hasattr(tool_call_chunk, "provider_specific_fields")
-                                and tool_call_chunk.provider_specific_fields
-                            ):
-                                if (
-                                    "provider_specific_fields"
-                                    not in self.partial_response_tool_calls[index]
-                                ):
-                                    self.partial_response_tool_calls[index][
-                                        "provider_specific_fields"
-                                    ] = {}
-                                self.partial_response_tool_calls[index][
-                                    "provider_specific_fields"
-                                ].update(tool_call_chunk.provider_specific_fields)
-
-                            if (
-                                hasattr(tool_call_chunk, "extra_content")
-                                and tool_call_chunk.extra_content
-                            ):
-                                if "extra_content" not in self.partial_response_tool_calls[index]:
-                                    self.partial_response_tool_calls[index]["extra_content"] = {}
-                                self.partial_response_tool_calls[index]["extra_content"].update(
-                                    tool_call_chunk.extra_content
-                                )
-
                             if tool_call_chunk.function:
+<<<<<<< HEAD
                                 if "function" not in self.partial_response_tool_calls[index]:
                                     self.partial_response_tool_calls[index]["function"] = {}
+=======
+>>>>>>> b36f2673e0a089faa74baa7daef4f23188a739ff
                                 if tool_call_chunk.function.name:
-                                    if (
-                                        "name"
-                                        not in self.partial_response_tool_calls[index]["function"]
-                                    ):
-                                        self.partial_response_tool_calls[index]["function"][
-                                            "name"
-                                        ] = ""
-                                    self.partial_response_tool_calls[index]["function"][
-                                        "name"
-                                    ] += tool_call_chunk.function.name
                                     self.io.update_spinner_suffix(tool_call_chunk.function.name)
                                 if tool_call_chunk.function.arguments:
-                                    if (
-                                        "arguments"
-                                        not in self.partial_response_tool_calls[index]["function"]
-                                    ):
-                                        self.partial_response_tool_calls[index]["function"][
-                                            "arguments"
-                                        ] = ""
-                                    self.partial_response_tool_calls[index]["function"][
-                                        "arguments"
-                                    ] += tool_call_chunk.function.arguments
                                     self.io.update_spinner_suffix(
                                         tool_call_chunk.function.arguments
                                     )
@@ -3058,11 +3064,14 @@ class Coder:
                     # dump(func)
                     for k, v in func.items():
                         self.tool_reflection = True
+<<<<<<< HEAD
 
                         if k in self.partial_response_function_call:
                             self.partial_response_function_call[k] += v
                         else:
                             self.partial_response_function_call[k] = v
+=======
+>>>>>>> b36f2673e0a089faa74baa7daef4f23188a739ff
                         self.io.update_spinner_suffix(v)
 
                     received_content = True
@@ -3086,6 +3095,7 @@ class Coder:
                     self.got_reasoning_content = True
                     received_content = True
                     self.io.update_spinner_suffix(reasoning_content)
+                    self.partial_response_reasoning_content += reasoning_content
 
                 try:
                     content = chunk.choices[0].delta.content
@@ -3101,6 +3111,9 @@ class Coder:
                     pass
 
             self.partial_response_content += text
+
+            self.partial_response_chunks.append(chunk)
+
             if self.show_pretty():
                 # Use simplified streaming - just call the method with full content
                 content_to_show = self.live_incremental_response(False)
@@ -3118,8 +3131,111 @@ class Coder:
                     self.stream_wrapper(safe_text, final=False)
                 yield text
 
+        # The Part Doing the Heavy Lifting Now
+        self.consolidate_chunks()
+
         if not received_content and len(self.partial_response_tool_calls) == 0:
             self.io.tool_warning("Empty response received from LLM. Check your provider account?")
+
+    def consolidate_chunks(self):
+        response = (
+            self.partial_response_chunks[0]
+            if not self.stream
+            else litellm.stream_chunk_builder(self.partial_response_chunks)
+        )
+        func_err = None
+        content_err = None
+
+        # Collect provider-specific fields from chunks to preserve them
+        # We need to track both by ID (primary) and index (fallback) since
+        # early chunks might not have IDs established yet
+        provider_specific_fields_by_id = {}
+        provider_specific_fields_by_index = {}
+
+        for chunk in self.partial_response_chunks:
+            try:
+                if chunk.choices and chunk.choices[0].delta and chunk.choices[0].delta.tool_calls:
+                    for tool_call in chunk.choices[0].delta.tool_calls:
+                        if (
+                            hasattr(tool_call, "provider_specific_fields")
+                            and tool_call.provider_specific_fields
+                        ):
+                            # Ensure provider_specific_fields is a dictionary
+                            psf = tool_call.provider_specific_fields
+                            if not isinstance(psf, dict):
+                                continue
+
+                            # Try to use ID first
+                            if hasattr(tool_call, "id") and tool_call.id:
+                                tool_id = tool_call.id
+                                if tool_id not in provider_specific_fields_by_id:
+                                    provider_specific_fields_by_id[tool_id] = {}
+                                # Merge provider-specific fields for this tool ID
+                                provider_specific_fields_by_id[tool_id].update(psf)
+                            # Also track by index as fallback
+                            elif hasattr(tool_call, "index"):
+                                tool_index = tool_call.index
+                                if tool_index not in provider_specific_fields_by_index:
+                                    provider_specific_fields_by_index[tool_index] = {}
+                                provider_specific_fields_by_index[tool_index].update(psf)
+            except (AttributeError, IndexError):
+                continue
+
+        try:
+            if response.choices[0].message.tool_calls:
+                for i, tool_call in enumerate(response.choices[0].message.tool_calls):
+                    # Add provider-specific fields if we collected any for this tool
+                    tool_id = tool_call.id
+
+                    # Try ID first
+                    if tool_id in provider_specific_fields_by_id:
+                        # Add provider-specific fields directly to the tool call object
+                        tool_call.provider_specific_fields = provider_specific_fields_by_id[tool_id]
+                    # Fall back to index
+                    elif i in provider_specific_fields_by_index:
+                        # Add provider-specific fields directly to the tool call object
+                        tool_call.provider_specific_fields = provider_specific_fields_by_index[i]
+
+                    # Create dictionary version with provider-specific fields
+                    tool_call_dict = tool_call.model_dump()
+
+                    # Add provider-specific fields to the dictionary too (in case model_dump() doesn't include them)
+                    if tool_id in provider_specific_fields_by_id:
+                        tool_call_dict["provider_specific_fields"] = provider_specific_fields_by_id[
+                            tool_id
+                        ]
+                    elif i in provider_specific_fields_by_index:
+                        tool_call_dict["provider_specific_fields"] = (
+                            provider_specific_fields_by_index[i]
+                        )
+
+                    # Only append to partial_response_tool_calls if it's empty
+                    if len(self.partial_response_tool_calls) == 0:
+                        self.partial_response_tool_calls.append(tool_call_dict)
+
+                self.partial_response_function_call = (
+                    response.choices[0].message.tool_calls[0].function
+                )
+        except AttributeError as e:
+            func_err = e
+
+        try:
+            reasoning_content = response.choices[0].message.reasoning_content
+        except AttributeError:
+            try:
+                reasoning_content = response.choices[0].message.reasoning
+            except AttributeError:
+                reasoning_content = None
+
+        self.partial_response_reasoning_content = reasoning_content or ""
+
+        try:
+            if not self.partial_response_reasoning_content:
+                self.partial_response_content = response.choices[0].message.content or ""
+        except AttributeError as e:
+            content_err = e
+
+        return response, func_err, content_err
 
     def stream_wrapper(self, content, final):
         if not hasattr(self, "_streaming_buffer_length"):
@@ -3298,19 +3414,6 @@ class Coder:
 
         self.io.tool_output(self.usage_report)
         self.io.rule()
-
-        prompt_tokens = self.message_tokens_sent
-        completion_tokens = self.message_tokens_received
-        self.event(
-            "message_send",
-            main_model=self.main_model,
-            edit_format=self.edit_format,
-            prompt_tokens=prompt_tokens,
-            completion_tokens=completion_tokens,
-            total_tokens=prompt_tokens + completion_tokens,
-            cost=self.message_cost,
-            total_cost=self.total_cost,
-        )
 
         self.message_cost = 0.0
         self.message_tokens_sent = 0
@@ -3509,6 +3612,16 @@ class Coder:
     async def apply_updates(self):
         edited = set()
         try:
+            if getattr(self.args, "tweak_responses", False):
+                confirmation = await self.io.confirm_ask("Tweak Response?", allow_tweak=True)
+
+                if confirmation or confirmation == "tweak":
+                    self.partial_response_content = self.io.edit_in_editor(
+                        self.partial_response_content
+                    )
+
+            await asyncio.sleep(0.1)
+
             edits = self.get_edits()
             edits = self.apply_edits_dry_run(edits)
             edits = await self.prepare_to_edit(edits)
@@ -3668,7 +3781,7 @@ class Coder:
         return edits
 
     async def auto_save_session(self):
-        """Automatically save the current session as 'auto-save'."""
+        """Automatically save the current session to {auto-save-session-name}.json."""
         if not getattr(self.args, "auto_save", False):
             return
 
@@ -3690,7 +3803,10 @@ class Coder:
                 session_manager = SessionManager(self, self.io)
                 loop = asyncio.get_running_loop()
                 self._autosave_future = loop.run_in_executor(
-                    None, session_manager.save_session, "auto-save", False
+                    None,
+                    session_manager.save_session,
+                    getattr(self.args, "auto_save_session_name", "auto-save"),
+                    False,
                 )
             except Exception:
                 # Don't show errors for auto-save to avoid interrupting the user experience
@@ -3703,17 +3819,24 @@ class Coder:
         done = set()
         group = ConfirmGroup(set(self.shell_commands))
         accumulated_output = ""
-        for command in self.shell_commands:
-            if command in done:
-                continue
-            done.add(command)
-            output = await self.handle_shell_commands(command, group)
-            if output:
-                accumulated_output += output + "\n\n"
-        return accumulated_output
+
+        try:
+            self.commands.cmd_running = True
+
+            for command in self.shell_commands:
+                if command in done:
+                    continue
+                done.add(command)
+                output = await self.handle_shell_commands(command, group)
+                if output:
+                    accumulated_output += output + "\n\n"
+
+            return accumulated_output
+        finally:
+            self.commands.cmd_running = False
 
     async def handle_shell_commands(self, commands_str, group):
-        commands = commands_str.strip().splitlines()
+        commands = commands_str.strip().split(";")
         command_count = sum(
             1 for cmd in commands if cmd.strip() and not cmd.strip().startswith("#")
         )
@@ -3733,6 +3856,8 @@ class Coder:
             if not command or command.startswith("#"):
                 continue
 
+            command = self.format_command_with_prefix(command)
+
             self.io.tool_output()
             self.io.tool_output(f"Running {command}")
             # Add the command to input history
@@ -3750,3 +3875,32 @@ class Coder:
             line_plural = "line" if num_lines == 1 else "lines"
             self.io.tool_output(f"Added {num_lines} {line_plural} of output to the chat.")
             return accumulated_output
+
+    def format_command_with_prefix(self, command):
+        """
+        Format a command with a command prefix.
+
+        If the command prefix contains a {} placeholder, replace it with the command.
+        Otherwise, append the command to the prefix with a space.
+
+        Args:
+            command (str): The command to format
+
+        Returns:
+            str: The formatted command
+        """
+        command_prefix = None
+
+        if command and getattr(self.args, "command_prefix", None):
+            command_prefix = getattr(self.args, "command_prefix", None)
+
+        if not command_prefix:
+            return command
+
+        # Check if the prefix contains a {} placeholder
+        if "{}" in command_prefix:
+            # Replace the {} placeholder with the command
+            return command_prefix.replace("{}", command)
+        else:
+            # Append the command to the prefix with a space
+            return f"{command_prefix} {command}"
