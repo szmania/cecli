@@ -310,7 +310,6 @@ class Coder:
 
         self.ignore_mentions = ignore_mentions
         if not self.ignore_mentions:
->>>>>>> b36f2673e0a089faa74baa7daef4f23188a739ff
             self.ignore_mentions = set()
 
         self.file_watcher = file_watcher
@@ -2995,6 +2994,7 @@ class Coder:
 
     async def show_send_output_stream(self, completion):
         received_content = False
+        id_index_dict = {} # Added for tool call streaming logic
 
         async for chunk in completion:
             # Check if confirmation is in progress and wait if needed
@@ -3020,7 +3020,6 @@ class Coder:
                         for tool_call_chunk in chunk.choices[0].delta.tool_calls:
                             self.tool_reflection = True
 
-<<<<<<< HEAD
                             index = tool_call_chunk.index
                             # Some models return unique ids, others, indexes for tool calls
                             if tool_call_chunk.id and tool_call_chunk.id not in id_index_dict:
@@ -3038,17 +3037,13 @@ class Coder:
 
                             if tool_call_chunk.id:
                                 self.partial_response_tool_calls[index]["id"] = tool_call_chunk.id
-=======
->>>>>>> b36f2673e0a089faa74baa7daef4f23188a739ff
+
                             if tool_call_chunk.type:
                                 self.io.update_spinner_suffix(tool_call_chunk.type)
 
                             if tool_call_chunk.function:
-<<<<<<< HEAD
                                 if "function" not in self.partial_response_tool_calls[index]:
                                     self.partial_response_tool_calls[index]["function"] = {}
-=======
->>>>>>> b36f2673e0a089faa74baa7daef4f23188a739ff
                                 if tool_call_chunk.function.name:
                                     self.io.update_spinner_suffix(tool_call_chunk.function.name)
                                 if tool_call_chunk.function.arguments:
@@ -3064,14 +3059,11 @@ class Coder:
                     # dump(func)
                     for k, v in func.items():
                         self.tool_reflection = True
-<<<<<<< HEAD
 
                         if k in self.partial_response_function_call:
                             self.partial_response_function_call[k] += v
                         else:
                             self.partial_response_function_call[k] = v
-=======
->>>>>>> b36f2673e0a089faa74baa7daef4f23188a739ff
                         self.io.update_spinner_suffix(v)
 
                     received_content = True
