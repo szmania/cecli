@@ -71,6 +71,7 @@ from aider.tools import (
     view_files_matching,
     view_files_with_symbol,
 )
+from aider.tools.tool_manager import ToolManager
 
 from .agent_prompts import AgentPrompts
 from .base_coder import ChatChunks, Coder
@@ -170,6 +171,9 @@ class AgentCoder(Coder):
         self.agent_finished = False
         self._get_agent_config()
         super().__init__(*args, **kwargs)
+
+        # Initialize tool manager for custom tools
+        self.tool_manager = ToolManager(self)
 
     def _build_tool_registry(self):
         """
