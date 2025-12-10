@@ -2778,6 +2778,14 @@ class Coder:
         """Cleanup when the Coder object is destroyed."""
         self.ok_to_warm_cache = False
 
+    def event(self, event_name, **kwargs):
+        """Handle events from commands or other parts of the system.
+        
+        This method can be overridden by subclasses to implement event handling.
+        """
+        # Base implementation does nothing - can be overridden by subclasses
+        pass
+
     def add_assistant_reply_to_cur_messages(self):
         """
         Add the assistant's reply to `cur_messages`.
