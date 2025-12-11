@@ -71,7 +71,7 @@ from aider.tools import (
     view_files_matching,
     view_files_with_symbol,
 )
-from aider.tools.tool_manager import ToolManager
+from aider.tool_manager import ToolManager
 
 from .agent_prompts import AgentPrompts
 from .base_coder import ChatChunks, Coder
