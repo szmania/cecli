@@ -1,6 +1,7 @@
 import ast
 import asyncio
 import base64
+import functools
 import json
 import locale
 import os
@@ -372,10 +373,17 @@ class AgentCoder(Coder):
             if hasattr(tool_module, "SCHEMA"):
                 schemas.append(tool_module.SCHEMA)
 
+        # Add schemas from ToolManager for custom tools
+        if self.tool_manager:
+            schemas.extend(self.tool_manager.get_tool_definitions())
+
         return schemas
 
     async def initialize_mcp_tools(self):
         await super().initialize_mcp_tools()
+
+        # Load custom tools discovered by ToolManager
+        await self.tool_manager.load_discovered_tools_async()
 
         local_tools = self.get_local_tool_schemas()
         if not local_tools:
@@ -435,6 +443,19 @@ class AgentCoder(Coder):
                             tasks.append(result)
                         else:
                             tasks.append(asyncio.to_thread(lambda: result))
+                elif self.tool_manager and norm_tool_name in self.tool_manager.tools:
+                    # Handle custom tools from ToolManager
+                    tool_info = self.tool_manager.tools[norm_tool_name]
+                    execute_func = tool_info["execute"]
+                    
+                    for params in parsed_args_list:
+                        if asyncio.iscoroutinefunction(execute_func):
+                            # For async functions, call directly
+                            tasks.append(execute_func(**params))
+                        else:
+                            # For sync functions, run in thread to prevent blocking
+                            func_with_args = functools.partial(execute_func, **params)
+                            tasks.append(asyncio.to_thread(func_with_args))
                 else:
                     # Handle MCP tools for tools not in registry
                     if self.mcp_tools:
