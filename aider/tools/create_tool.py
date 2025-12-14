@@ -6,7 +6,6 @@ import asyncio
 import re
 import sys
 
-from aider.exceptions import LiteLLMExceptions
 from aider.run_cmd import run_cmd
 from aider.tools.utils.base_tool import BaseTool
 
@@ -250,7 +249,7 @@ class Tool(BaseTool):
             success_msg = f"Successfully created tool '{file_name}' in {scope} scope."
             return success_msg + final_message_suffix
 
-        except LiteLLMExceptions as e:
+        except litellm.exceptions.LiteLLMException as e:
             return f"Error: Model API call failed: {e}"
         except Exception as e:
             return f"An unexpected error occurred during tool creation: {e}"
