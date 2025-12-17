@@ -249,7 +249,7 @@ class Tool(BaseTool):
             success_msg = f"Successfully created tool '{file_name}' in {scope} scope."
             return success_msg + final_message_suffix
 
-        except litellm.exceptions.LiteLLMException as e:
+        except litellm.exceptions.APIError as e:
             return f"Error: Model API call failed: {e}"
         except Exception as e:
             return f"An unexpected error occurred during tool creation: {e}"
