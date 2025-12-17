@@ -1241,7 +1241,7 @@ class AgentCoder(Coder):
 
         # Check if the content contains the SEARCH/REPLACE markers
         has_search = "<<<<<<< SEARCH" in self.partial_response_content
-        has_divider = "=======" in self in self.partial_response_content
+        has_divider = "=======" in self.partial_response_content
         has_replace = ">>>>>>> REPLACE" in self.partial_response_content
         edit_match = has_search and has_divider and has_replace
 
