@@ -227,6 +227,19 @@ use-enhanced-map: true  # Use enhanced repo map with import relationships
 
 This configuration system allows for fine-grained control over which tools are available in Agent Mode, enabling security-conscious deployments and specialized workflows while maintaining essential functionality.
 
+### Tool Management Commands
+
+Aider-CE provides a suite of commands for managing custom tools directly from the chat interface. These commands are only available in Agent Mode.
+
+| Command | Description |
+| :--- | :--- |
+| `/tools` | List available standard and custom tools with their descriptions. |
+| `/tools-create [<file_name.py>] <description> [--scope <local\|global>]` | Create a new custom tool from a description. A file name is optional and will be generated if not provided. |
+| `/tools-load <name_or_path>` | Load a tool from a file, glob pattern, or a standard tool by name. |
+| `/tools-unload <name_or_path>` | Unload a standard or custom tool by name or file path. |
+| `/tools-move <tool_name> <local\|global>` | Move a tool to a different scope (local or global). |
+| `/tools-edit <path>` | Add a tool's source file to the chat to be edited. |
+
 ### Skills
 
 Agent Mode includes a powerful skills system that allows you to extend the AI's capabilities with custom instructions, reference materials, scripts, and assets. Skills are configured through the `agent-config` parameter in the YAML configuration file.
