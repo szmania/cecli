@@ -2514,6 +2514,9 @@ Just show me the edits I need to make.
 
         potential_paths = glob.glob(expanded_path, recursive=True)
 
+        if not potential_paths and os.path.exists(expanded_path):
+            potential_paths = [expanded_path]
+
         if not potential_paths:
             self.io.tool_error(f"No files or directories found matching: {path_arg}")
             return
