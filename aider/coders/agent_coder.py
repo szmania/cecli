@@ -249,10 +249,8 @@ class AgentCoder(Coder):
 
                 # If includelist is specified, only include tools in includelist
                 if tools_includelist:
-                    should_include = tool_name in tools_includelist
-
-                # Always include essential tools
-                if tool_name in essential_tools:
+                    should_include = tool_name in tools_includelist or tool_name in essential_tools
+                else:
                     should_include = True
 
                 # Exclude tools in excludelist (unless they're essential)
@@ -447,15 +445,14 @@ class AgentCoder(Coder):
                     # Handle custom tools from ToolManager
                     tool_info = self.tool_manager.tools[norm_tool_name]
                     execute_func = tool_info["execute"]
-                    
                     for params in parsed_args_list:
+                        # Pass the coder instance to the execute function
                         if asyncio.iscoroutinefunction(execute_func):
-                            # For async functions, call directly
-                            tasks.append(execute_func(**params))
+                            tasks.append(execute_func(coder=self, **params))
                         else:
-                            # For sync functions, run in thread to prevent blocking
-                            func_with_args = functools.partial(execute_func, **params)
-                            tasks.append(asyncio.to_thread(func_with_args))
+                            tasks.append(
+                                asyncio.to_thread(execute_func, coder=self, **params)
+                            )
                 else:
                     # Handle MCP tools for tools not in registry
                     if self.mcp_tools:
