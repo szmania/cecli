@@ -29,6 +29,7 @@ class Tool(BaseTool):
         Execute a non-interactive shell command after user confirmation.
         """
         try:
+            coder.io.tool_output("HELLO FROM THE NEW COMMAND TOOL")
             command_string = coder.format_command_with_prefix(command_string)
             coder.io.tool_output(f"⚙️ Executing non-interactive shell command: {command_string}")
 
