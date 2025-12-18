@@ -1,5 +1,6 @@
 import os
 import platform
+import shlex
 import shutil
 import subprocess
 import sys
@@ -421,6 +422,13 @@ def printable_shell_command(cmd_list):
         str: Shell-escaped command string.
     """
     return oslex.join(cmd_list)
+
+
+def parse_quoted_filenames(args):
+    """
+    Splits a string of filenames, handling quotes.
+    """
+    return shlex.split(args)
 
 
 def split_concatenated_json(s: str) -> list[str]:
