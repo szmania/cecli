@@ -2209,18 +2209,19 @@ Just show me the edits I need to make.
             tm = self.coder.tool_manager
             local_tools_dir = tm._get_local_tools_dir()
 
-            for name, tool_info in tm.tools.items():
+            for norm_name, tool_info in tm.tools.items():
                 file_path = tool_info.get("file_path", "")
                 if file_path and file_path in tm.unloaded_tools:
                     continue
 
+                display_name = tool_info.get("name", norm_name)
                 definition = tool_info.get("definition", {})
                 description = definition.get("function", {}).get("description", "No description.")
 
                 if local_tools_dir and file_path.startswith(local_tools_dir):
-                    local_tools[name] = description
+                    local_tools[display_name] = description
                 else:
-                    global_tools[name] = description
+                    global_tools[display_name] = description
 
         if not standard_tools and not local_tools and not global_tools:
             self.io.tool_output("No tools available.")

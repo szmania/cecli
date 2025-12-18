@@ -132,7 +132,9 @@ class ToolManager:
                     schema = tool_class.SCHEMA
                     tool_name = schema.get("function", {}).get("name")
                     if tool_name:
-                        self.tools[tool_name] = {
+                        norm_name = tool_name.lower()
+                        self.tools[norm_name] = {
+                            "name": tool_name,
                             "definition": schema,
                             "execute": tool_class.execute,
                             "file_path": file_path,
@@ -149,7 +151,9 @@ class ToolManager:
                     definition = module.get_tool_definition()
                     tool_name = definition.get("function", {}).get("name")
                     if tool_name:
-                        self.tools[tool_name] = {
+                        norm_name = tool_name.lower()
+                        self.tools[norm_name] = {
+                            "name": tool_name,
                             "definition": definition,
                             "execute": module._execute,
                             "file_path": file_path,
