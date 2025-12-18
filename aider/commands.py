@@ -2425,21 +2425,32 @@ Just show me the edits I need to make.
         # --- Try to find it in custom tools ---
         custom_tool_name = None
         if tool_manager:
+            # Check by normalized name (the key)
             if arg in tool_manager.tools:
                 custom_tool_name = arg
             else:
-                try:
-                    abs_path = os.path.abspath(arg)
-                    for name, tool_info in tool_manager.tools.items():
-                        if os.path.abspath(tool_info.get("file_path")) == abs_path:
-                            custom_tool_name = name
-                            break
-                except Exception:
-                    pass  # Not a valid path
+                # Check by schema name (display name)
+                for norm_name, tool_info in tool_manager.tools.items():
+                    if tool_info.get("name") == arg:
+                        custom_tool_name = norm_name
+                        break
+                # If not found by schema name, check by file path
+                if not custom_tool_name:
+                    try:
+                        abs_path = os.path.abspath(arg)
+                        for name, tool_info in tool_manager.tools.items():
+                            if os.path.abspath(tool_info.get("file_path")) == abs_path:
+                                custom_tool_name = name
+                                break
+                    except Exception:
+                        pass  # Not a valid path
 
         if custom_tool_name:
+            display_name = tool_manager.tools.get(custom_tool_name, {}).get(
+                "name", custom_tool_name
+            )
             if await self.io.confirm_ask(
-                f"Are you sure you want to unload the custom tool '{custom_tool_name}'?"
+                f"Are you sure you want to unload the custom tool '{display_name}'?"
             ):
                 tool_manager.unload_tool(custom_tool_name)
             return
