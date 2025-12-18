@@ -4,6 +4,7 @@ import asyncio
 import glob
 import os
 import re
+import shlex
 import subprocess
 import sys
 import tempfile
@@ -1556,6 +1557,213 @@ class Commands:
             cur_messages=coder.cur_messages,
         )
 
+    async def cmd_tools_create(self, args):
+        "Create a new custom tool from a description."
+        from aider.coders.agent_coder import AgentCoder
+
+        if not isinstance(self.coder, AgentCoder):
+            self.io.tool_error("This command is only available in agent mode.")
+            return
+
+        try:
+            import shlex
+
+            parts = shlex.split(args)
+
+            file_name = None
+            description_parts = []
+            scope = "local"  # default
+
+            i = 0
+            while i < len(parts):
+                part = parts[i]
+                if part == "--scope":
+                    if i + 1 < len(parts):
+                        scope = parts[i + 1].lower()
+                        if scope not in ["local", "global"]:
+                            self.io.tool_error("Scope must be 'local' or 'global'.")
+                            return
+                        i += 2
+                        continue
+                    else:
+                        self.io.tool_error("Missing value for --scope.")
+                        return
+                elif file_name is None and part.endswith(".py"):
+                    file_name = part
+                else:
+                    description_parts.append(part)
+                i += 1
+
+            description = " ".join(description_parts)
+
+            if not description:
+                self.io.tool_error(
+                    "Usage: /tools-create [<file.py>] <description> [--scope <local|global>]"
+                )
+                return
+
+            await create_tool.create_tool(self.coder, file_name, description, scope)
+            await self.coder.initialize_mcp_tools()
+
+        except Exception as e:
+            self.io.tool_error(f"Error creating tool: {e}")
+
+    async def cmd_tools_load(self, args):
+        "Load a tool from a file, glob pattern, or a standard tool by name."
+        from aider.coders.agent_coder import AgentCoder
+
+        if not isinstance(self.coder, AgentCoder):
+            self.io.tool_error("This command is only available in agent mode.")
+            return
+
+        name_or_path = args.strip()
+        if not name_or_path:
+            self.io.tool_error("Please provide a tool name or path to load.")
+            return
+
+        # Try to load a previously unloaded standard tool
+        norm_name = name_or_path.lower()
+        if hasattr(self.coder, "unloaded_standard_tools") and norm_name in self.coder.unloaded_standard_tools:
+            tool_class = self.coder.unloaded_standard_tools.pop(norm_name)
+            self.coder.tool_registry[norm_name] = tool_class
+            self.io.tool_output(f"Loaded standard tool '{name_or_path}'.")
+            await self.coder.initialize_mcp_tools()
+            return
+
+        # Check if it's already a loaded standard tool
+        if hasattr(self.coder, "tool_registry") and norm_name in self.coder.tool_registry:
+            self.io.tool_output(f"Standard tool '{name_or_path}' is already loaded.")
+            return
+
+        # Check if it's already a loaded custom tool
+        if self.coder.tool_manager and name_or_path in self.coder.tool_manager.tools:
+            self.io.tool_output(f"Custom tool '{name_or_path}' is already loaded.")
+            return
+
+        # Try to load as a custom tool from path/glob
+        try:
+            if any(c in name_or_path for c in "*?[]"):
+                paths = glob.glob(name_or_path, recursive=True)
+            else:
+                paths = [name_or_path] if os.path.exists(name_or_path) else []
+
+            if not paths:
+                self.io.tool_error(f"No file(s) found for '{name_or_path}'.")
+                return
+
+            loaded_any = False
+            for path in paths:
+                if path.endswith(".py") and os.path.isfile(path):
+                    success, msg = await self.coder.tool_manager.load_tool_async(path)
+                    if success:
+                        loaded_any = True
+                    else:
+                        self.io.tool_error(f"Failed to load tool from {path}: {msg}")
+
+            if loaded_any:
+                await self.coder.initialize_mcp_tools()
+            elif paths:
+                self.io.tool_error(f"No python tools found for pattern '{name_or_path}'.")
+
+        except Exception as e:
+            self.io.tool_error(f"Error loading tool(s) from '{name_or_path}': {e}")
+
+    async def cmd_tools_unload(self, args):
+        "Unload a standard or custom tool by name or file path."
+        from aider.coders.agent_coder import AgentCoder
+
+        if not isinstance(self.coder, AgentCoder):
+            self.io.tool_error("This command is only available in agent mode.")
+            return
+
+        name_or_path = args.strip()
+        if not name_or_path:
+            self.io.tool_error("Please provide a tool name or path to unload.")
+            return
+
+        unloaded = False
+        # Try to unload as a custom tool by name
+        if self.coder.tool_manager and self.coder.tool_manager.unload_tool(name_or_path):
+            unloaded = True
+        else:
+            # Try to unload as a custom tool by path
+            tool_to_unload = None
+            for tool_name, tool_info in self.coder.tool_manager.tools.items():
+                if tool_info.get("file_path") == name_or_path:
+                    tool_to_unload = tool_name
+                    break
+            if tool_to_unload:
+                self.coder.tool_manager.unload_tool(tool_to_unload)
+                unloaded = True
+
+        # Try to unload as a standard tool
+        if not unloaded and hasattr(self.coder, "tool_registry"):
+            norm_name = name_or_path.lower()
+            if norm_name in self.coder.tool_registry:
+                tool_class = self.coder.tool_registry.pop(norm_name)
+                self.coder.unloaded_standard_tools[norm_name] = tool_class
+                self.io.tool_output(f"Unloaded standard tool '{name_or_path}'.")
+                unloaded = True
+
+        if unloaded:
+            await self.coder.initialize_mcp_tools()
+        else:
+            self.io.tool_error(f"Tool '{name_or_path}' not found or not loaded.")
+
+    async def cmd_tools_move(self, args):
+        "Move a tool to a different scope (local or global)."
+        from aider.coders.agent_coder import AgentCoder
+
+        if not isinstance(self.coder, AgentCoder):
+            self.io.tool_error("This command is only available in agent mode.")
+            return
+
+        parts = args.strip().split()
+        if len(parts) != 2:
+            self.io.tool_error("Usage: /tools-move <tool_name> <local|global>")
+            return
+
+        tool_name, scope = parts
+        if not self.coder.tool_manager:
+            self.io.tool_error("Tool manager not available.")
+            return
+
+        tool_info = self.coder.tool_manager.tools.get(tool_name)
+        if not tool_info:
+            self.io.tool_error(f"Custom tool '{tool_name}' not found.")
+            return
+
+        src_path = tool_info["file_path"]
+        result = self.coder.tool_manager.move_tool(tool_name, scope)
+        self.io.tool_output(result)
+
+        if "Successfully" in result:
+            if scope == "global":
+                dest_dir = self.coder.tool_manager._get_global_tools_dir()
+            else:
+                dest_dir = self.coder.tool_manager._get_local_tools_dir()
+
+            dest_path = os.path.join(dest_dir, os.path.basename(src_path))
+
+            self.coder.tool_manager.unload_tool(tool_name)
+            await self.coder.tool_manager.load_tool_async(dest_path)
+            await self.coder.initialize_mcp_tools()
+
+    async def cmd_tools_edit(self, args):
+        "Add a tool's source file to the chat to be edited."
+        from aider.coders.agent_coder import AgentCoder
+
+        if not isinstance(self.coder, AgentCoder):
+            self.io.tool_error("This command is only available in agent mode.")
+            return
+
+        path = args.strip()
+        if not path:
+            self.io.tool_error("Please provide the path to the tool file to edit.")
+            return
+
+        await self.cmd_add(path)
+
     def get_help_md(self):
         "Show help about all commands in markdown"
 
@@ -2201,3 +2409,39 @@ Just show me the edits I need to make.
             max_len = max(len(name) for name in tools_dict.keys()) if tools_dict else 0
             for name, desc in sorted(tools_dict.items()):
                 self.io.tool_output(f"- {name:<{max_len}} : {desc}")
+
+        # Standard tools
+        standard_tools = {}
+        if hasattr(self.coder, "tool_registry"):
+            for tool_class in self.coder.tool_registry.values():
+                schema = tool_class.SCHEMA
+                name = schema.get("function", {}).get("name")
+                desc = schema.get("function", {}).get("description", "No description.")
+                if name:
+                    standard_tools[name] = desc
+        print_tools("Standard Tools", standard_tools)
+
+        # Custom tools
+        if self.coder.tool_manager:
+            custom_tools_by_scope = {"global": {}, "local": {}, "unknown": {}}
+            for tool_info in self.coder.tool_manager.tools.values():
+                name = tool_info["name"]
+                schema = tool_info["definition"]
+                desc = schema.get("function", {}).get("description", "No description.")
+
+                file_path = tool_info.get("file_path", "")
+                local_dir = self.coder.tool_manager._get_local_tools_dir()
+                global_dir = self.coder.tool_manager._get_global_tools_dir()
+
+                scope = "unknown"
+                if local_dir and file_path.startswith(local_dir):
+                    scope = "local"
+                elif global_dir and file_path.startswith(global_dir):
+                    scope = "global"
+
+                custom_tools_by_scope[scope][name] = desc
+
+            print_tools("Custom Tools (local)", custom_tools_by_scope["local"])
+            print_tools("Custom Tools (global)", custom_tools_by_scope["global"])
+            if custom_tools_by_scope["unknown"]:
+                print_tools("Custom Tools (unknown scope)", custom_tools_by_scope["unknown"])

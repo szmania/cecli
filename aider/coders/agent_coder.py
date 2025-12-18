@@ -171,6 +171,7 @@ class AgentCoder(Coder):
         self.skip_cli_confirmations = False
 
         self.agent_finished = False
+        self.unloaded_standard_tools = {}
         self._get_agent_config()
         super().__init__(*args, **kwargs)
 

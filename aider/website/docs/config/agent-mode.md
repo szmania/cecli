@@ -204,7 +204,7 @@ agent-config: |
   {
     # Tool configuration
     "tools_includelist": ["view", "makeeditable", "replacetext", "finished"],  # Optional: Whitelist of tools
-    "tools_excludelist": ["command", "commandinteractive"],  # Optional: Blacklist of tools
+    "tools_excludelist": ["command", "commandinteractive", "runprocess"],  # Optional: Blacklist of tools
     
     # Context blocks configuration
     "include_context_blocks": ["todo_list", "git_status"],  # Optional: Context blocks to include
