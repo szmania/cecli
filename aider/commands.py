@@ -857,7 +857,11 @@ class Commands:
 
         matched_files = []
         for fn in raw_matched_files:
-            matched_files += expand_subdir(fn)
+            if fn.is_dir():
+                # Expand directory to all files within it
+                matched_files.extend([f for f in fn.rglob("*") if f.is_file()])
+            else:
+                matched_files.append(fn)
 
         matched_files = [
             fn.relative_to(self.coder.root)
