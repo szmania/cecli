@@ -1389,6 +1389,23 @@ class AgentCoder(Coder):
                 )
                 return f"Error executing {norm_tool_name}: {str(e)}"
 
+        elif self.tool_manager and norm_tool_name in self.tool_manager.tools:
+            # Handle custom tools from ToolManager
+            tool_info = self.tool_manager.tools[norm_tool_name]
+            execute_func = tool_info["execute"]
+            try:
+                # Pass the coder instance to the execute function
+                if asyncio.iscoroutinefunction(execute_func):
+                    result = await execute_func(coder=self, **params)
+                else:
+                    result = await asyncio.to_thread(execute_func, coder=self, **params)
+                return str(result)
+            except Exception as e:
+                self.io.tool_error(
+                    f"Error during {norm_tool_name} execution: {e}\n{traceback.format_exc()}"
+                )
+                return f"Error executing {norm_tool_name}: {str(e)}"
+
         # Handle MCP tools for tools not in registry
         if self.mcp_tools:
             for server_name, server_tools in self.mcp_tools:
