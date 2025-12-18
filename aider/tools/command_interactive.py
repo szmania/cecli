@@ -33,15 +33,6 @@ class Tool(BaseTool):
         try:
             command_string = coder.format_command_with_prefix(command_string)
 
-            # Always confirm in a non-interactive context to allow tests to run.
-            confirmed = True
-
-            if not confirmed:
-                # This happens if the user explicitly says 'no' this time.
-                # If 'Always' was chosen previously, confirm_ask returns True directly.
-                coder.io.tool_output(f"Skipped execution of shell command: {command_string}")
-                return "Shell command execution skipped by user."
-
             coder.io.tool_output(f"⚙️ Starting interactive shell command: {command_string}")
             coder.io.tool_output(">>> You may need to interact with the command below <<<")
             coder.io.tool_output(" \n")

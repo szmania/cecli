@@ -29,21 +29,7 @@ class Tool(BaseTool):
         Execute a non-interactive shell command after user confirmation.
         """
         try:
-            # Ask for confirmation before executing.
-            # allow_never=True enables the 'Always' option.
-            # confirm_ask handles remembering the 'Always' choice based on the subject.
             command_string = coder.format_command_with_prefix(command_string)
-
-            # Always confirm in a non-interactive context to allow tests to run.
-            confirmed = True
-
-            if not confirmed:
-                # This happens if the user explicitly says 'no' this time.
-                # If 'Always' was chosen previously, confirm_ask returns True directly.
-                coder.io.tool_output(f"Skipped execution of shell command: {command_string}")
-                return "Shell command execution skipped by user."
-
-            # Proceed with execution if confirmed is True
             coder.io.tool_output(f"⚙️ Executing non-interactive shell command: {command_string}")
 
             # Use run_cmd_subprocess for non-interactive execution
