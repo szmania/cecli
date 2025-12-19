@@ -1,7 +1,3 @@
-    <Levies key="Westerlands_Marbrand_MAA_Billmen" percentage="25" max="LEVY" />
-    <Levies key="Reach_Tyrell_Guard_Spearmen" percentage="25" max="LEVY" />
-    <Levies key="Crownlands_Velaryon_MAA_Swordsmen" percentage="50" max="LEVY" />
-    <Levies key="Dorne_Dayne_MAA_Longbowmen" percentage="100" max="LEVY" />
 pydub>=0.25.1
 configargparse>=1.7.1
 GitPython>=3.1.45
@@ -38,6 +34,13 @@ mcp>=1.12.3
 # in matplotlib and a bunch of other deps
 # https://github.com/networkx/networkx/blob/d7132daa8588f653eacac7a5bae1ee85a183fa43/pyproject.toml#L57
 # We really only need networkx itself and scipy for the repomap.
+#
+# >3.5 seems to not be available for py3.10
+networkx>=3.4.2
+
+# This is the one networkx dependency that we need.
+# Including it here explicitly because we
+# didn't specify networkx[default] above.
 #
 # >3.5 seems to not be available for py3.10
 networkx>=3.4.2
