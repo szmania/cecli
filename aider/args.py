@@ -39,6 +39,7 @@ def get_parser(default_config_files, git_root):
         default_config_files=default_config_files,
         config_file_parser_class=configargparse.YAMLConfigFileParser,
         auto_env_var_prefix="AIDER_",
+        allow_abbrev=False,
     )
     # List of valid edit formats for argparse validation & shtab completion.
     # Dynamically gather them from the registered coder classes so the list
@@ -867,9 +868,11 @@ def get_parser(default_config_files, git_root):
         default=None,
     )
     group.add_argument(
+        "--yes",
         "--yes-always-commands",
         "--yolo",
         action="store_true",
+        dest="yes_always_commands",
         help="Always say yes to every confirmation (including cli commands)",
         default=False,
     )
