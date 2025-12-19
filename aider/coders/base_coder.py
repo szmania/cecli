@@ -496,7 +496,7 @@ class Coder:
                 max_code_line_length=map_max_line_length,
                 repo_root=self.root,
                 use_memory_cache=repomap_in_memory,
-                use_enhanced_map=False if not self.args or self.args.use_enhanced_map else True,
+                use_enhanced_map=getattr(self.args, "use_enhanced_map", False),
             )
 
         self.summarizer = summarizer or ChatSummary(
@@ -546,6 +546,12 @@ class Coder:
             if self.verbose:
                 self.io.tool_output("JSON Schema:")
                 self.io.tool_output(json.dumps(self.functions, indent=4))
+
+        self.tool_reflection = False
+        self._last_known_tool_index = 0
+        # Task coordination state variables
+        self.input_running = False
+        self.output_running = False
 
     def get_announcements(self):
         lines = []
