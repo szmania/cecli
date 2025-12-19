@@ -48,7 +48,7 @@ class Tool(BaseTool):
                 coder.io.tool_output(f"Skipped execution of command: {command}")
                 return "Command execution skipped by user."
 
-            coder.io.tool_output(f"⚙️ Executing command in subprocess: {command}")
+            coder.io.tool_output(f"Executing command in subprocess: {command}")
 
             # Use shlex.split to safely parse the command string
             args = shlex.split(command)
