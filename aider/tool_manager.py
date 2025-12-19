@@ -1,4 +1,6 @@
 import os
+import re
+import subprocess
 import sys
 import importlib.util
 from pathlib import Path
@@ -174,6 +176,70 @@ class ToolManager:
                     self.coder.io.tool_warning(msg)
                     return False, msg
             except Exception as e:
+                # Handle ImportError specifically for missing packages
+                if isinstance(e, ImportError):
+                    match = re.search(r"No module named '([^']*)'", str(e))
+                    package_name = None
+                    if match:
+                        # get 'requests' from 'requests.exceptions'
+                        package_name = match.group(1).split(".")[0]
+
+                    if package_name:
+                        res = await self.coder.io.confirm_ask(
+                            f"The tool at '{file_path}' failed to load due to a missing package:"
+                            f" '{package_name}'.\nDo you want to add it to requirements.txt and"
+                            " install it?"
+                        )
+                        if not res:
+                            msg = (
+                                "Tool loading aborted. Missing package"
+                                f" '{package_name}' was not installed."
+                            )
+                            self.coder.io.tool_warning(msg)
+                            return False, msg
+
+                        # Determine the directory of the tool to find/create requirements.txt
+                        tools_dir = os.path.dirname(file_path)
+                        requirements_path = os.path.join(tools_dir, "requirements.txt")
+
+                        # Add the package to requirements.txt
+                        try:
+                            with open(requirements_path, "a") as f:
+                                f.write(f"{package_name}\n")
+                            self.coder.io.tool_output(
+                                f"Added '{package_name}' to {requirements_path}"
+                            )
+                        except IOError as io_err:
+                            error_msg = f"Failed to write to {requirements_path}: {io_err}"
+                            self.coder.io.tool_error(error_msg)
+                            return False, error_msg
+
+                        # Install the package
+                        self.coder.io.tool_output(f"Installing '{package_name}'...")
+                        try:
+                            subprocess.check_call(
+                                [sys.executable, "-m", "pip", "install", package_name]
+                            )
+                            self.coder.io.tool_output(f"Successfully installed '{package_name}'.")
+                            self.coder.io.tool_output(f"Retrying to load tool from {file_path}...")
+                            continue  # Retry loading the tool
+                        except subprocess.CalledProcessError as install_error:
+                            error_msg = (
+                                "Failed to install package"
+                                f" '{package_name}': {install_error}"
+                            )
+                            self.coder.io.tool_error(error_msg)
+                            # Don't loop, let the user handle it.
+                            return False, error_msg
+                        except FileNotFoundError:
+                            error_msg = (
+                                "Failed to install package. `pip` command not found. Is pip"
+                                " installed in the current environment?"
+                            )
+                            self.coder.io.tool_error(error_msg)
+                            return False, error_msg
+
+                # Fallback for other exceptions or unparsable ImportErrors
                 msg = f"Failed to load tool from {file_path}: {e}"
                 self.coder.io.tool_error(msg)
 
