@@ -819,9 +819,10 @@ def get_parser(default_config_files, git_root):
         "--linear-output",
         action="store_true",
         help=(
-            "Run input and output sequentially instead of us simultaneous streams (default: False)"
+            "Run input and output sequentially instead of using simultaneous streams (default:"
+            " False)"
         ),
-        default=True,
+        default=False,
     )
     group.add_argument(
         "--debug",
