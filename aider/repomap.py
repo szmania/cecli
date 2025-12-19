@@ -6,7 +6,7 @@ import sqlite3
 import sys
 import time
 import warnings
-from collections import Counter, defaultdict, namedtuple
+from collections import defaultdict, namedtuple
 from importlib import resources
 from pathlib import Path
 
@@ -602,7 +602,8 @@ class RepoMap:
         import networkx as nx
 
         defines = defaultdict(set)
-        references = defaultdict(list)
+        references = defaultdict(lambda: defaultdict(int))
+        total_ref_count = defaultdict(int)  # Track total references per identifier
         definitions = defaultdict(set)
         file_imports = defaultdict(set)
         import_ast_mode = False
@@ -615,8 +616,10 @@ class RepoMap:
         fnames = sorted(fnames)
 
         # Default personalization for unspecified files is 1/num_nodes
-        # https://networkx.org/documentation/stable/_modules/networkx/algorithms/link_analysis/pagerank_alg.html#pagerank
         personalize = 100 / len(fnames)
+
+        fname_to_parts = {}
+        fname_to_suffix = {}
 
         try:
             cache_size = len(self.TAGS_CACHE)
@@ -667,6 +670,8 @@ class RepoMap:
 
             # Check path components against mentioned_idents
             path_obj = Path(rel_fname)
+            fname_to_parts[rel_fname] = path_obj.parts
+            fname_to_suffix[rel_fname] = path_obj.suffix
             path_components = set(path_obj.parts)
             basename_with_ext = path_obj.name
             basename_without_ext, _ = os.path.splitext(basename_with_ext)
@@ -692,7 +697,8 @@ class RepoMap:
                     definitions[key].add(tag)
 
                 elif tag.kind == "ref":
-                    references[tag.name].append(rel_fname)
+                    references[tag.name][rel_fname] += 1
+                    total_ref_count[tag.name] += 1
 
                 if tag.specific_kind == "import":
                     file_imports[rel_fname].add(tag.name)
@@ -702,8 +708,12 @@ class RepoMap:
         if self.use_enhanced_map and len(file_imports) > 0:
             import_ast_mode = True
 
-        if not references:
-            references = dict((k, list(v)) for k, v in defines.items())
+        if len(references) == 0:
+            # Convert defines to the new references structure: dict of dicts with counts
+            references = {}
+            for ident, files in defines.items():
+                references[ident] = {file: 1 for file in files}
+                total_ref_count[ident] = len(files)  # Each file has count 1
 
         idents = set(defines.keys()).intersection(set(references.keys()))
 
@@ -712,11 +722,13 @@ class RepoMap:
         # Add a small self-edge for every definition that has no references
         # Helps with tree-sitter 0.23.2 with ruby, where "def greet(name)"
         # isn't counted as a def AND a ref. tree-sitter 0.24.0 does.
+
+        unreferenced_weight = 2**-32 / (len(idents) + 1)
         for ident in defines.keys():
             if ident in references:
                 continue
             for definer in defines[ident]:
-                G.add_edge(definer, definer, weight=0.000001, ident=ident)
+                G.add_edge(definer, definer, weight=unreferenced_weight, ident=ident)
 
         for ident in idents:
             if progress:
@@ -755,14 +767,17 @@ class RepoMap:
             # Combined with the above downweighting
             # There should be a push/pull that balances repetitiveness of identifier defs
             # With absolute number of references throughout a codebase
-            unique_file_refs = len(set(references[ident]))
-            total_refs = len(references[ident])
+            unique_file_refs = len(references[ident])
+            total_refs = total_ref_count[ident]
             ext_mul = round(math.log2(unique_file_refs * total_refs**2 + 1))
 
-            for referencer, num_refs in Counter(references[ident]).items():
+            for referencer, num_refs in references[ident].items():
                 relevant_definers = [] if import_ast_mode else definers
 
-                if import_ast_mode:
+                # A referencer should not link to any definiers of an identifier it also defines
+                if referencer in definers:
+                    relevant_definers = [referencer]
+                elif import_ast_mode:
                     if referencer in file_imports:
                         matches = [
                             d
@@ -774,10 +789,9 @@ class RepoMap:
 
                 for definer in relevant_definers:
                     # dump(referencer, definer, num_refs, mul)
-
                     # Only add edge if file extensions match
-                    referencer_ext = Path(referencer).suffix
-                    definer_ext = Path(definer).suffix
+                    referencer_ext = fname_to_suffix[referencer]
+                    definer_ext = fname_to_suffix[definer]
                     if referencer_ext != definer_ext:
                         continue
 
@@ -786,12 +800,25 @@ class RepoMap:
                     if referencer in chat_rel_fnames:
                         use_mul *= 64
                     elif referencer == definer:
-                        use_mul *= 1 / 128
+                        use_mul *= num_refs / 128
 
                     # scale down so high freq (low value) mentions don't dominate
                     # num_refs = math.sqrt(num_refs)
-                    path_distance = self.shared_path_components(referencer, definer)
-                    weight = num_refs * use_mul * 2 ** (-1 * path_distance)
+
+                    p1 = fname_to_parts[referencer]
+                    p2 = fname_to_parts[definer]
+
+                    # Count common leading parts
+                    common_count = 0
+                    for c1, c2 in zip(p1, p2):
+                        if c1 == c2:
+                            common_count += 1
+                        else:
+                            break
+
+                    path_distance = len(p1) + len(p2) - (2 * common_count)
+
+                    weight = use_mul * 2 ** (-1 * path_distance)
                     G.add_edge(referencer, definer, weight=weight, key=ident, ident=ident)
 
         self.io.profile("Build Graph")

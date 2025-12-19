@@ -78,22 +78,6 @@ def get_parser(default_config_files, git_root):
         help="Specify the api base url",
     )
     group.add_argument(
-        "--openai-api-type",
-        help="(deprecated, use --set-env OPENAI_API_TYPE=<value>)",
-    )
-    group.add_argument(
-        "--openai-api-version",
-        help="(deprecated, use --set-env OPENAI_API_VERSION=<value>)",
-    )
-    group.add_argument(
-        "--openai-api-deployment-id",
-        help="(deprecated, use --set-env OPENAI_API_DEPLOYMENT_ID=<value>)",
-    )
-    group.add_argument(
-        "--openai-organization-id",
-        help="(deprecated, use --set-env OPENAI_ORGANIZATION=<value>)",
-    )
-    group.add_argument(
         "--set-env",
         action="append",
         metavar="ENV_VAR_NAME=value",
@@ -135,6 +119,23 @@ def get_parser(default_config_files, git_root):
         metavar="ALIAS:MODEL",
         help="Add a model alias (can be used multiple times)",
     )
+    group.add_argument(
+        "--model-overrides",
+        metavar="MODEL_OVERRIDES_JSON",
+        help=(
+            'Specify model tag overrides directly as JSON/YAML string (e.g., \'{"gpt-4o": {"high":'
+            ' {"temperature": 0.8}}}\')'
+        ),
+        default=None,
+    )
+    group.add_argument(
+        "--model-overrides-file",
+        metavar="MODEL_OVERRIDES_FILE",
+        default=".aider.model.overrides.yml",
+        help=(
+            "Specify a file with model tag overrides (e.g., gpt-4o:high -> reasoning_effort: high)"
+        ),
+    ).complete = shtab.FILE
     group.add_argument(
         "--reasoning-effort",
         type=str,
@@ -184,6 +185,13 @@ def get_parser(default_config_files, git_root):
         choices=edit_format_choices,
         default=None,
         help="Specify what edit format the LLM should use (default depends on model)",
+    )
+    group.add_argument(
+        "--ask",
+        action="store_const",
+        dest="edit_format",
+        const="ask",
+        help="Use ask edit format for the main chat",
     )
     group.add_argument(
         "--architect",
@@ -251,8 +259,22 @@ def get_parser(default_config_files, git_root):
         ),
     )
 
+    ########
+    group = parser.add_argument_group("TUI Settings")
+    group.add_argument(
+        "--tui",
+        action="store_true",
+        default=False,
+        help="Launch Textual TUI interface (experimental)",
+    )
+    group.add_argument(
+        "--tui-config",
+        metavar="TUI_CONFIG_JSON",
+        help="Specify TUI Mode configuration as a JSON string",
+        default=None,
+    )
     #########
-    group = parser.add_argument_group("Agent settings")
+    group = parser.add_argument_group("Agent Settings")
     group.add_argument(
         "--agent-config",
         metavar="AGENT_CONFIG_JSON",
@@ -698,36 +720,6 @@ def get_parser(default_config_files, git_root):
         default=False,
     )
 
-    ##########
-    group = parser.add_argument_group("Analytics")
-    group.add_argument(
-        "--analytics",
-        action=argparse.BooleanOptionalAction,
-        default=None,
-        help=argparse.SUPPRESS,
-    )
-    group.add_argument(
-        "--analytics-log",
-        metavar="ANALYTICS_LOG_FILE",
-        help=argparse.SUPPRESS,
-    ).complete = shtab.FILE
-    group.add_argument(
-        "--analytics-disable",
-        action="store_true",
-        help=argparse.SUPPRESS,
-        default=False,
-    )
-    group.add_argument(
-        "--analytics-posthog-host",
-        metavar="ANALYTICS_POSTHOG_HOST",
-        help=argparse.SUPPRESS,
-    )
-    group.add_argument(
-        "--analytics-posthog-project-api-key",
-        metavar="ANALYTICS_POSTHOG_PROJECT_API_KEY",
-        help=argparse.SUPPRESS,
-    )
-
     #########
     group = parser.add_argument_group("Upgrading")
     group.add_argument(
@@ -789,13 +781,6 @@ def get_parser(default_config_files, git_root):
         ),
     ).complete = shtab.FILE
     group.add_argument(
-        "--gui",
-        "--browser",
-        action=argparse.BooleanOptionalAction,
-        help=argparse.SUPPRESS,
-        default=False,
-    )
-    group.add_argument(
         "--copy-paste",
         action=argparse.BooleanOptionalAction,
         default=False,
@@ -836,7 +821,7 @@ def get_parser(default_config_files, git_root):
         help=(
             "Run input and output sequentially instead of us simultaneous streams (default: False)"
         ),
-        default=False,
+        default=True,
     )
     group.add_argument(
         "--debug",
@@ -877,8 +862,15 @@ def get_parser(default_config_files, git_root):
     group.add_argument(
         "--yes-always",
         action="store_true",
-        help="Always say yes to every confirmation",
+        help="Always say yes to every confirmation (not including cli commands)",
         default=None,
+    )
+    group.add_argument(
+        "--yes-always-commands",
+        "--yolo",
+        action="store_true",
+        help="Always say yes to every confirmation (including cli commands)",
+        default=False,
     )
     group.add_argument(
         "--disable-playwright",

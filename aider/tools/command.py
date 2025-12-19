@@ -29,8 +29,33 @@ class Tool(BaseTool):
         Execute a non-interactive shell command after user confirmation.
         """
         try:
-            coder.io.tool_output("HELLO FROM THE NEW COMMAND TOOL")
             command_string = coder.format_command_with_prefix(command_string)
+
+            confirmed = (
+                True
+                if coder.skip_cli_confirmations
+                else await coder.io.confirm_ask(
+                    "Allow execution of this command?",
+                    subject=command_string,
+                    explicit_yes_required=True,  # Require explicit 'yes' or 'always'
+                    allow_never=True,  # Enable the 'Always' option
+                    group_response="Command Tool",
+                )
+            )
+
+            if not confirmed:
+                # This happens if the user explicitly says 'no' this time.
+                # If 'Always' was chosen previously, confirm_ask returns True directly.
+                coder.io.tool_output(f"Skipped execution of shell command: {command_string}")
+                return "Shell command execution skipped by user."
+
+            should_print = True
+            tui = None
+            if coder.tui and coder.tui():
+                tui = coder.tui()
+                should_print = False
+
+            # Proceed with execution if confirmed is True
             coder.io.tool_output(f"⚙️ Executing non-interactive shell command: {command_string}")
 
             # Use run_cmd_subprocess for non-interactive execution
@@ -38,6 +63,7 @@ class Tool(BaseTool):
                 command_string,
                 verbose=coder.verbose,
                 cwd=coder.root,  # Execute in the project root
+                should_print=should_print,
             )
 
             # Format the output for the result message, include more content
@@ -51,6 +77,9 @@ class Tool(BaseTool):
                     + f"\n... (output truncated at {output_limit} characters, based on"
                     " large_file_token_threshold)"
                 )
+
+            if tui:
+                coder.io.tool_output(output_content)
 
             if exit_status == 0:
                 return (

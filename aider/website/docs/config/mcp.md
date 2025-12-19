@@ -18,11 +18,13 @@ You have two ways of sharing your MCP server configuration with Aider.
 
 {: .note }
 
-> Today, Aider supports connecting to MCP servers using stdio and http transports.
+> Today, Aider-CE/Cecli supports connecting to MCP servers using stdio, http, and sse transports.
 
 ### Config Files
 
-You can also configure MCP servers in your `.aider.conf.yml` file:
+You can configure MCP servers in your `.aider.conf.yml` file using either JSON or YAML format:
+
+#### JSON Configuration
 
 ```yaml
 mcp-servers: |
@@ -36,6 +38,19 @@ mcp-servers: |
   }
 ```
 
+#### YAML Configuration
+
+```yaml
+mcp-servers:
+  mcpServers:
+    context7:
+      transport: http
+      url: https://mcp.context7.com/mcp
+    deepwiki:
+      transport: http
+      url: https://mcp.deepwiki.com/mcp
+```
+
 Or specify a configuration file:
 
 ```yaml
@@ -46,7 +61,7 @@ These options are configurable in any of Aider's config file formats.
 
 ### Flags
 
-You can specify MCP servers directly on the command line using the `--mcp-servers` option with a JSON string:
+You can specify MCP servers directly on the command line using the `--mcp-servers` option with a JSON or YAML string:
 
 #### Using a JSON String
 
@@ -54,9 +69,21 @@ You can specify MCP servers directly on the command line using the `--mcp-server
 aider --mcp-servers '{"mcpServers":{"git":{"transport":"http","url":"http://localhost:8000"}}}'
 ```
 
+#### Using a YAML String
+
+```bash
+aider --mcp-servers 'mcpServers:
+  context7:
+    transport: http
+    url: https://mcp.context7.com/mcp
+  deepwiki:
+    transport: http
+    url: https://mcp.deepwiki.com/mcp'
+```
+
 #### Using a configuration file
 
-Alternatively, you can store your MCP server configurations in a JSON file and reference it with the `--mcp-servers-file` option:
+Alternatively, you can store your MCP server configurations in a JSON or YAML file and reference it with the `--mcp-servers-file` option:
 
 ```bash
 aider --mcp-servers-file mcp.json
@@ -72,10 +99,10 @@ aider --mcp-transport http
 
 ### Environment Variables
 
-You can also configure MCP servers using environment variables in your `.env` file:
+You can also configure MCP servers using environment variables in your `.env` file using JSON or YAML format:
 
 ```
-AIDER_MCP_SERVERS={"mcpServers":{"git":{"command":"uvx","args":["mcp-server-git"]}}}
+AIDER_MCP_SERVERS={"mcpServers":{"git":{"transport": "stdio", "command":"uvx","args":["mcp-server-git"]}}}
 ```
 
 Or specify a configuration file:
@@ -90,6 +117,6 @@ If you encounter issues with MCP servers:
 
 1. Use the `--verbose` flag to see detailed information about MCP server loading
 2. Check that the specified executables are installed and available in your PATH
-3. Verify that your JSON configuration is valid
+3. Verify that your JSON or YAML configuration is valid
 
 For more information about specific MCP servers and their capabilities, refer to their respective documentation.

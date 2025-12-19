@@ -146,8 +146,30 @@ Arguments: {}
 ```
 
 ### Agent Configuration
-
 Agent Mode can be configured using the `--agent-config` command line argument, which accepts a JSON string for fine-grained control over tool availability and behavior.
+
+Agent Mode can also be configured directly in the relevant config.yml file:
+
+```yaml
+agent: true
+agent-config:
+  # Tool configuration
+  tools_includelist: ["view", "makeeditable", "replacetext", "finished"]  # Optional: Whitelist of tools
+  tools_excludelist: ["command", "commandinteractive"]  # Optional: Blacklist of tools
+  
+  # Context blocks configuration
+  include_context_blocks: ["todo_list", "git_status"]  # Optional: Context blocks to include
+  exclude_context_blocks: ["symbol_outline", "directory_structure"]  # Optional: Context blocks to exclude
+  
+  # Performance and behavior settings
+  large_file_token_threshold: 12500  # Token threshold for large file warnings
+  skip_cli_confirmations: false  # YOLO mode - be brave and let the LLM cook
+  
+  # Skills configuration (see Skills documentation for details)
+  skills_paths: ["~/my-skills", "./project-skills"]  # Directories to search for skills
+  skills_includelist: ["python-refactoring", "react-components"]  # Optional: Whitelist of skills to include
+  skills_excludelist: ["legacy-tools"]  # Optional: Blacklist of skills to exclude
+```
 
 #### Configuration Options
 
@@ -190,8 +212,7 @@ preserve-todo-list: true
 use-enhanced-map: true
 ```
 
-
-#### Configuration Example
+#### Complete Configuration Example
 
 Complete configuration example in YAML configuration file (`.aider.conf.yml` or `~/.aider.conf.yml`):
 
@@ -200,25 +221,23 @@ Complete configuration example in YAML configuration file (`.aider.conf.yml` or 
 agent: true
 
 # Agent Mode configuration
-agent-config: |
-  {
-    # Tool configuration
-    "tools_includelist": ["view", "makeeditable", "replacetext", "finished"],  # Optional: Whitelist of tools
-    "tools_excludelist": ["command", "commandinteractive", "runprocess"],  # Optional: Blacklist of tools
-    
-    # Context blocks configuration
-    "include_context_blocks": ["todo_list", "git_status"],  # Optional: Context blocks to include
-    "exclude_context_blocks": ["symbol_outline", "directory_structure"],  # Optional: Context blocks to exclude
-    
-    # Performance and behavior settings
-    "large_file_token_threshold": 12500,  # Token threshold for large file warnings
-    "skip_cli_confirmations": false,  # YOLO mode - be brave and let the LLM cook
-    
-    # Skills configuration (see Skills documentation for details)
-    "skills_paths": ["~/my-skills", "./project-skills"],  # Directories to search for skills
-    "skills_includelist": ["python-refactoring", "react-components"],  # Optional: Whitelist of skills to include
-    "skills_excludelist": ["legacy-tools"]  # Optional: Blacklist of skills to exclude
-  }
+agent-config:
+  # Tool configuration
+  tools_includelist: ["view", "makeeditable", "replacetext", "finished"]  # Optional: Whitelist of tools
+  tools_excludelist: ["command", "commandinteractive", "runprocess"]  # Optional: Blacklist of tools
+  
+  # Context blocks configuration
+  include_context_blocks: ["todo_list", "git_status"]  # Optional: Context blocks to include
+  exclude_context_blocks: ["symbol_outline", "directory_structure"]  # Optional: Context blocks to exclude
+  
+  # Performance and behavior settings
+  large_file_token_threshold: 12500  # Token threshold for large file warnings
+  skip_cli_confirmations: false  # YOLO mode - be brave and let the LLM cook
+  
+  # Skills configuration (see Skills documentation for details)
+  skills_paths: ["~/my-skills", "./project-skills"]  # Directories to search for skills
+  skills_includelist: ["python-refactoring", "react-components"]  # Optional: Whitelist of skills to include
+  skills_excludelist: ["legacy-tools"]  # Optional: Blacklist of skills to exclude
 
 # Other Agent Mode options
 preserve-todo-list: true  # Preserve todo list across sessions

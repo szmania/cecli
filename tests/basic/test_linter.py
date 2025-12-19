@@ -31,7 +31,10 @@ class TestLinter(unittest.TestCase):
     def test_run_cmd(self, mock_popen):
         mock_process = MagicMock()
         mock_process.returncode = 0
-        mock_process.stdout.read.side_effect = ("", None)
+        # First readline returns empty string, second returns None
+        mock_process.stdout.readline.side_effect = ["", None]
+        # First poll returns None (process still running), second returns 0 (exit code)
+        mock_process.poll.side_effect = [None, 0]
         mock_popen.return_value = mock_process
 
         result = self.linter.run_cmd("test_cmd", "test_file.py", "code")
@@ -51,7 +54,10 @@ class TestLinter(unittest.TestCase):
     def test_run_cmd_with_errors(self, mock_popen):
         mock_process = MagicMock()
         mock_process.returncode = 1
-        mock_process.stdout.read.side_effect = ("Error message", None)
+        # First readline returns error, second returns empty string, third returns None
+        mock_process.stdout.readline.side_effect = ["Error message", "", None]
+        # First poll returns None (process still running), second returns 1 (exit code)
+        mock_process.poll.side_effect = [None, 1]
         mock_popen.return_value = mock_process
 
         result = self.linter.run_cmd("test_cmd", "test_file.py", "code")
@@ -62,7 +68,10 @@ class TestLinter(unittest.TestCase):
         with patch("subprocess.Popen") as mock_popen:
             mock_process = MagicMock()
             mock_process.returncode = 1
-            mock_process.stdout.read.side_effect = ("Error message", None)
+            # First readline returns error, second returns empty string, third returns None
+            mock_process.stdout.readline.side_effect = ["Error message", "", None]
+            # First poll returns None (process still running), second returns 1 (exit code)
+            mock_process.poll.side_effect = [None, 1]
             mock_popen.return_value = mock_process
 
             # Test with a file path containing special characters

@@ -27,7 +27,7 @@ from aider.repo import ANY_GIT_ERROR
 from aider.run_cmd import run_cmd
 from aider.scrape import Scraper, install_playwright
 from aider.tools import create_tool
-from aider.utils import is_image_file, run_fzf, parse_quoted_filenames
+from aider.utils import is_image_file, run_fzf
 
 from .dump import dump  # noqa: F401
 
@@ -93,7 +93,8 @@ class Commands:
     async def cmd_model(self, args):
         "Switch the Main Model to a new LLM"
 
-        model_name = args.strip()
+        arg_split = args.split(" ", 1)
+        model_name = arg_split[0].strip()
         if not model_name:
             announcements = "\n".join(self.coder.get_announcements())
             self.io.tool_output(announcements)
@@ -115,7 +116,57 @@ class Commands:
             # If the user was using the old model's default, switch to the new model's default
             new_edit_format = model.edit_format
 
-        raise SwitchCoder(main_model=model, edit_format=new_edit_format)
+        if len(arg_split) > 1:
+            # implement architect coder-like generation call for model
+            message = arg_split[1].strip()
+
+            # Store the original model configuration
+            original_main_model = self.coder.main_model
+            original_edit_format = self.coder.edit_format
+
+            # Create a temporary coder with the new model
+            from aider.coders import Coder
+
+            kwargs = dict()
+            kwargs["main_model"] = model
+            kwargs["edit_format"] = new_edit_format
+            kwargs["suggest_shell_commands"] = False
+            kwargs["total_cost"] = self.coder.total_cost
+            kwargs["num_cache_warming_pings"] = 0
+            kwargs["summarize_from_coder"] = False
+
+            new_kwargs = dict(io=self.io, from_coder=self.coder)
+            new_kwargs.update(kwargs)
+
+            temp_coder = await Coder.create(**new_kwargs)
+            temp_coder.cur_messages = []
+            temp_coder.done_messages = []
+
+            if self.verbose:
+                temp_coder.show_announcements()
+
+            try:
+                await temp_coder.generate(user_message=message, preproc=False)
+                self.coder.move_back_cur_messages(
+                    f"Model {model_name} made those changes to the files."
+                )
+                self.coder.total_cost = temp_coder.total_cost
+                self.coder.aider_commit_hashes = temp_coder.aider_commit_hashes
+
+                # Restore the original model configuration
+                raise SwitchCoder(main_model=original_main_model, edit_format=original_edit_format)
+            except Exception as e:
+                # If there's an error, still restore the original model
+                if not isinstance(e, SwitchCoder):
+                    self.io.tool_error(e)
+                    raise SwitchCoder(
+                        main_model=original_main_model, edit_format=original_edit_format
+                    )
+                else:
+                    # Re-raise SwitchCoder if that's what was thrown
+                    raise
+        else:
+            raise SwitchCoder(main_model=model, edit_format=new_edit_format)
 
     async def cmd_editor_model(self, args):
         "Switch the Editor Model to a new LLM"
@@ -266,7 +317,12 @@ class Commands:
         return inp[0] in "/!"
 
     def is_run_command(self, inp):
-        return inp and (inp[0] in "!" or inp[:5] == "/test" or inp[:4] == "/run")
+        return inp and (
+            inp[0] in "!" or inp[:5] == "/lint" or inp[:5] == "/test" or inp[:4] == "/run"
+        )
+
+    def is_test_command(self, inp):
+        return inp and (inp[:5] == "/lint" or inp[:5] == "/test")
 
     def get_raw_completions(self, cmd):
         assert cmd.startswith("/")
@@ -428,6 +484,10 @@ class Commands:
         "Clear the chat history"
 
         self._clear_chat_history()
+
+        if self.coder.tui and self.coder.tui():
+            self.coder.tui().action_clear_output()
+
         self.io.tool_output("All chat history cleared.")
 
     def _drop_all_files(self):
@@ -457,6 +517,10 @@ class Commands:
         "Drop all files and clear the chat history"
         self._drop_all_files()
         self._clear_chat_history()
+
+        if self.coder.tui and self.coder.tui():
+            self.coder.tui().action_clear_output()
+
         self.io.tool_output("All files dropped and chat history cleared.")
 
     def cmd_tokens(self, args):
@@ -536,6 +600,10 @@ class Commands:
 
                 relative_fname = self.coder.get_rel_fname(fname)
                 content = self.io.read_text(fname)
+
+                if not content:
+                    continue
+
                 if is_image_file(relative_fname):
                     tokens = self.coder.main_model.token_count_for_image(fname)
                 else:
@@ -558,7 +626,11 @@ class Commands:
 
                 relative_fname = self.coder.get_rel_fname(fname)
                 content = self.io.read_text(fname)
-                if content is not None and not is_image_file(relative_fname):
+
+                if not content:
+                    continue
+
+                if not is_image_file(relative_fname):
                     # approximate
                     content = f"{relative_fname}\n{fence}\n" + content + f"{fence}\n"
                     tokens = self.coder.main_model.token_count(content)
@@ -575,6 +647,10 @@ class Commands:
             relative_fname = self.coder.get_rel_fname(fname)
             if not is_image_file(relative_fname):
                 stub = self.coder.get_file_stub(fname)
+
+                if not stub:
+                    continue
+
                 content = f"{relative_fname} (stub)\n{fence}\n" + stub + "{fence}\n"
                 tokens = self.coder.main_model.token_count(content)
                 res.append((tokens, f"{relative_fname} (read-only stub)", "/drop to remove"))
@@ -857,11 +933,7 @@ class Commands:
 
         matched_files = []
         for fn in raw_matched_files:
-            if fn.is_dir():
-                # Expand directory to all files within it
-                matched_files.extend([f for f in fn.rglob("*") if f.is_file()])
-            else:
-                matched_files.append(fn)
+            matched_files += expand_subdir(fn)
 
         matched_files = [
             fn.relative_to(self.coder.root)
@@ -877,7 +949,21 @@ class Commands:
         res = list(map(str, matched_files))
         return res
 
-    async def _add_files(self, args):
+    async def cmd_add(self, args):
+        "Add files to the chat so aider can edit them or review them in detail"
+
+        if not args.strip():
+            all_files = self.coder.get_all_relative_files()
+            files_in_chat = self.coder.get_inchat_relative_files()
+            addable_files = sorted(set(all_files) - set(files_in_chat))
+            if not addable_files:
+                self.io.tool_output("No files available to add.")
+                return
+            selected_files = run_fzf(addable_files, multi=True, coder=self.coder)
+            if not selected_files:
+                return
+            args = " ".join([self.quote_fname(f) for f in selected_files])
+
         all_matched_files = set()
 
         filenames = parse_quoted_filenames(args)
@@ -991,24 +1077,6 @@ class Commands:
                     ):
                         if hasattr(self.coder, "_calculate_context_block_tokens"):
                             self.coder._calculate_context_block_tokens()
-        return all_matched_files
-
-    async def cmd_add(self, args):
-        "Add files to the chat so aider can edit them or review them in detail"
-
-        if not args.strip():
-            all_files = self.coder.get_all_relative_files()
-            files_in_chat = self.coder.get_inchat_relative_files()
-            addable_files = sorted(set(all_files) - set(files_in_chat))
-            if not addable_files:
-                self.io.tool_output("No files available to add.")
-                return
-            selected_files = run_fzf(addable_files, multi=True)
-            if not selected_files:
-                return
-            args = " ".join([self.quote_fname(f) for f in selected_files])
-
-        await self._add_files(args)
 
         if self.coder.repo_map:
             map_tokens = self.coder.repo_map.max_map_tokens
@@ -1059,12 +1127,27 @@ class Commands:
         ]
 
     def _handle_read_only_files(self, expanded_word, file_set, description=""):
-        """Handle read-only files with substring matching and samefile check"""
+        """Handle read-only files with substring matching, samefile check, and glob pattern matching"""
         matched = []
         for f in file_set:
-            if expanded_word in f:
-                matched.append(f)
-                continue
+            # Check if the expanded_word contains glob characters
+            if any(c in expanded_word for c in "*?[]"):
+                # Use pathlib.Path.match() for glob pattern matching
+                try:
+                    # Convert file path to Path object
+                    file_path = Path(f)
+                    # Check if the file path matches the glob pattern
+                    if file_path.match(os.path.abspath(expanded_word)):
+                        matched.append(f)
+                        continue
+                except Exception:
+                    # If path matching fails, fall back to other methods
+                    pass
+            else:
+                # Original substring matching for non-glob patterns
+                if expanded_word in f:
+                    matched.append(f)
+                    continue
 
             # Try samefile comparison for relative paths
             try:
@@ -1122,7 +1205,7 @@ class Commands:
                     matched_files = [
                         self.coder.get_rel_fname(f)
                         for f in self.coder.abs_fnames
-                        if expanded_word in f
+                        if self.coder.abs_root_path(expanded_word) in f
                     ]
 
                 if not matched_files:
@@ -1146,7 +1229,7 @@ class Commands:
         finally:
             if self.coder.repo_map:
                 map_tokens = self.coder.repo_map.max_map_tokens
-                map_mul_no_files = self.coder.repo.map_mul_no_files
+                map_mul_no_files = self.coder.repo_map.map_mul_no_files
             else:
                 map_tokens = 0
                 map_mul_no_files = 1
@@ -1210,19 +1293,29 @@ class Commands:
         "Run a shell command and optionally add the output to the chat (alias: !)"
         try:
             self.cmd_running = True
+            should_print = True
+
+            if self.coder.args.tui:
+                should_print = False
+
             exit_status, combined_output = await asyncio.to_thread(
                 run_cmd,
                 args,
                 verbose=self.verbose,
-                error_print=self.io.tool_error,
+                error_print=self.coder.io.tool_error,
                 cwd=self.coder.root,
+                should_print=should_print,
             )
+
             self.cmd_running = False
 
-            # This print statement, for whatever reason,
-            # allows the thread to properly yield control of the terminal
-            # to the main program
-            print("")
+            if self.coder.args.tui:
+                print(combined_output)
+            else:
+                # This print statement, for whatever reason,
+                # allows the thread to properly yield control of the terminal
+                # to the main program
+                print("")
 
             if combined_output is None:
                 return
@@ -1275,6 +1368,13 @@ class Commands:
                 pass
 
         await asyncio.sleep(0)
+
+        # Check if running in TUI mode - use graceful exit to restore terminal
+        if hasattr(self.io, "request_exit"):
+            self.io.request_exit()
+            # Give TUI time to process the exit message
+            await asyncio.sleep(0.5)
+            return
 
         try:
             if self.coder.args.linear_output:
@@ -2017,7 +2117,7 @@ class Commands:
                     target_mode="read-only",
                 )
                 return
-            selected_files = run_fzf(addable_files, multi=True)
+            selected_files = run_fzf(addable_files, multi=True, coder=self.coder)
             if not selected_files:
                 # If user didn't select any files, convert all editable files to read-only
                 self._cmd_read_only_base(
@@ -2055,7 +2155,7 @@ class Commands:
                     target_mode="read-only (stub)",
                 )
                 return
-            selected_files = run_fzf(addable_files, multi=True)
+            selected_files = run_fzf(addable_files, multi=True, coder=self.coder)
             if not selected_files:
                 # If user didn't select any files, convert all editable files to read-only stubs
                 self._cmd_read_only_base(
@@ -2249,7 +2349,7 @@ class Commands:
     def cmd_history_search(self, args):
         "Fuzzy search in history and paste it in the prompt"
         history_lines = self.io.get_input_history()
-        selected_lines = run_fzf(history_lines)
+        selected_lines = run_fzf(history_lines, coder=self.coder)
         if selected_lines:
             self.io.set_placeholder("".join(selected_lines))
 
@@ -2365,6 +2465,103 @@ class Commands:
         session_manager = sessions.SessionManager(self.coder, self.io)
         session_manager.load_session(args.strip())
 
+    def completions_load_session(self):
+        """Return available session names for completion"""
+        session_manager = sessions.SessionManager(self.coder, self.io)
+        sessions_list = session_manager.list_sessions()
+        return [session_info["name"] for session_info in sessions_list]
+
+    def cmd_load_skill(self, args):
+        """Load a skill by name (agent mode only)"""
+        if not args.strip():
+            self.io.tool_output("Usage: /load-skill <skill-name>")
+            return
+
+        skill_name = args.strip()
+
+        # Check if we're in agent mode
+        if not hasattr(self.coder, "edit_format") or self.coder.edit_format != "agent":
+            self.io.tool_output("Skill loading is only available in agent mode.")
+            return
+
+        # Check if skills_manager is available
+        if not hasattr(self.coder, "skills_manager") or self.coder.skills_manager is None:
+            self.io.tool_output("Skills manager is not initialized. Skills may not be configured.")
+            # Check if skills directories are configured
+            if (
+                hasattr(self.coder, "skills_directory_paths")
+                and not self.coder.skills_directory_paths
+            ):
+                self.io.tool_output(
+                    "No skills directories configured. Use --skills-paths to configure skill"
+                    " directories."
+                )
+            return
+
+        # Use the instance method on skills_manager
+        result = self.coder.skills_manager.load_skill(skill_name)
+        self.io.tool_output(result)
+
+    def cmd_remove_skill(self, args):
+        """Remove a skill by name (agent mode only)"""
+        if not args.strip():
+            self.io.tool_output("Usage: /remove-skill <skill-name>")
+            return
+
+        skill_name = args.strip()
+
+        # Check if we're in agent mode
+        if not hasattr(self.coder, "edit_format") or self.coder.edit_format != "agent":
+            self.io.tool_output("Skill removal is only available in agent mode.")
+            return
+
+        # Check if skills_manager is available
+        if not hasattr(self.coder, "skills_manager") or self.coder.skills_manager is None:
+            self.io.tool_output("Skills manager is not initialized. Skills may not be configured.")
+            # Check if skills directories are configured
+            if (
+                hasattr(self.coder, "skills_directory_paths")
+                and not self.coder.skills_directory_paths
+            ):
+                self.io.tool_output(
+                    "No skills directories configured. Use --skills-paths to configure skill"
+                    " directories."
+                )
+            return
+
+        # Use the instance method on skills_manager
+        result = self.coder.skills_manager.remove_skill(skill_name)
+        self.io.tool_output(result)
+
+    def completions_load_skill(self):
+        """Return available skill names for completion"""
+        if not hasattr(self.coder, "skills_manager") or self.coder.skills_manager is None:
+            return []
+
+        try:
+            skills = self.coder.skills_manager.find_skills()
+            return [skill.name for skill in skills]
+        except Exception:
+            return []
+
+    def completions_remove_skill(self):
+        """Return currently loaded skill names for completion"""
+        if not hasattr(self.coder, "skills_manager") or self.coder.skills_manager is None:
+            return []
+
+        try:
+            skills = self.coder.skills_manager.find_skills()
+            return [skill.name for skill in skills]
+        except Exception:
+            return []
+
+    def cmd_command_prefix(self, args=""):
+        """Change Command Prefix For All Running Commands"""
+        if not args.strip():
+            setattr(self.coder.args, "command_prefix", "")
+
+        setattr(self.coder.args, "command_prefix", args.strip())
+
     def cmd_copy_context(self, args=None):
         """Copy the current chat context as markdown, suitable to paste into a web UI"""
 
@@ -2461,3 +2658,35 @@ Just show me the edits I need to make.
             print_tools("Custom Tools (global)", custom_tools_by_scope["global"])
             if custom_tools_by_scope["unknown"]:
                 print_tools("Custom Tools (unknown scope)", custom_tools_by_scope["unknown"])
+
+
+def expand_subdir(file_path):
+    if file_path.is_file():
+        yield file_path
+        return
+
+    if file_path.is_dir():
+        for file in file_path.rglob("*"):
+            if file.is_file():
+                yield file
+
+
+def parse_quoted_filenames(args):
+    filenames = re.findall(r"\"(.+?)\"|(\S+)", args)
+    filenames = [name for sublist in filenames for name in sublist if name]
+    return filenames
+
+
+def get_help_md():
+    md = Commands(None, None).get_help_md()
+    return md
+
+
+def main():
+    md = get_help_md()
+    print(md)
+
+
+if __name__ == "__main__":
+    status = main()
+    sys.exit(status)

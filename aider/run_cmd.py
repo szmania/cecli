@@ -8,12 +8,12 @@ import pexpect
 import psutil
 
 
-def run_cmd(command, verbose=False, error_print=None, cwd=None):
+def run_cmd(command, verbose=False, error_print=None, cwd=None, should_print=True):
     try:
         if sys.stdin.isatty() and hasattr(pexpect, "spawn") and platform.system() != "Windows":
-            return run_cmd_pexpect(command, verbose, cwd)
+            return run_cmd_pexpect(command, verbose, cwd, should_print=should_print)
 
-        return run_cmd_subprocess(command, verbose, cwd)
+        return run_cmd_subprocess(command, verbose, cwd, should_print=should_print)
     except OSError as e:
         error_message = f"Error occurred while running command '{command}': {str(e)}"
         if error_print is None:
@@ -39,7 +39,9 @@ def get_windows_parent_process_name():
         return None
 
 
-def run_cmd_subprocess(command, verbose=False, cwd=None, encoding=sys.stdout.encoding):
+def run_cmd_subprocess(
+    command, verbose=False, cwd=None, encoding=sys.stdout.encoding, should_print=True
+):
     if verbose:
         print("Using run_cmd_subprocess:", command)
 
@@ -68,18 +70,26 @@ def run_cmd_subprocess(command, verbose=False, cwd=None, encoding=sys.stdout.enc
             executable=shell if platform.system() != "Windows" else None,
             encoding=encoding,
             errors="replace",
-            bufsize=0,  # Set bufsize to 0 for unbuffered output
+            bufsize=1,  # Set bufsize to 0 for unbuffered output
             universal_newlines=True,
             cwd=cwd,
         )
 
         output = []
+
         while True:
-            chunk = process.stdout.read(1)
-            if not chunk:
-                break
-            print(chunk, end="", flush=True)  # Print the chunk in real-time
-            output.append(chunk)  # Store the chunk for later use
+            # Read one line (it will block until a newline or EOF is received)
+            line = process.stdout.readline()
+
+            # Check if the line is empty AND the process has finished
+            if not line and process.poll() is not None:
+                break  # Exit the loop if nothing more to read and process is done
+
+            if line:
+                output.append(line)
+
+                if should_print:
+                    print(line, end="", flush=True)
 
         process.wait()
         return process.returncode, "".join(output)
@@ -87,7 +97,7 @@ def run_cmd_subprocess(command, verbose=False, cwd=None, encoding=sys.stdout.enc
         return 1, str(e)
 
 
-def run_cmd_pexpect(command, verbose=False, cwd=None):
+def run_cmd_pexpect(command, verbose=False, cwd=None, should_print=True):
     """
     Run a shell command interactively using pexpect, capturing all output.
 

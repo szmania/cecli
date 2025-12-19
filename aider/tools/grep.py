@@ -167,23 +167,33 @@ class Tool(BaseTool):
                 cmd_args.append("--exclude-dir=.git")
 
             # Add pattern and directory path
-            cmd_args.extend([pattern, str(search_dir_path)])
+            cmd_args.extend(["--", pattern, str(search_dir_path)])
 
             # Convert list to command string for run_cmd_subprocess
             command_string = oslex.join(cmd_args)
+
+            should_print = True
+            tui = None
+            if coder.tui and coder.tui():
+                tui = coder.tui()
+                should_print = False
 
             coder.io.tool_output(f"⚙️ Executing {tool_name}: {command_string}")
 
             # Use run_cmd_subprocess for execution
             # Note: rg, ag, and grep return 1 if no matches are found, which is not an error for this tool.
             exit_status, combined_output = run_cmd_subprocess(
-                command_string, verbose=coder.verbose, cwd=coder.root  # Execute in the project root
+                command_string,
+                verbose=coder.verbose,
+                cwd=coder.root,
+                should_print=should_print,  # Execute in the project root
             )
 
             # Format the output for the result message
             output_content = combined_output or ""
 
             # Handle exit codes (consistent across rg, ag, grep)
+            result_message = ""
             if exit_status == 0:
                 # Limit output size if necessary
                 max_output_lines = 50  # Consider making this configurable
@@ -200,11 +210,10 @@ class Tool(BaseTool):
                     result_message = "No matches found (unexpected)."
                 else:
                     result_message = f"Found matches:\n```text\n{output_content}\n```"
-                return result_message
 
             elif exit_status == 1:
                 # Exit code 1 means no matches found - this is expected behavior, not an error.
-                return "No matches found."
+                result_message = "No matches found."
             else:
                 # Exit code > 1 indicates an actual error
                 error_message = (
@@ -219,7 +228,12 @@ class Tool(BaseTool):
                         )
                     error_message += f" Output:\n{output_content}"
                 coder.io.tool_error(error_message)
-                return f"Error: {error_message}"
+                result_message = f"Error: {error_message}"
+
+            if tui:
+                coder.io.tool_output(result_message)
+
+            return result_message
 
         except Exception as e:
             # Add command_string to the error message if it's defined

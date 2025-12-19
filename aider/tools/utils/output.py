@@ -30,7 +30,8 @@ def tool_header(coder, mcp_server, tool_response):
     color_start, color_end = color_markers(coder)
 
     coder.io.tool_output(
-        f"{color_start}Tool Call:{color_end} {mcp_server.name} • {tool_response.function.name}"
+        f"{color_start}Tool Call:{color_end} {mcp_server.name} • {tool_response.function.name}",
+        type="Tool Call",
     )
 
 
@@ -102,7 +103,7 @@ def tool_footer(coder, tool_response):
         coder.io.tool_output(f"Tool ID: {tool_response.id}")
         coder.io.tool_output(f"Tool type: {tool_response.type}")
 
-    coder.io.tool_output("\n")
+    coder.io.tool_output("\n", type="tool-footer")
 
 
 def color_markers(coder):

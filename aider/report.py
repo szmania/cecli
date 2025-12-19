@@ -95,7 +95,7 @@ def report_github_issue(issue_text, title=None, confirm=True):
     :param confirm: Whether to ask for confirmation before opening the browser (default: True)
     :return: None
     """
-    version_info = f"Aider version: {__version__}\n"
+    version_info = f"Aider-CE version: {__version__}\n"
     python_version = f"Python version: {sys.version.split()[0]}\n"
     platform_info = f"Platform: {platform.platform()}\n"
     python_info = get_python_info() + "\n"

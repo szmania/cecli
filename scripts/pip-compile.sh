@@ -30,7 +30,7 @@ grep -v ^tree-sitter= tmp.requirements.txt \
     > requirements.txt
 
 # Compile additional requirements files
-SUFFIXES=(dev help browser playwright)
+SUFFIXES=(dev help playwright)
 
 for SUFFIX in "${SUFFIXES[@]}"; do
     uv pip compile \

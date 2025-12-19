@@ -1,85 +1,137 @@
+import argparse
+
+
 def add_deprecated_model_args(parser, group):
     """Add deprecated model shortcut arguments to the argparse parser."""
-    opus_model = "claude-3-opus-20240229"
+
     group.add_argument(
         "--opus",
         action="store_true",
-        help=f"Use {opus_model} model for the main chat (deprecated, use --model)",
+        help=argparse.SUPPRESS,
         default=False,
     )
-    sonnet_model = "anthropic/claude-3-7-sonnet-20250219"
+
     group.add_argument(
         "--sonnet",
         action="store_true",
-        help=f"Use {sonnet_model} model for the main chat (deprecated, use --model)",
+        help=argparse.SUPPRESS,
         default=False,
     )
-    haiku_model = "claude-3-5-haiku-20241022"
+
     group.add_argument(
         "--haiku",
         action="store_true",
-        help=f"Use {haiku_model} model for the main chat (deprecated, use --model)",
+        help=argparse.SUPPRESS,
         default=False,
     )
-    gpt_4_model = "gpt-4-0613"
+
     group.add_argument(
         "--4",
         "-4",
         action="store_true",
-        help=f"Use {gpt_4_model} model for the main chat (deprecated, use --model)",
+        help=argparse.SUPPRESS,
         default=False,
     )
-    gpt_4o_model = "gpt-4o"
+
     group.add_argument(
         "--4o",
         action="store_true",
-        help=f"Use {gpt_4o_model} model for the main chat (deprecated, use --model)",
+        help=argparse.SUPPRESS,
         default=False,
     )
-    gpt_4o_mini_model = "gpt-4o-mini"
+
     group.add_argument(
         "--mini",
         action="store_true",
-        help=f"Use {gpt_4o_mini_model} model for the main chat (deprecated, use --model)",
+        help=argparse.SUPPRESS,
         default=False,
     )
-    gpt_4_turbo_model = "gpt-4-1106-preview"
+
     group.add_argument(
         "--4-turbo",
         action="store_true",
-        help=f"Use {gpt_4_turbo_model} model for the main chat (deprecated, use --model)",
+        help=argparse.SUPPRESS,
         default=False,
     )
-    gpt_3_model_name = "gpt-3.5-turbo"
+
     group.add_argument(
         "--35turbo",
         "--35-turbo",
         "--3",
         "-3",
         action="store_true",
-        help=f"Use {gpt_3_model_name} model for the main chat (deprecated, use --model)",
+        help=argparse.SUPPRESS,
         default=False,
     )
-    deepseek_model = "deepseek/deepseek-chat"
+
     group.add_argument(
         "--deepseek",
         action="store_true",
-        help=f"Use {deepseek_model} model for the main chat (deprecated, use --model)",
+        help=argparse.SUPPRESS,
         default=False,
     )
-    o1_mini_model = "o1-mini"
+
     group.add_argument(
         "--o1-mini",
         action="store_true",
-        help=f"Use {o1_mini_model} model for the main chat (deprecated, use --model)",
+        help=argparse.SUPPRESS,
         default=False,
     )
-    o1_preview_model = "o1-preview"
+
     group.add_argument(
         "--o1-preview",
         action="store_true",
-        help=f"Use {o1_preview_model} model for the main chat (deprecated, use --model)",
+        help=argparse.SUPPRESS,
         default=False,
+    )
+
+    #########
+    group = parser.add_argument_group("API Keys and Settings (Deprecated)")
+    group.add_argument(
+        "--openai-api-type",
+        help=argparse.SUPPRESS,
+    )
+    group.add_argument(
+        "--openai-api-version",
+        help=argparse.SUPPRESS,
+    )
+    group.add_argument(
+        "--openai-api-deployment-id",
+        help=argparse.SUPPRESS,
+    )
+    group.add_argument(
+        "--openai-organization-id",
+        help=argparse.SUPPRESS,
+    )
+
+    ##########
+    group = parser.add_argument_group("Analytics")
+    group.add_argument(
+        "--analytics",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help=argparse.SUPPRESS,
+    )
+    group.add_argument(
+        "--analytics-log",
+        metavar="ANALYTICS_LOG_FILE",
+        help=argparse.SUPPRESS,
+    )
+    group.add_argument(
+        "--analytics-disable",
+        action="store_true",
+        help=argparse.SUPPRESS,
+        default=False,
+    )
+    group.add_argument(
+        "--analytics-posthog-host",
+        metavar="ANALYTICS_POSTHOG_HOST",
+        help=argparse.SUPPRESS,
+    )
+    group.add_argument(
+        "--analytics-posthog-project-api-key",
+        metavar="ANALYTICS_POSTHOG_PROJECT_API_KEY",
+        help=argparse.SUPPRESS,
     )
 
 

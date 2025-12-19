@@ -15,7 +15,7 @@ from aider.waiting import Spinner
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".bmp", ".tiff", ".webp", ".pdf"}
 
 
-def run_fzf(input_data, multi=False):
+def _execute_fzf(input_data, multi=False):
     """
     Runs fzf as a subprocess, feeding it input_data.
     Returns the selected items.
@@ -45,6 +45,29 @@ def run_fzf(input_data, multi=False):
     else:
         # User cancelled (e.g., pressed Esc)
         return []
+
+
+def run_fzf(input_data, multi=False, coder=None):
+    """
+    Runs fzf as a subprocess, feeding it input_data.
+    Returns the selected items.
+    """
+    if not shutil.which("fzf"):
+        return []  # fzf not available
+
+    tui = None
+    if coder is not None and coder.tui:
+        tui = coder.tui()
+
+    result = []
+
+    if tui:
+        result = tui.run_obstructive(_execute_fzf, input_data, multi=multi)
+
+    else:
+        result = _execute_fzf(input_data, multi=multi)
+
+    return result
 
 
 class IgnorantTemporaryDirectory:

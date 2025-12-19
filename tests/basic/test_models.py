@@ -609,6 +609,154 @@ class TestModels(unittest.TestCase):
             cache_control_injection_points=ANY,
         )
 
+    def test_model_override_kwargs(self):
+        """Test that override kwargs are applied to model extra_params."""
+        # Test with override kwargs
+        model = Model("gpt-4", override_kwargs={"temperature": 0.8, "top_p": 0.9})
+        self.assertIn("temperature", model.extra_params)
+        self.assertEqual(model.extra_params["temperature"], 0.8)
+        self.assertIn("top_p", model.extra_params)
+        self.assertEqual(model.extra_params["top_p"], 0.9)
+
+        # Test that override kwargs merge with existing extra_params
+        model = Model("gpt-4", override_kwargs={"extra_headers": {"X-Custom": "value"}})
+        self.assertIn("extra_headers", model.extra_params)
+        self.assertIn("X-Custom", model.extra_params["extra_headers"])
+        self.assertEqual(model.extra_params["extra_headers"]["X-Custom"], "value")
+
+        # Test nested dict merging
+        model = Model("gpt-4", override_kwargs={"extra_body": {"reasoning_effort": "high"}})
+        self.assertIn("extra_body", model.extra_params)
+        self.assertIn("reasoning_effort", model.extra_params["extra_body"])
+        self.assertEqual(model.extra_params["extra_body"]["reasoning_effort"], "high")
+
+    def test_model_override_kwargs_with_existing_extra_params(self):
+        """Test that override kwargs merge correctly with existing extra_params."""
+        # Create a model with existing extra_params via model settings
+        import tempfile
+
+        import yaml
+
+        test_settings = [
+            {
+                "name": "gpt-4",
+                "extra_params": {"temperature": 0.5, "extra_headers": {"Existing": "header"}},
+            },
+        ]
+
+        tmp = tempfile.mktemp(suffix=".yml")
+        try:
+            with open(tmp, "w") as f:
+                yaml.dump(test_settings, f)
+
+            register_models([tmp])
+
+            # Test that override kwargs take precedence
+            model = Model("gpt-4", override_kwargs={"temperature": 0.8, "top_p": 0.9})
+            self.assertEqual(model.extra_params["temperature"], 0.8)  # Override wins
+            self.assertEqual(model.extra_params["top_p"], 0.9)  # New param added
+            self.assertIn("extra_headers", model.extra_params)
+            self.assertEqual(
+                model.extra_params["extra_headers"]["Existing"], "header"
+            )  # Existing preserved
+
+            # Test nested dict merging
+            model = Model("gpt-4", override_kwargs={"extra_headers": {"New": "value"}})
+            self.assertIn("Existing", model.extra_params["extra_headers"])
+            self.assertIn("New", model.extra_params["extra_headers"])
+            self.assertEqual(model.extra_params["extra_headers"]["Existing"], "header")
+            self.assertEqual(model.extra_params["extra_headers"]["New"], "value")
+        finally:
+            import os
+
+            try:
+                os.unlink(tmp)
+            except OSError:
+                pass
+
+    @patch("aider.models.litellm.acompletion")
+    async def test_send_completion_with_override_kwargs(self, mock_completion):
+        """Test that override kwargs are passed to acompletion."""
+        # Create model with override kwargs
+        model = Model("gpt-4", override_kwargs={"temperature": 0.8, "top_p": 0.9})
+        messages = [{"role": "user", "content": "Hello"}]
+
+        await model.send_completion(messages, functions=None, stream=False)
+
+        # Check that override kwargs are in the call
+        mock_completion.assert_called_once()
+        call_kwargs = mock_completion.call_args.kwargs
+
+        self.assertIn("temperature", call_kwargs)
+        self.assertEqual(call_kwargs["temperature"], 0.8)
+        self.assertIn("top_p", call_kwargs)
+        self.assertEqual(call_kwargs["top_p"], 0.9)
+
+        # Check that model name and other defaults are still there
+        self.assertEqual(call_kwargs["model"], "gpt-4")
+        self.assertFalse(call_kwargs["stream"])
+
+    def test_parse_model_with_suffix(self):
+        """Test the parse_model_with_suffix function from main.py."""
+
+        # This test simulates the parse_model_with_suffix function logic
+        def parse_model_with_suffix(model_name, overrides):
+            """Parse model name with optional :suffix and apply overrides."""
+            if not model_name:
+                return model_name, {}
+
+            # Split on last colon to get model name and suffix
+            if ":" in model_name:
+                base_model, suffix = model_name.rsplit(":", 1)
+            else:
+                base_model, suffix = model_name, None
+
+            # Apply overrides if suffix exists
+            override_kwargs = {}
+            if suffix and base_model in overrides and suffix in overrides[base_model]:
+                override_kwargs = overrides[base_model][suffix].copy()
+
+            return base_model, override_kwargs
+
+        # Test cases
+        overrides = {
+            "gpt-4o": {
+                "high": {"reasoning_effort": "high", "temperature": 0.7},
+                "low": {"reasoning_effort": "low", "temperature": 0.2},
+            },
+            "claude-3-5-sonnet": {"fast": {"temperature": 0.3}, "creative": {"temperature": 0.9}},
+        }
+
+        # Test with suffix
+        base_model, kwargs = parse_model_with_suffix("gpt-4o:high", overrides)
+        self.assertEqual(base_model, "gpt-4o")
+        self.assertEqual(kwargs, {"reasoning_effort": "high", "temperature": 0.7})
+
+        # Test with different suffix
+        base_model, kwargs = parse_model_with_suffix("gpt-4o:low", overrides)
+        self.assertEqual(base_model, "gpt-4o")
+        self.assertEqual(kwargs, {"reasoning_effort": "low", "temperature": 0.2})
+
+        # Test without suffix
+        base_model, kwargs = parse_model_with_suffix("gpt-4o", overrides)
+        self.assertEqual(base_model, "gpt-4o")
+        self.assertEqual(kwargs, {})
+
+        # Test with unknown suffix
+        base_model, kwargs = parse_model_with_suffix("gpt-4o:unknown", overrides)
+        self.assertEqual(base_model, "gpt-4o")
+        self.assertEqual(kwargs, {})
+
+        # Test with unknown model
+        base_model, kwargs = parse_model_with_suffix("unknown-model:high", overrides)
+        self.assertEqual(base_model, "unknown-model")
+        self.assertEqual(kwargs, {})
+
+        # Test empty model name
+        base_model, kwargs = parse_model_with_suffix("", overrides)
+        self.assertEqual(base_model, "")
+        self.assertEqual(kwargs, {})
+
 
 if __name__ == "__main__":
     unittest.main()

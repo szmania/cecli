@@ -51,10 +51,9 @@ jobs:
           pytest \
           pytest-asyncio \
           -r requirements/requirements.in \
-          -r requirements/requirements-browser.in \
           -r requirements/requirements-help.in \
           -r requirements/requirements-playwright.in \
-          ".[browser,help,playwright]"
+          ".[help,playwright]"
 
     - name: Run tests
       env:

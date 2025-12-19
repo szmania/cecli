@@ -1,3 +1,14 @@
+import os
+
+try:
+    if not os.getenv("CECLI_DEFAULT_TLS") and not os.getenv("AIDER_CE_DEFAULT_TLS"):
+        import truststore
+
+        truststore.inject_into_ssl()
+except Exception as e:
+    print(e)
+    pass
+
 import asyncio
 import glob
 import json
@@ -23,6 +34,10 @@ except ImportError:
 
 import shtab
 from dotenv import load_dotenv
+
+if sys.platform == "win32":  # Windows asyncio fix. set_event_loop_policy deprecated in 3.16
+    if hasattr(asyncio, "set_event_loop_policy"):
+        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 from prompt_toolkit.enums import EditingMode
 
 from aider import __version__, models, urls, utils
@@ -46,6 +61,44 @@ from aider.versioncheck import check_version, install_from_main_branch, install_
 from aider.watch import FileWatcher
 
 from .dump import dump  # noqa: F401
+
+
+def convert_yaml_to_json_string(value):
+    """
+    Convert YAML dict/list values to JSON strings for compatibility.
+
+    configargparse.YAMLConfigFileParser converts YAML to Python objects,
+    but some arguments expect JSON strings. This function handles:
+    - Direct dict/list objects
+    - String representations of dicts/lists (Python literals)
+    - Already JSON strings (passed through unchanged)
+
+    Args:
+        value: The value to convert
+
+    Returns:
+        str: JSON string if value is a dict/list, otherwise the original value
+    """
+    if value is None:
+        return None
+
+    if isinstance(value, (dict, list)):
+        return json.dumps(value)
+
+    if isinstance(value, str):
+        # configargparse might convert dict to string representation
+        # Try to parse it as a Python literal
+        try:
+            import ast
+
+            parsed = ast.literal_eval(value)
+            if isinstance(parsed, (dict, list)):
+                return json.dumps(parsed)
+        except (SyntaxError, ValueError):
+            # If it's not a Python literal, assume it's already JSON
+            pass
+
+    return value
 
 
 def check_config_files_for_yes(config_files):
@@ -91,6 +144,23 @@ def guessed_wrong_repo(io, git_root, fnames, git_dname):
         return
 
     return str(check_repo)
+
+
+def validate_tui_args(args):
+    """Validate that incompatible flags aren't used with --tui"""
+    if not args.tui:
+        return
+
+    incompatible = []
+    if args.vim:
+        incompatible.append("--vim")
+    if not args.fancy_input:
+        incompatible.append("--no-fancy-input")
+
+    if incompatible:
+        print(f"Error: --tui is incompatible with: {', '.join(incompatible)}")
+        print("Remove these flags or use standard CLI mode.")
+        sys.exit(1)
 
 
 async def make_new_repo(git_root, io):
@@ -334,6 +404,80 @@ def register_litellm_models(git_root, model_metadata_fname, io, verbose=False):
         return 1
 
 
+def load_model_overrides(git_root, model_overrides_fname, io, verbose=False):
+    """Load model tag overrides from a YAML file."""
+    from pathlib import Path
+
+    import yaml
+
+    model_overrides_files = generate_search_path_list(
+        ".aider.model.overrides.yml", git_root, model_overrides_fname
+    )
+
+    overrides = {}
+    files_loaded = []
+
+    for fname in model_overrides_files:
+        try:
+            if Path(fname).exists():
+                with open(fname, "r") as f:
+                    content = yaml.safe_load(f)
+                    if content:
+                        # Merge overrides, later files override earlier ones
+                        for model_name, tags in content.items():
+                            if model_name not in overrides:
+                                overrides[model_name] = {}
+                            overrides[model_name].update(tags)
+                        files_loaded.append(fname)
+        except Exception as e:
+            io.tool_error(f"Error loading model overrides from {fname}: {e}")
+
+    if len(files_loaded) > 0 and verbose:
+        io.tool_output("Loaded model overrides from:")
+        for file_loaded in files_loaded:
+            io.tool_output(f"  - {file_loaded}")
+
+    if (
+        model_overrides_fname
+        and model_overrides_fname not in files_loaded
+        and model_overrides_fname != ".aider.model.overrides.yml"
+    ):
+        io.tool_warning(f"Model Overrides File Not Found: {model_overrides_fname}")
+
+    return overrides
+
+
+def load_model_overrides_from_string(model_overrides_str, io):
+    """Load model tag overrides from a JSON/YAML string."""
+    import json
+
+    import yaml
+
+    overrides = {}
+
+    if not model_overrides_str:
+        return overrides
+
+    try:
+        # First try to parse as JSON
+        try:
+            content = json.loads(model_overrides_str)
+        except json.JSONDecodeError:
+            # If JSON fails, try YAML
+            content = yaml.safe_load(model_overrides_str)
+
+        if content and isinstance(content, dict):
+            for model_name, tags in content.items():
+                if model_name not in overrides:
+                    overrides[model_name] = {}
+                overrides[model_name].update(tags)
+
+        return overrides
+    except Exception as e:
+        io.tool_error(f"Error parsing model overrides string: {e}")
+        return {}
+
+
 async def sanity_check_repo(repo, io):
     if not repo:
         return True
@@ -454,6 +598,14 @@ def custom_tracer(frame, event, arg):
 
 
 def main(argv=None, input=None, output=None, force_git_root=None, return_coder=False):
+    # Asyncio run workaround for Windows in Python 3.12+. Required from 3.16+
+    if sys.platform == "win32":
+        if sys.version_info >= (3, 12) and hasattr(asyncio, "SelectorEventLoop"):
+            return asyncio.run(
+                main_async(argv, input, output, force_git_root, return_coder),
+                loop_factory=asyncio.SelectorEventLoop,
+            )
+
     return asyncio.run(main_async(argv, input, output, force_git_root, return_coder))
 
 
@@ -510,8 +662,23 @@ async def main_async(argv=None, input=None, output=None, force_git_root=None, re
     loaded_dotenvs = load_dotenv_files(git_root, args.env_file, args.encoding)
 
     # Parse again to include any arguments that might have been defined in .env
-    args = parser.parse_args(argv)
+    args, unknown = parser.parse_known_args(argv)
     set_args_error_data(args)
+
+    if len(unknown):
+        print("Unknown Args: ", unknown)
+
+    # Convert YAML dict arguments to JSON strings for compatibility
+    # configargparse.YAMLConfigFileParser converts YAML to Python objects,
+    # but some arguments expect JSON strings
+    if hasattr(args, "agent_config") and args.agent_config is not None:
+        args.agent_config = convert_yaml_to_json_string(args.agent_config)
+
+    if hasattr(args, "tui_config") and args.tui_config is not None:
+        args.tui_config = convert_yaml_to_json_string(args.tui_config)
+
+    if hasattr(args, "mcp_servers") and args.mcp_servers is not None:
+        args.mcp_servers = convert_yaml_to_json_string(args.mcp_servers)
 
     if args.debug:
         global log_file
@@ -555,6 +722,9 @@ async def main_async(argv=None, input=None, output=None, force_git_root=None, re
     if return_coder and args.yes_always is None:
         args.yes_always = True
 
+    if args.yes_always_commands:
+        args.yes_always = True
+
     editing_mode = EditingMode.VI if args.vim else EditingMode.EMACS
 
     def get_io(pretty):
@@ -587,14 +757,36 @@ async def main_async(argv=None, input=None, output=None, force_git_root=None, re
             verbose=args.verbose,
         )
 
-    io = get_io(args.pretty)
-    try:
-        io.rule()
-    except UnicodeEncodeError as err:
-        if not io.pretty:
-            raise err
-        io = get_io(False)
-        io.tool_warning("Terminal does not support pretty output (UnicodeDecodeError)")
+    # Validate TUI arguments
+    validate_tui_args(args)
+
+    # TUI mode - create TUI-specific IO
+    output_queue = None
+    input_queue = None
+    if args.tui:
+        try:
+            from aider.tui import create_tui_io
+
+            args.linear_output = True
+            print("Starting aider TUI...", flush=True)
+            io, output_queue, input_queue = create_tui_io(args, editing_mode)
+        except ImportError as e:
+            print("Error: --tui requires 'textual' package")
+            print("Install with: pip install aider-ce[tui]")
+            print(f"Import error: {e}")
+            sys.exit(1)
+    else:
+        io = get_io(args.pretty)
+
+    # Only do CLI-specific initialization if not in TUI mode
+    if not args.tui:
+        try:
+            io.rule()
+        except UnicodeEncodeError as err:
+            if not io.pretty:
+                raise err
+            io = get_io(False)
+            io.tool_warning("Terminal does not support pretty output (UnicodeDecodeError)")
 
     # Process any environment variables set via --set-env
     if args.set_env:
@@ -753,10 +945,76 @@ async def main_async(argv=None, input=None, output=None, force_git_root=None, re
         return await graceful_exit(None, 1)
     args.model = selected_model_name  # Update args with the selected model
 
+    # Load model overrides if specified
+    model_overrides = {}
+
+    # First load from file if specified
+    if args.model_overrides_file:
+        model_overrides = load_model_overrides(
+            git_root, args.model_overrides_file, io, verbose=args.verbose
+        )
+
+    # Then load from direct JSON/YAML string if specified (overrides file)
+    if args.model_overrides:
+        direct_overrides = load_model_overrides_from_string(args.model_overrides, io)
+        # Merge direct overrides with file overrides (direct takes precedence)
+        for model_name, tags in direct_overrides.items():
+            if model_name not in model_overrides:
+                model_overrides[model_name] = {}
+            model_overrides[model_name].update(tags)
+
+    # Parse model names with suffixes and apply overrides
+    def parse_model_with_suffix(model_name, overrides):
+        """Parse model name with optional :suffix and apply overrides."""
+        if not model_name:
+            return model_name, {}
+
+        # Split on last colon to get model name and suffix
+        if ":" in model_name:
+            base_model, suffix = model_name.rsplit(":", 1)
+        else:
+            base_model, suffix = model_name, None
+
+        # Apply overrides if suffix exists
+        override_kwargs = {}
+        if suffix and base_model in overrides and suffix in overrides[base_model]:
+            override_kwargs = overrides[base_model][suffix].copy()
+
+        return base_model, override_kwargs
+
+    # Parse main model
+    main_model_name, main_model_overrides = parse_model_with_suffix(args.model, model_overrides)
+    weak_model_name, weak_model_overrides = parse_model_with_suffix(
+        args.weak_model, model_overrides
+    )
+    editor_model_name, editor_model_overrides = parse_model_with_suffix(
+        args.editor_model, model_overrides
+    )
+
+    # Create weak model if specified with overrides
+    weak_model_obj = None
+    if weak_model_name:
+        weak_model_obj = models.Model(
+            weak_model_name,
+            weak_model=False,
+            verbose=args.verbose,
+            override_kwargs=weak_model_overrides,
+        )
+
+    # Create editor model if specified with overrides
+    editor_model_obj = None
+    if editor_model_name:
+        editor_model_obj = models.Model(
+            editor_model_name,
+            editor_model=False,
+            verbose=args.verbose,
+            override_kwargs=editor_model_overrides,
+        )
+
     # Check if an OpenRouter model was selected/specified but the key is missing
-    if args.model.startswith("openrouter/") and not os.environ.get("OPENROUTER_API_KEY"):
+    if main_model_name.startswith("openrouter/") and not os.environ.get("OPENROUTER_API_KEY"):
         io.tool_warning(
-            f"The specified model '{args.model}' requires an OpenRouter API key, which was not"
+            f"The specified model '{main_model_name}' requires an OpenRouter API key, which was not"
             " found."
         )
         # Attempt OAuth flow because the specific model needs it
@@ -777,7 +1035,7 @@ async def main_async(argv=None, input=None, output=None, force_git_root=None, re
         else:
             # OAuth failed or was declined by the user
             io.tool_error(
-                f"Unable to proceed without an OpenRouter API key for model '{args.model}'."
+                f"Unable to proceed without an OpenRouter API key for model '{main_model_name}'."
             )
             await io.offer_url(
                 urls.models_and_keys, "Open documentation URL for more info?", acknowledge=True
@@ -785,15 +1043,16 @@ async def main_async(argv=None, input=None, output=None, force_git_root=None, re
             return await graceful_exit(None, 1)
 
     main_model = models.Model(
-        args.model,
-        weak_model=args.weak_model,
-        editor_model=args.editor_model,
+        main_model_name,
+        weak_model=weak_model_obj,
+        editor_model=editor_model_obj,
         editor_edit_format=args.editor_edit_format,
         verbose=args.verbose,
         request_timeout=args.request_timeout,
         retry_timeout=args.retry_timeout,
         retry_backoff_factor=args.retry_backoff_factor,
         retry_on_unavailable=args.retry_on_unavailable,
+        override_kwargs=main_model_overrides,
     )
 
     # Check if deprecated remove_reasoning is set
@@ -1153,6 +1412,14 @@ async def main_async(argv=None, input=None, output=None, force_git_root=None, re
             # Don't show errors for auto-load to avoid interrupting the user experience
             pass
 
+    # TUI mode - launch Textual interface
+    if args.tui:
+        from aider.tui import launch_tui
+
+        return_code = await launch_tui(coder, output_queue, input_queue, args)
+        return await graceful_exit(coder, return_code)
+
+    # Standard CLI mode - main loop
     while True:
         try:
             coder.ok_to_warm_cache = bool(args.cache_keepalive_pings)

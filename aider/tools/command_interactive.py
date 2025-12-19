@@ -33,6 +33,30 @@ class Tool(BaseTool):
         try:
             command_string = coder.format_command_with_prefix(command_string)
 
+            confirmed = (
+                True
+                if coder.skip_cli_confirmations
+                else await coder.io.confirm_ask(
+                    "Allow execution of this command?",
+                    subject=command_string,
+                    explicit_yes_required=True,  # Require explicit 'yes' or 'always'
+                    allow_never=True,  # Enable the 'Always' option
+                    group_response="Command Interactive Tool",
+                )
+            )
+
+            if not confirmed:
+                # This happens if the user explicitly says 'no' this time.
+                # If 'Always' was chosen previously, confirm_ask returns True directly.
+                coder.io.tool_output(f"Skipped execution of shell command: {command_string}")
+                return "Shell command execution skipped by user."
+
+            should_print = True
+            # tui = None
+            if coder.tui and coder.tui():
+                # tui = coder.tui()
+                should_print = False
+
             coder.io.tool_output(f"⚙️ Starting interactive shell command: {command_string}")
             coder.io.tool_output(">>> You may need to interact with the command below <<<")
             coder.io.tool_output(" \n")
@@ -46,6 +70,7 @@ class Tool(BaseTool):
                 verbose=coder.verbose,  # Pass verbose flag
                 error_print=coder.io.tool_error,  # Use io for error printing
                 cwd=coder.root,  # Execute in the project root
+                should_print=should_print,
             )
 
             await asyncio.sleep(1)

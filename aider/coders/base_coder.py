@@ -152,6 +152,9 @@ class Coder:
 
     ok_to_warm_cache = False
 
+    # Weak reference to TUI app instance (when running in TUI mode)
+    tui = None
+
     @classmethod
     async def create(
         self,
@@ -183,6 +186,9 @@ class Coder:
             io = from_coder.io
 
         if from_coder:
+            if not args:
+                args = from_coder.args
+
             use_kwargs = dict(from_coder.original_kwargs)  # copy orig kwargs
 
             # If the edit format changes, we can't leave old ASSISTANT
@@ -543,7 +549,7 @@ class Coder:
 
     def get_announcements(self):
         lines = []
-        lines.append(f"Aider-CE v{__version__}")
+        lines.append(f"cecli v{__version__}")
 
         # Model
         main_model = self.main_model
@@ -1247,11 +1253,17 @@ class Coder:
                     await self.io.recreate_input()
                     await self.io.input_task
                     user_message = self.io.input_task.result()
-                    self.io.tool_output("Processing...\n")
+
+                    if self.args and not self.args.tui:
+                        self.io.tool_output("Processing...\n")
+
                     self.io.output_task = asyncio.create_task(self.generate(user_message, preproc))
 
                     await self.io.output_task
-                    self.io.tool_output("Finished.")
+
+                    if self.args and not self.args.tui:
+                        self.io.tool_output("Finished.")
+
                     self.io.ring_bell()
                     user_message = None
                     await self.auto_save_session()
@@ -1348,8 +1360,11 @@ class Coder:
                     try:
                         user_message = self.io.input_task.result()
 
+                        # Defer to confirmation handler to fix Windows event loop race.
+                        if self.io.confirmation_in_progress:
+                            pass
                         # Set user message for output task
-                        if not self.io.acknowledge_confirmation():
+                        elif not self.io.acknowledge_confirmation():
                             if user_message:
                                 self.user_message = user_message
                                 await self.auto_save_session()
@@ -1381,7 +1396,7 @@ class Coder:
                     self.io.ring_bell()
                     await self.io.recreate_input()
 
-                await asyncio.sleep(0.01)  # Small yield to prevent tight loop
+                await asyncio.sleep(0.1)  # Small yield to prevent tight loop
 
             except KeyboardInterrupt:
                 self.io.set_placeholder("")
@@ -1439,7 +1454,7 @@ class Coder:
                         await self.io.stop_output_task()
 
                 await self.auto_save_session()
-                await asyncio.sleep(0.01)  # Small yield to prevent tight loop
+                await asyncio.sleep(0.1)  # Small yield to prevent tight loop
 
             except KeyboardInterrupt:
                 self.io.stop_spinner()
@@ -1521,7 +1536,9 @@ class Coder:
         else:
             message = user_message
 
-        if self.commands.is_command(user_message):
+        if self.commands.is_command(user_message) and not self.commands.is_test_command(
+            user_message
+        ):
             return
 
         while True:
@@ -2124,7 +2141,7 @@ class Coder:
                 " the context limit is exceeded."
             )
 
-            if not await self.io.confirm_ask("Try to proceed anyway?", explicit_yes_required=True):
+            if not await self.io.confirm_ask("Try to proceed anyway?"):
                 return False
         return True
 
@@ -2885,6 +2902,9 @@ class Coder:
         added_fnames = []
         group = ConfirmGroup(new_mentions)
         for rel_fname in sorted(new_mentions):
+            if self.args.tui:
+                self.io.tool_output(rel_fname)
+
             if await self.io.confirm_ask(
                 "Add file to the chat?", subject=rel_fname, group=group, allow_never=True
             ):
@@ -3005,13 +3025,17 @@ class Coder:
         id_index_dict = {} # Added for tool call streaming logic
 
         async for chunk in completion:
+            if self.args.debug:
+                with open(".aider/logs/chunks.log", "a") as f:
+                    print(chunk, file=f)
+
             # Check if confirmation is in progress and wait if needed
             while self.io.confirmation_in_progress:
                 await asyncio.sleep(0.1)  # Yield control and wait briefly
 
             if isinstance(chunk, str):
-                text = chunk
-                received_content = True
+                self.io.tool_error(chunk)
+                continue
             else:
                 if len(chunk.choices) == 0:
                     continue
@@ -3844,7 +3868,7 @@ class Coder:
         if not await self.io.confirm_ask(
             prompt,
             subject="\n".join(commands),
-            explicit_yes_required=True,
+            explicit_yes_required=self.args.yes_always_commands,
             group=group,
             allow_never=True,
         ):

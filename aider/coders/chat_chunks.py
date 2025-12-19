@@ -46,40 +46,49 @@ class ChatChunks:
             )
 
     def add_cache_control_headers(self):
-        if self.examples:
-            self.add_cache_control(self.examples)
+        # Limit to 4 cacheable blocks to appease Anthropic's limits on chunk caching
+        if self.format_list("readonly_files"):
+            self.add_cache_control(self.format_list("readonly_files"))
+        elif self.format_list("static"):
+            self.add_cache_control(self.format_list("static"))
+        elif self.format_list("examples"):
+            self.add_cache_control(self.format_list("examples"))
         else:
-            self.add_cache_control(self.system)
+            self.add_cache_control(self.format_list("system"))
 
         # The files form a cacheable block.
         # The block starts with readonly_files and ends with chat_files.
         # So we mark the end of chat_files.
-        self.add_cache_control(self.chat_files)
+        # self.add_cache_control(self.add_cache_control(self.format_list("chat_files"))
 
         # The repo map is its own cacheable block.
-        self.add_cache_control(self.repo)
+        if self.format_list("repo"):
+            self.add_cache_control(self.format_list("repo"))
+        elif self.format_list("chat_files"):
+            self.add_cache_control(self.format_list("chat_files"))
 
         # The history is ephemeral on its own.
-        self.add_cache_control(self.done)
+        self.add_cache_control(self.add_cache_control(self.format_list("cur")), penultimate=True)
 
     # Per this: https://github.com/BerriAI/litellm/issues/10226
     # The first and second to last messages are cache optimal
     # Since caches are also written to incrementally and you need
     # the past and current states to properly append and gain
     # efficiencies/savings in cache writing
-    def add_cache_control(self, messages):
-        if not messages or len(messages) < 2:
+    def add_cache_control(self, messages, penultimate=False):
+        if not messages:
             return
 
-        content = messages[-2]["content"]
-        if type(content) is str:
-            content = dict(
-                type="text",
-                text=content,
-            )
-        content["cache_control"] = {"type": "ephemeral"}
+        if penultimate and len(messages) < 2:
+            content = messages[-2]["content"]
+            if type(content) is str:
+                content = dict(
+                    type="text",
+                    text=content,
+                )
+            content["cache_control"] = {"type": "ephemeral"}
 
-        messages[-2]["content"] = [content]
+            messages[-2]["content"] = [content]
 
         content = messages[-1]["content"]
         if type(content) is str:

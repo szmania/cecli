@@ -315,7 +315,7 @@ class InputOutput:
         user_input_color="blue",
         tool_output_color=None,
         tool_error_color="red",
-        tool_warning_color="#FFA500",
+        tool_warning_color="#ffd700",
         assistant_output_color="blue",
         completion_menu_color=None,
         completion_menu_bg_color=None,
@@ -343,7 +343,6 @@ class InputOutput:
             self.chat_history_file = None
 
         self.placeholder = None
-        self.fallback_spinner = None
         self.prompt_session = None
         self.interrupted = False
         self.never_prompts = set()
@@ -459,6 +458,8 @@ class InputOutput:
         self.spinner_frame_index = 0
         self.spinner_last_frame_index = 0
         self.unicode_palette = "░█"
+        self.fallback_spinner = None
+        self.fallback_spinner_enabled = True
 
         if fancy_input:
             # If unicode is supported, use the rich 'dots2' spinner, otherwise an ascii fallback
@@ -527,7 +528,7 @@ class InputOutput:
 
             if update_last_text:
                 self.last_spinner_text = text
-        else:
+        elif self.fallback_spinner_enabled:
             self.fallback_spinner = Spinner(text)
             self.fallback_spinner.step()
 
@@ -548,7 +549,7 @@ class InputOutput:
 
         # Keep last frame index to avoid spinner "jumping" on restart
         self.spinner_last_frame_index = self.spinner_frame_index
-        if self.fallback_spinner:
+        if self.fallback_spinner and self.fallback_spinner_enabled:
             self.fallback_spinner.end()
             self.fallback_spinner = None
 
@@ -1398,7 +1399,7 @@ class InputOutput:
     def tool_warning(self, message="", strip=True):
         self._tool_message(message, strip, self.tool_warning_color)
 
-    def tool_output(self, *messages, log_only=False, bold=False):
+    def tool_output(self, *messages, log_only=False, bold=False, type=None):
         if messages:
             hist = " ".join(messages)
             hist = f"{hist.strip()}"
