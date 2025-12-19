@@ -12,6 +12,7 @@ from dataclasses import dataclass, fields
 from pathlib import Path
 from typing import Optional, Union
 
+import json5
 import yaml
 from PIL import Image
 
@@ -997,18 +998,29 @@ class Model(ModelSettings):
             kwargs["temperature"] = temperature
 
         # `tools` is for modern tool usage. `functions` is for legacy/forced calls.
-        # This handles `base_coder` sending both with same content for `agent_coder`.
-        effective_tools = tools
+        # This handles `base_coder` sending both with same content for `navigator_coder`.
+        effective_tools = []
+        if tools:
+            effective_tools.extend(tools)
 
-        if effective_tools is None and functions:
-            # Convert legacy `functions` to `tools` format if `tools` isn't provided.
-            effective_tools = [dict(type="function", function=f) for f in functions]
+        if functions:
+            # Convert legacy `functions` to `tools` format and add them
+            effective_tools.extend([dict(type="function", function=f) for f in functions])
 
         if effective_tools:
+            # Deduplicate tools based on function name
+            seen_tool_names = set()
+            deduped_tools = []
+            for tool in effective_tools:
+                tool_name = tool.get("function", {}).get("name")
+                if tool_name and tool_name not in seen_tool_names:
+                    deduped_tools.append(tool)
+                    seen_tool_names.add(tool_name)
+            effective_tools = deduped_tools
             kwargs["tools"] = effective_tools
 
         # Forcing a function call is for legacy style `functions` with a single function.
-        # This is used by ArchitectCoder and not intended for AgentCoder's tools.
+        # This is used by ArchitectCoder and not intended for NavigatorCoder's tools.
         if functions and len(functions) == 1:
             function = functions[0]
             if "name" in function:
@@ -1194,7 +1206,7 @@ def register_litellm_models(model_fnames):
             data = Path(model_fname).read_text()
             if not data.strip():
                 continue
-            model_def = json.loads(data)
+            model_def = json5.loads(data)
             if not model_def:
                 continue
 
