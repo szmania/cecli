@@ -42,6 +42,7 @@ When `--auto-save` is enabled, aider will automatically save your session as 'au
 - All files in the chat (editable, read-only, and read-only stubs)
 - Current model and edit format settings
 - Auto-commit, auto-lint, and auto-test settings
+- Todo list content from `.aider.todo.txt`
 - Session metadata (timestamp, version)
 
 ### `/load-session <name>`
@@ -56,6 +57,7 @@ Load a previously saved session by name or file path.
 - Restores chat history and file configurations
 - Recreates the exact session state
 - Preserves all settings and model configurations
+- Restores the todo list content saved in the session
 
 ### `/list-sessions`
 List all available saved sessions in `.aider/sessions/`.
@@ -78,10 +80,13 @@ Sessions are stored as JSON files in the `.aider/sessions/` directory within you
 
 ```json
 {
-  "version": "1.0",
+  "version": 1,
   "timestamp": 1700000000,
   "session_name": "my-session",
   "model": "gpt-4",
+  "weak_model": "gpt-4o-mini",
+  "editor_model": "gpt-4o",
+  "editor_edit_format": "diff",
   "edit_format": "diff",
   "chat_history": {
     "done_messages": [...],
@@ -93,11 +98,11 @@ Sessions are stored as JSON files in the `.aider/sessions/` directory within you
     "read_only_stubs": []
   },
   "settings": {
-    "root": "/path/to/project",
     "auto_commits": true,
     "auto_lint": false,
     "auto_test": false
-  }
+  },
+  "todo_list": "- plan feature A\n- write tests\n"
 }
 ```
 
@@ -143,6 +148,7 @@ Sessions are stored as JSON files in the `.aider/sessions/` directory within you
 - Session files include all file paths, so they work best when project structure is stable
 - External files (outside the project root) are stored with absolute paths
 - Missing files are skipped with warnings during loading
+- The todo list file (`.aider.todo.txt`) is cleared on startup; it is restored when you load a session or when you update it during a run
 
 ### Version Control
 - Consider adding `.aider/sessions/` to your `.gitignore` if sessions contain sensitive information
@@ -160,12 +166,16 @@ If files are reported as missing during loading:
 - The files may have been moved or deleted
 - Session files store relative paths, so directory structure changes can affect this
 - External files must exist at their original locations
+- The todo list (`.aider.todo.txt`) is cleared on startup unless restored from a loaded session
 
 ### Corrupted Sessions
 If a session fails to load:
 - Check the session file is valid JSON
 - Verify the session version is compatible
 - Try creating a new session and compare file structures
+
+### Deprecated Options
+- `--preserve-todo-list` is deprecated. The todo list is cleared on startup and restored only when you load a session that contains it.
 
 ## Related Commands
 - `/reset` - Clear chat history and drop files (useful before loading a session)

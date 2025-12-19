@@ -963,33 +963,38 @@ async def main_async(argv=None, input=None, output=None, force_git_root=None, re
                 model_overrides[model_name] = {}
             model_overrides[model_name].update(tags)
 
-    # Parse model names with suffixes and apply overrides
-    def parse_model_with_suffix(model_name, overrides):
-        """Parse model name with optional :suffix and apply overrides."""
+    # Build an index from full "base:suffix" names to (base_model, override_dict)
+    # so we don't have to parse/split user-provided model names at runtime.
+    override_index = {}
+    for base_model, suffixes in model_overrides.items():
+        if not isinstance(suffixes, dict):
+            continue
+        for suffix, cfg in suffixes.items():
+            if not isinstance(cfg, dict):
+                continue
+            full_name = f"{base_model}:{suffix}"
+            # Later entries override earlier ones
+            override_index[full_name] = (base_model, cfg)
+
+    def apply_model_overrides(model_name):
+        """Return (effective_model_name, override_kwargs) for a given model_name.
+
+        If model_name exactly matches a configured "base:suffix" override, we
+        switch to the base model and apply that override dict. Otherwise we
+        leave the name unchanged and return empty overrides.
+        """
         if not model_name:
             return model_name, {}
+        entry = override_index.get(model_name)
+        if not entry:
+            return model_name, {}
+        base_model, cfg = entry
+        return base_model, cfg.copy()
 
-        # Split on last colon to get model name and suffix
-        if ":" in model_name:
-            base_model, suffix = model_name.rsplit(":", 1)
-        else:
-            base_model, suffix = model_name, None
-
-        # Apply overrides if suffix exists
-        override_kwargs = {}
-        if suffix and base_model in overrides and suffix in overrides[base_model]:
-            override_kwargs = overrides[base_model][suffix].copy()
-
-        return base_model, override_kwargs
-
-    # Parse main model
-    main_model_name, main_model_overrides = parse_model_with_suffix(args.model, model_overrides)
-    weak_model_name, weak_model_overrides = parse_model_with_suffix(
-        args.weak_model, model_overrides
-    )
-    editor_model_name, editor_model_overrides = parse_model_with_suffix(
-        args.editor_model, model_overrides
-    )
+    # Apply overrides (if any) to the selected models
+    main_model_name, main_model_overrides = apply_model_overrides(args.model)
+    weak_model_name, weak_model_overrides = apply_model_overrides(args.weak_model)
+    editor_model_name, editor_model_overrides = apply_model_overrides(args.editor_model)
 
     # Create weak model if specified with overrides
     weak_model_obj = None

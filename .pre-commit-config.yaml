@@ -21,3 +21,12 @@ repos:
         args: ["--skip", "aider/website/docs/languages.md"]
         additional_dependencies:
           - tomli
+  - repo: local
+    hooks:
+      - id: filter-model-metadata
+        name: Filter model metadata to chat mode only
+        entry: node scripts/filter-chat-mode.js
+        args: ["aider/resources/model-metadata.json"]
+        language: system
+        files: ^aider/resources/model-metadata\.json$
+        pass_filenames: false

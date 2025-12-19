@@ -57,6 +57,10 @@ class TestSessionCommands(TestCase):
                 {"role": "user", "content": "Can you help me?"},
             ]
 
+            # Add a todo list
+            todo_content = "Task 1\nTask 2"
+            Path(".aider.todo.txt").write_text(todo_content, encoding="utf-8")
+
             # Save session
             session_name = "test_session"
             commands.cmd_save_session(session_name)
@@ -69,7 +73,7 @@ class TestSessionCommands(TestCase):
             with open(session_file, "r", encoding="utf-8") as f:
                 session_data = json.load(f)
 
-            self.assertEqual(session_data["version"], "1.0")
+            self.assertEqual(session_data["version"], 1)
             self.assertEqual(session_data["session_name"], session_name)
             self.assertEqual(session_data["model"], self.GPT35.name)
             self.assertEqual(session_data["edit_format"], coder.edit_format)
@@ -87,10 +91,12 @@ class TestSessionCommands(TestCase):
 
             # Verify settings
             settings = session_data["settings"]
-            self.assertEqual(settings["root"], coder.root)
             self.assertEqual(settings["auto_commits"], coder.auto_commits)
             self.assertEqual(settings["auto_lint"], coder.auto_lint)
             self.assertEqual(settings["auto_test"], coder.auto_test)
+
+            # Verify todo list persisted
+            self.assertEqual(session_data["todo_list"], todo_content)
 
     async def test_cmd_load_session_basic(self):
         """Test basic session load functionality"""
@@ -113,7 +119,7 @@ class TestSessionCommands(TestCase):
 
             # Create a session file manually
             session_data = {
-                "version": "1.0",
+                "version": 1,
                 "timestamp": time.time(),
                 "session_name": "test_session",
                 "model": self.GPT35.name,
@@ -133,11 +139,11 @@ class TestSessionCommands(TestCase):
                     "read_only_stubs": [],
                 },
                 "settings": {
-                    "root": str(repo_dir),
                     "auto_commits": True,
                     "auto_lint": False,
                     "auto_test": False,
                 },
+                "todo_list": "Restored tasks\n- item",
             }
 
             # Save session file
@@ -166,6 +172,11 @@ class TestSessionCommands(TestCase):
             self.assertEqual(coder.auto_lint, False)
             self.assertEqual(coder.auto_test, False)
 
+            # Verify todo list restored
+            todo_file = Path(".aider.todo.txt")
+            self.assertTrue(todo_file.exists())
+            self.assertEqual(todo_file.read_text(encoding="utf-8"), session_data["todo_list"])
+
     async def test_cmd_list_sessions_basic(self):
         """Test basic session list functionality"""
         with GitTemporaryDirectory():
@@ -176,7 +187,7 @@ class TestSessionCommands(TestCase):
             # Create multiple session files
             sessions_data = [
                 {
-                    "version": "1.0",
+                    "version": 1,
                     "timestamp": time.time() - 3600,  # 1 hour ago
                     "session_name": "session1",
                     "model": "gpt-3.5-turbo",
@@ -191,7 +202,7 @@ class TestSessionCommands(TestCase):
                     },
                 },
                 {
-                    "version": "1.0",
+                    "version": 1,
                     "timestamp": time.time(),  # current time
                     "session_name": "session2",
                     "model": "gpt-4",
@@ -232,3 +243,18 @@ class TestSessionCommands(TestCase):
                 self.assertIn("session2", output_text)
                 self.assertIn("gpt-3.5-turbo", output_text)
                 self.assertIn("gpt-4", output_text)
+
+    async def test_preserve_todo_list_deprecated(self):
+        """Ensure preserve-todo-list flag is deprecated and todo is cleared on startup"""
+        with GitTemporaryDirectory():
+            todo_path = Path(".aider.todo.txt")
+            todo_path.write_text("keep me", encoding="utf-8")
+
+            io = InputOutput(pretty=False, fancy_input=False, yes=True)
+            with mock.patch.object(io, "tool_warning") as mock_tool_warning:
+                await Coder.create(self.GPT35, None, io, preserve_todo_list=True)
+
+            self.assertFalse(todo_path.exists())
+            self.assertTrue(
+                any("deprecated" in call[0][0] for call in mock_tool_warning.call_args_list)
+            )

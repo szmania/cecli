@@ -9,6 +9,7 @@ from aider.tools.utils.helpers import (
     format_tool_result,
     generate_unified_diff_snippet,
     handle_tool_error,
+    is_provided,
     select_occurrence_index,
     validate_file_for_edit,
 )
@@ -32,11 +33,25 @@ class Tool(BaseTool):
                     "occurrence": {"type": "integer", "default": 1},
                     "change_id": {"type": "string"},
                     "dry_run": {"type": "boolean", "default": False},
-                    "position": {"type": "string", "enum": ["top", "bottom"]},
+                    "position": {"type": "string", "enum": ["top", "bottom", ""]},
                     "auto_indent": {"type": "boolean", "default": True},
                     "use_regex": {"type": "boolean", "default": False},
                 },
                 "required": ["file_path", "content"],
+                "oneOf": [
+                    {
+                        "required": ["after_pattern"],
+                        "not": {"required": ["before_pattern", "position"]},
+                    },
+                    {
+                        "required": ["before_pattern"],
+                        "not": {"required": ["after_pattern", "position"]},
+                    },
+                    {
+                        "required": ["position"],
+                        "not": {"required": ["after_pattern", "before_pattern"]},
+                    },
+                ],
             },
         },
     }
@@ -68,14 +83,14 @@ class Tool(BaseTool):
             occurrence: Which occurrence of the pattern to use (1-based, or -1 for last)
             change_id: Optional ID for tracking changes
             dry_run: If True, only simulate the change
-            position: Special position like "start_of_file" or "end_of_file"
+            position: Special position like "top" or "bottom" (mutually exclusive with before_pattern and after_pattern)
             auto_indent: If True, automatically adjust indentation of inserted content
             use_regex: If True, treat patterns as regular expressions
         """
         tool_name = "InsertBlock"
         try:
             # 1. Validate parameters
-            if sum(x is not None for x in [after_pattern, before_pattern, position]) != 1:
+            if sum(is_provided(x) for x in [after_pattern, before_pattern, position]) != 1:
                 raise ToolError(
                     "Must specify exactly one of: after_pattern, before_pattern, or position"
                 )

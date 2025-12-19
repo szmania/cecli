@@ -314,6 +314,12 @@ class Coder:
         self.auto_accept_architect = auto_accept_architect
         self.preserve_todo_list = preserve_todo_list
 
+        if self.preserve_todo_list:
+            self.io.tool_warning(
+                "--preserve-todo-list is deprecated; todo lists are now saved and restored with"
+                " sessions. The flag will be removed in a future release."
+            )
+
         self.ignore_mentions = ignore_mentions
         if not self.ignore_mentions:
             self.ignore_mentions = set()
@@ -524,17 +530,16 @@ class Coder:
         self.auto_test = auto_test
         self.test_cmd = test_cmd
 
-        # Clean up todo list file on startup unless preserve_todo_list is True
-        if not getattr(self, "preserve_todo_list", False):
-            todo_file_path = ".aider.todo.txt"
-            abs_path = self.abs_root_path(todo_file_path)
-            if os.path.isfile(abs_path):
-                try:
-                    os.remove(abs_path)
-                    if self.verbose:
-                        self.io.tool_output(f"Removed existing todo list file: {todo_file_path}")
-                except Exception as e:
-                    self.io.tool_warning(f"Could not remove todo list file {todo_file_path}: {e}")
+        # Clean up todo list file on startup; sessions will restore it when needed
+        todo_file_path = ".aider.todo.txt"
+        abs_path = self.abs_root_path(todo_file_path)
+        if os.path.isfile(abs_path):
+            try:
+                os.remove(abs_path)
+                if self.verbose:
+                    self.io.tool_output(f"Removed existing todo list file: {todo_file_path}")
+            except Exception as e:
+                self.io.tool_warning(f"Could not remove todo list file {todo_file_path}: {e}")
 
         # validate the functions jsonschema
         if self.functions:

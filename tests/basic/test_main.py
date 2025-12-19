@@ -1151,6 +1151,103 @@ class TestMain(TestCase):
             del os.environ["ANTHROPIC_API_KEY"]
             del os.environ["OPENAI_API_KEY"]
 
+    async def test_model_overrides_suffix_applied(self):
+        with GitTemporaryDirectory() as git_dir:
+            git_dir = Path(git_dir)
+            overrides_file = git_dir / ".aider.model.overrides.yml"
+            overrides_file.write_text("gpt-4o:\n  fast:\n    temperature: 0.1\n")
+
+            with (
+                patch("aider.models.Model") as MockModel,
+                patch("aider.coders.Coder.create") as MockCoder,
+            ):
+                mock_coder_instance = MagicMock()
+                MockCoder.return_value = mock_coder_instance
+
+                mock_instance = MockModel.return_value
+                mock_instance.info = {}
+                mock_instance.name = "gpt-4o"
+                mock_instance.validate_environment.return_value = {
+                    "missing_keys": [],
+                    "keys_in_environment": [],
+                }
+                mock_instance.accepts_settings = []
+                mock_instance.weak_model_name = None
+                mock_instance.get_weak_model.return_value = None
+
+                await main(
+                    ["--model", "gpt-4o:fast", "--exit", "--yes", "--no-git"],
+                    input=DummyInput(),
+                    output=DummyOutput(),
+                    force_git_root=git_dir,
+                )
+
+                # Find the call that constructed the main model with overrides
+                matched_call_found = False
+                for call_args in MockModel.call_args_list:
+                    args, kwargs = call_args
+                    if (
+                        args
+                        and args[0] == "gpt-4o"
+                        and kwargs.get("override_kwargs") == {"temperature": 0.1}
+                    ):
+                        matched_call_found = True
+                        break
+
+                self.assertTrue(
+                    matched_call_found,
+                    (
+                        "Expected a Model call with base name 'gpt-4o' and override_kwargs"
+                        " {'temperature': 0.1}"
+                    ),
+                )
+
+    async def test_model_overrides_no_match_preserves_model_name(self):
+        with GitTemporaryDirectory() as git_dir:
+            git_dir = Path(git_dir)
+
+            with (
+                patch("aider.models.Model") as MockModel,
+                patch("aider.coders.Coder.create") as MockCoder,
+            ):
+                mock_coder_instance = MagicMock()
+                MockCoder.return_value = mock_coder_instance
+
+                mock_instance = MockModel.return_value
+                mock_instance.info = {}
+                mock_instance.name = "test-model"
+                mock_instance.validate_environment.return_value = {
+                    "missing_keys": [],
+                    "keys_in_environment": [],
+                }
+                mock_instance.accepts_settings = []
+                mock_instance.weak_model_name = None
+                mock_instance.get_weak_model.return_value = None
+
+                model_name = "hf:moonshotai/Kimi-K2-Thinking"
+
+                await main(
+                    ["--model", model_name, "--exit", "--yes", "--no-git"],
+                    input=DummyInput(),
+                    output=DummyOutput(),
+                    force_git_root=git_dir,
+                )
+
+                matched_call_found = False
+                for call_args in MockModel.call_args_list:
+                    args, kwargs = call_args
+                    if args and args[0] == model_name and kwargs.get("override_kwargs") == {}:
+                        matched_call_found = True
+                        break
+
+                self.assertTrue(
+                    matched_call_found,
+                    (
+                        "Expected a Model call with the full model name preserved and empty"
+                        " override_kwargs"
+                    ),
+                )
+
     async def test_chat_language_spanish(self):
         with GitTemporaryDirectory():
             coder = await main(

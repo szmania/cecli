@@ -204,11 +204,9 @@ When `include_context_blocks` is specified, only the listed blocks will be inclu
 
 #### Other Aider-CE CLI/Config Options for Agent Mode
 
-- `preserve-todo-list` - Preserve todo list across sessions
 - `use-enhanced-map` - Use enhanced repo map that takes into account import relationships between files
 
 ```yaml
-preserve-todo-list: true
 use-enhanced-map: true
 ```
 
@@ -240,7 +238,6 @@ agent-config:
   skills_excludelist: ["legacy-tools"]  # Optional: Blacklist of skills to exclude
 
 # Other Agent Mode options
-preserve-todo-list: true  # Preserve todo list across sessions
 use-enhanced-map: true  # Use enhanced repo map with import relationships
 ```
 

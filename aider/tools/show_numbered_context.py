@@ -1,7 +1,12 @@
 import os
 
 from aider.tools.utils.base_tool import BaseTool
-from aider.tools.utils.helpers import ToolError, handle_tool_error, resolve_paths
+from aider.tools.utils.helpers import (
+    ToolError,
+    handle_tool_error,
+    is_provided,
+    resolve_paths,
+)
 
 
 class Tool(BaseTool):
@@ -20,6 +25,10 @@ class Tool(BaseTool):
                     "context_lines": {"type": "integer", "default": 3},
                 },
                 "required": ["file_path"],
+                "oneOf": [
+                    {"required": ["pattern"], "not": {"required": ["line_number"]}},
+                    {"required": ["line_number"], "not": {"required": ["pattern"]}},
+                ],
             },
         },
     }
@@ -34,8 +43,16 @@ class Tool(BaseTool):
         tool_name = "ShowNumberedContext"
         try:
             # 1. Validate arguments
-            if not (pattern is None) ^ (line_number is None):
+            pattern_provided = is_provided(pattern)
+            line_number_provided = is_provided(line_number, treat_zero_as_missing=True)
+
+            if sum([pattern_provided, line_number_provided]) != 1:
                 raise ToolError("Provide exactly one of 'pattern' or 'line_number'.")
+
+            if not pattern_provided:
+                pattern = None
+            if not line_number_provided:
+                line_number = None
 
             # 2. Resolve path
             abs_path, rel_path = resolve_paths(coder, file_path)

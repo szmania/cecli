@@ -327,7 +327,10 @@ def get_parser(default_config_files, git_root):
     group.add_argument(
         "--preserve-todo-list",
         action="store_true",
-        help="Preserve the existing .aider.todo.txt file on startup (default: False)",
+        help=(
+            "Deprecated: no longer needed because the todo list is saved and restored with"
+            " sessions. This flag has no effect and will be removed."
+        ),
         default=False,
     )
     group.add_argument(

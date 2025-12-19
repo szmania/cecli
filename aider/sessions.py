@@ -126,6 +126,17 @@ class SessionManager:
             for abs_fname in self.coder.abs_read_only_stubs_fnames
         ]
 
+        # Capture todo list content so it can be restored with the session
+        todo_content = None
+        try:
+            todo_path = self.coder.abs_root_path(".aider.todo.txt")
+            if os.path.isfile(todo_path):
+                todo_content = self.io.read_text(todo_path)
+                if todo_content is None:
+                    todo_content = ""
+        except Exception as e:
+            self.io.tool_warning(f"Could not read todo list file: {e}")
+
         return {
             "version": 1,
             "session_name": session_name,
@@ -148,6 +159,7 @@ class SessionManager:
                 "auto_lint": self.coder.auto_lint,
                 "auto_test": self.coder.auto_test,
             },
+            "todo_list": todo_content,
         }
 
     def _find_session_file(self, session_identifier: str) -> Optional[Path]:
@@ -231,6 +243,19 @@ class SessionManager:
                 self.coder.auto_lint = settings["auto_lint"]
             if "auto_test" in settings:
                 self.coder.auto_test = settings["auto_test"]
+
+            # Restore todo list content if present in the session
+            if "todo_list" in session_data:
+                todo_path = self.coder.abs_root_path(".aider.todo.txt")
+                todo_content = session_data.get("todo_list")
+                try:
+                    if todo_content is None:
+                        if os.path.exists(todo_path):
+                            os.remove(todo_path)
+                    else:
+                        self.io.write_text(todo_path, todo_content)
+                except Exception as e:
+                    self.io.tool_warning(f"Could not restore todo list: {e}")
 
             self.io.tool_output(
                 f"Session loaded: {session_data.get('session_name', session_file.stem)}"
