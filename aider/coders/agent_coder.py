@@ -486,6 +486,8 @@ class AgentCoder(Coder):
 
                 result_message = "\n\n".join(all_results_content)
 
+            except (EOFError, KeyboardInterrupt):
+                raise
             except Exception as e:
                 result_message = f"Error executing {tool_name}: {e}"
                 self.io.tool_error(
@@ -1803,6 +1805,8 @@ class AgentCoder(Coder):
                 # Use the tool registry for execution
                 result_message = await self._execute_tool_with_registry(norm_tool_name, params)
 
+            except (EOFError, KeyboardInterrupt):
+                raise
             except Exception as e:
                 result_message = f"Error executing {tool_name}: {str(e)}"
                 self.io.tool_error(

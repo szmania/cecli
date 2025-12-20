@@ -240,6 +240,8 @@ class ToolManager:
                             return False, error_msg
 
                 # Fallback for other exceptions or unparsable ImportErrors
+                except (EOFError, KeyboardInterrupt):
+                    raise
                 msg = f"Failed to load tool from {file_path}: {e}"
                 self.coder.io.tool_error(msg)
 
