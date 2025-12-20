@@ -105,8 +105,6 @@ I am working with code in a git repository. Here are summaries of some files:
 - Remove files from the context when you are done with viewing/editing with the `Remove` tool. It is fine to re-add them later, if they are needed again
 - Remove skills if they are not helpful for your current task with `RemoveSkill`
 
-{lazy_prompt}
-{shell_cmd_reminder}
 </context>
 """
 
