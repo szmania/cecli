@@ -239,9 +239,6 @@ class ToolManager:
                             self.coder.io.tool_error(error_msg)
                             return False, error_msg
 
-                # Fallback for other exceptions or unparsable ImportErrors
-                except (EOFError, KeyboardInterrupt):
-                    raise
                 msg = f"Failed to load tool from {file_path}: {e}"
                 self.coder.io.tool_error(msg)
 
@@ -287,6 +284,8 @@ class ToolManager:
                     self.coder.args.pretty = original_pretty
                     self.coder.is_fixing_tool = False
                 # Loop will continue and try to load again
+            except (EOFError, KeyboardInterrupt):
+                raise
 
     def unload_tool(self, tool_name):
         if tool_name in self.tools:
