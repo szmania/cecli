@@ -1728,21 +1728,6 @@ class AgentCoder(Coder):
                     # Extract value based on AST node type
                     if isinstance(value_node, ast.Constant):
                         value = value_node.value
-                        # Check if this is a multiline string and trim whitespace
-                        if isinstance(value, str) and "\n" in value:
-                            # Get the source line(s) for this node to check if it's a triple-quoted string
-                            lineno = value_node.lineno if hasattr(value_node, "lineno") else 0
-                            end_lineno = (
-                                value_node.end_lineno
-                                if hasattr(value_node, "end_lineno")
-                                else lineno
-                            )
-                            if end_lineno > lineno:  # It's a multiline string
-                                # Trim exactly one leading and one trailing newline if present
-                                if value.startswith("\n"):
-                                    value = value[1:]
-                                if value.endswith("\n"):
-                                    value = value[:-1]
                     elif isinstance(
                         value_node, ast.Name
                     ):  # Handle unquoted values like True/False/None or variables
