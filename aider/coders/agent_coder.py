@@ -1457,17 +1457,7 @@ class AgentCoder(Coder):
                             # Convert arguments dictionary to keyword arguments string
                             kw_args = []
                             for key, value in arguments.items():
-                                if isinstance(value, str):
-                                    # Escape quotes and wrap in quotes
-                                    escaped_value = value.replace('"', '\\"')
-                                    kw_args.append(f'{key}="{escaped_value}"')
-                                elif isinstance(value, bool):
-                                    kw_args.append(f"{key}={str(value).lower()}")
-                                elif value is None:
-                                    kw_args.append(f"{key}=None")
-                                else:
-                                    # For numbers and other types, use repr for safe representation
-                                    kw_args.append(f"{key}={repr(value)}")
+                                kw_args.append(f"{key}={repr(value)}")
 
                             # Join keyword arguments
                             kw_args_str = ", ".join(kw_args)
