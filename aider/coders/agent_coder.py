@@ -39,6 +39,7 @@ from aider.repo import ANY_GIT_ERROR
 from aider.tools import (
     command,
     command_interactive,
+    context_manager,
     delete_block,
     delete_line,
     delete_lines,
@@ -192,6 +193,7 @@ class AgentCoder(Coder):
         tool_modules = [
             command,
             command_interactive,
+            context_manager,
             delete_block,
             delete_line,
             delete_lines,
