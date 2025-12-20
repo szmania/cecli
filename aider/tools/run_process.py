@@ -1,6 +1,4 @@
-import shlex
 import subprocess
-import os
 
 from aider.tools.utils.base_tool import BaseTool
 
@@ -50,17 +48,16 @@ class Tool(BaseTool):
 
             coder.io.tool_output(f"Executing command in subprocess: {command}")
 
-            # Use shlex.split to safely parse the command string
-            args = shlex.split(command)
-
-            # Execute the command as a subprocess
+            # Execute the command in a shell.
+            # This allows for shell built-ins, redirection, and pipelines.
+            # The user confirmation is the security measure.
             process = subprocess.run(
-                args,
+                command,
                 capture_output=True,
                 text=True,
                 cwd=coder.root,
                 check=False,  # Don't raise exception on non-zero exit
-                env=os.environ.copy(),
+                shell=True,
             )
 
             exit_status = process.returncode
@@ -88,9 +85,9 @@ class Tool(BaseTool):
                 return f"Command failed with exit code {exit_status}. Output:\n{output}"
 
         except FileNotFoundError:
-            cmd_name = shlex.split(command)[0]
-            coder.io.tool_error(f"Error: Command not found: '{cmd_name}'")
-            return f"Error: Command not found: '{cmd_name}'"
+            # This can happen if shell=True and the shell itself is not found.
+            coder.io.tool_error(f"Error: Shell not found to execute command: '{command}'")
+            return "Error: Shell not found."
         except Exception as e:
             coder.io.tool_error(f"Error executing command '{command}': {str(e)}")
             return f"Error executing command: {str(e)}"
