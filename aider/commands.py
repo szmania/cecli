@@ -1367,8 +1367,6 @@ class Commands:
             except Exception:
                 pass
 
-        await asyncio.sleep(0)
-
         # Check if running in TUI mode - use graceful exit to restore terminal
         if hasattr(self.io, "request_exit"):
             self.io.request_exit()
