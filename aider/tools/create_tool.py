@@ -153,9 +153,11 @@ class Tool(BaseTool):
 
         # 5. Call LLM
         try:
-            completion = await litellm.acompletion(
-                model=coder.main_model.name,
+            coder.io.tool_output("Generating new tool code with an LLM call...")
+            completion = await coder.main_model.send_completion(
                 messages=messages,
+                functions=None,
+                stream=False,
                 temperature=0,
             )
 
