@@ -2238,7 +2238,7 @@ class Commands:
 
         try:
             with open(args.strip(), "r", encoding=self.io.encoding, errors="replace") as f:
-                commands = f.readlines()
+                lines = f.readlines()
         except FileNotFoundError:
             self.io.tool_error(f"File not found: {args}")
             return
@@ -2246,7 +2246,26 @@ class Commands:
             self.io.tool_error(f"Error reading file: {e}")
             return
 
-        for cmd in commands:
+        commands_to_run = []
+        current_cmd = ""
+        for line in lines:
+            stripped = line.strip()
+            if stripped.startswith(('/', '!')):
+                if current_cmd:
+                    commands_to_run.append(current_cmd)
+                current_cmd = line
+            elif stripped.startswith('#') or not stripped:
+                if current_cmd:
+                    commands_to_run.append(current_cmd)
+                    current_cmd = ""
+                # This is a comment or empty line, it terminates the previous command
+            else:
+                current_cmd += line
+
+        if current_cmd:
+            commands_to_run.append(current_cmd)
+
+        for cmd in commands_to_run:
             cmd = cmd.strip()
             if not cmd or cmd.startswith("#"):
                 continue

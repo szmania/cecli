@@ -160,9 +160,9 @@ class Tool(BaseTool):
         try:
             coder.io.tool_output(f"Creating new tool '{file_name}' in {scope} scope...")
             coder.io.tool_output("Generating new tool code with an LLM call...")
-            completion = await coder.main_model.send_completion(
+            completion = await litellm.acompletion(
+                model=coder.main_model.name,
                 messages=messages,
-                functions=None,
                 stream=False,
                 temperature=0,
             )
