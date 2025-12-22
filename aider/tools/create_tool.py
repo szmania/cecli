@@ -160,12 +160,18 @@ class Tool(BaseTool):
         try:
             coder.io.tool_output(f"Creating new tool '{file_name}' in {scope} scope...")
             coder.io.tool_output("Generating new tool code with an LLM call...")
-            completion = await litellm.acompletion(
-                model=coder.main_model.name,
-                messages=messages,
-                stream=False,
-                temperature=0,
+            
+            # Use the main model's configuration parameters to ensure proper API setup
+            kwargs = coder.main_model.extra_params.copy()
+            kwargs.update(
+                dict(
+                    model=coder.main_model.name,
+                    messages=messages,
+                    stream=False,
+                    temperature=0,
+                )
             )
+            completion = await litellm.acompletion(**kwargs)
 
             # 6. Parse and Clean Response
             generated_code = completion.choices[0].message.content
