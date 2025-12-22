@@ -66,6 +66,11 @@ class Tool(BaseTool):
                 return "Error: Cannot create local tool without a git repository."
             tools_dir = os.path.join(coder.repo.root, ".aider", "tools")
 
+        # Check if file already exists before generating code
+        file_path = os.path.join(tools_dir, file_name)
+        if os.path.exists(file_path):
+            return f"Error: Tool file '{file_name}' already exists in {scope} scope."
+
         # 3. Define Prompt
         tool_creation_prompt_content = """You are an expert software engineer. Your task is to generate the complete Python code for a custom tool for the 'aider' coding assistant.
 
@@ -153,6 +158,7 @@ class Tool(BaseTool):
 
         # 5. Call LLM
         try:
+            coder.io.tool_output(f"Creating new tool '{file_name}' in {scope} scope...")
             coder.io.tool_output("Generating new tool code with an LLM call...")
             completion = await coder.main_model.send_completion(
                 messages=messages,
@@ -180,7 +186,7 @@ class Tool(BaseTool):
 
             # 7. Save and Load
             os.makedirs(tools_dir, exist_ok=True)
-            file_path = os.path.join(tools_dir, file_name)
+            # file_path is already defined above
             with open(file_path, "w", encoding="utf-8") as f:
                 f.write(cleaned_code)
 
