@@ -167,13 +167,32 @@ class Tool(BaseTool):
                 dict(
                     model=coder.main_model.name,
                     messages=messages,
-                    stream=False,
+                    stream=True,  # Changed to streaming
                     temperature=0,
                 )
             )
+            
+            # 6. Call LLM with streaming and collect response
             completion = await litellm.acompletion(**kwargs)
+            
+            # Collect streaming chunks
+            full_response = ""
+            async for chunk in completion:
+                if chunk.choices and chunk.choices[0].delta.content:
+                    full_response += chunk.choices[0].delta.content
+            
+            # Create a mock response object to match non-streaming format
+            class MockChoice:
+                def __init__(self, content):
+                    self.message = type('obj', (object,), {'content': content})()
+            
+            class MockCompletion:
+                def __init__(self, content):
+                    self.choices = [MockChoice(content)]
+            
+            completion = MockCompletion(full_response)
 
-            # 6. Parse and Clean Response
+            # 7. Parse and Clean Response
             generated_code = completion.choices[0].message.content
             if not generated_code:
                 return "Error: LLM did not generate any code for the tool."
