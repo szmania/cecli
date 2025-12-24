@@ -1725,9 +1725,16 @@ class Commands:
                     s = "unnamed_tool"
                 file_name = f"{s[:50]}.py"
 
-            await create_tool.Tool.execute(
+            result = await create_tool.Tool.execute(
                 coder=self.coder, description=description, file_name=file_name, scope=scope
             )
+            
+            # Display the result to the user
+            if result and result.startswith("Error:"):
+                self.io.tool_error(result)
+            elif result:
+                self.io.tool_output(result)
+                
             await self.coder.initialize_mcp_tools()
 
         except Exception as e:

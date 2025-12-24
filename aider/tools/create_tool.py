@@ -42,14 +42,14 @@ class Tool(BaseTool):
 
     @classmethod
     async def execute(cls, coder, description: str, file_name: str, scope: str = "local"):
-        from aider.utils import strip_fenced_code
-
-        coder.io.tool_output("Executing CreateTool from aider/tools/create_tool.py (class-based)")
-
         """
         Creates a new custom tool based on the provided description and filename.
         The new tool is then automatically loaded into the current session.
         """
+        from aider.utils import strip_fenced_code
+
+        coder.io.tool_output("Executing CreateTool from aider/tools/create_tool.py (class-based)")
+
         # 1. Validate Inputs
         if not file_name.lower().endswith(".py"):
             return f"Error: file_name '{file_name}' must end with '.py'."
