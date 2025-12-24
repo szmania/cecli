@@ -2400,8 +2400,18 @@ class Coder:
         # Expand any tool calls that have concatenated JSON in their arguments.
         # This is necessary because some models (like Gemini) will serialize
         # multiple tool calls in this way.
+        # Also ensure all tool calls have IDs to prevent 400 errors
         expanded_tool_calls = []
         for tool_call in original_tool_calls:
+            # Ensure tool call has an ID - generate one if missing
+            tool_call_id = getattr(tool_call, 'id', None)
+            if not tool_call_id:
+                # Generate a unique ID if one isn't provided by the model
+                import uuid
+                tool_call_id = str(uuid.uuid4())
+                # Create a new tool call with the generated ID
+                tool_call = tool_call.model_copy(update={"id": tool_call_id})
+
             args_string = tool_call.function.arguments.strip()
 
             # If there are no arguments, or it's not a string that looks like it could
@@ -2479,10 +2489,11 @@ class Coder:
 
         for tool_call in tool_calls:
             # LLM APIs sometimes return duplicates and that's annoying part 3
-            if tool_call.get("id") in tool_id_set:
+            # Fix: Use attribute access instead of dictionary access for Pydantic objects
+            if getattr(tool_call, 'id', None) in tool_id_set:
                 continue
 
-            tool_id_set.add(tool_call.get("id"))
+            tool_id_set.add(getattr(tool_call, 'id', None))
 
             # Check if this tool_call matches any MCP tool
             for server_name, server_tools in self.mcp_tools:
