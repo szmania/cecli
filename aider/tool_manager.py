@@ -134,8 +134,7 @@ class ToolManager:
 
         self.coder.io.tool_output("Loading custom tools...")
         self.coder.io.tool_output(
-            "Note: Tool dependencies will be installed into the same Python environment that Aider"
-            " is running in."
+            "Note: Tool dependencies will be installed into isolated virtual environments."
         )
         for file_path in self.discovered_tool_files:
             if file_path in self.unloaded_tools:
@@ -375,8 +374,16 @@ class ToolManager:
                         # Install the package in the appropriate environment
                         self.coder.io.tool_output(f"Installing '{package_name}' in {scope} environment...")
                         try:
+                            # Use the correct Python executable for the tool's scope
+                            if scope == "local":
+                                python_exe = self.local_tools_python
+                            elif scope == "global":
+                                python_exe = self.global_tools_python
+                            else:
+                                python_exe = sys.executable  # Fallback
+
                             subprocess.check_call(
-                                [python_executable, "-m", "pip", "install", package_name]
+                                [python_exe, "-m", "pip", "install", package_name]
                             )
                             self.coder.io.tool_output(f"Successfully installed '{package_name}' in {scope} environment.")
                             self.coder.io.tool_output(f"Retrying to load tool from {file_path}...")
