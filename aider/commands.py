@@ -1882,15 +1882,15 @@ class Commands:
             self.io.tool_error("Tool manager not available.")
             return
 
-        # Use fuzzy search to find the tool
-        success, tool_name, message = self.coder.tool_manager.find_tool(tool_name_query)
+        # Use fuzzy search to find the tool, only looking for custom tools
+        success, tool_name, message = self.coder.tool_manager.find_tool(tool_name_query, search_scope='custom')
         if not success:
             self.io.tool_error(message)
             return
             
         self.io.tool_output(message)  # Show the found tool message
 
-        tool_info = self.coder.tool_manager.tools.get(tool_name)
+        tool_info = self.coder.tool_manager.tools.get(tool_name.lower())
         if not tool_info:
             self.io.tool_error(f"Custom tool '{tool_name}' not found.")
             return
@@ -1943,20 +1943,13 @@ class Commands:
             self.io.tool_error("Tool manager not available.")
             return
 
-        # Use fuzzy search to find the tool
-        success, tool_name, message = self.coder.tool_manager.find_tool(tool_name_query)
+        # Use fuzzy search to find the tool, only looking for custom tools
+        success, tool_name, message = self.coder.tool_manager.find_tool(tool_name_query, search_scope='custom')
         if not success:
             self.io.tool_error(message)
             return
             
         self.io.tool_output(message)  # Show the found tool message
-
-        # Check if it's a standard tool
-        if hasattr(self.coder, "tool_registry") and tool_name.lower() in self.coder.tool_registry:
-            self.io.tool_error(
-                f"Cannot delete standard tool '{tool_name}'. Only custom tools can be deleted."
-            )
-            return
 
         result = self.coder.tool_manager.delete_tool(tool_name)
         self.io.tool_output(result)

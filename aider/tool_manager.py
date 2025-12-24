@@ -20,12 +20,13 @@ class ToolManager:
         self.load_dot_env_files()
         self.discovered_tool_files = self.discover_tools()
 
-    def find_tool(self, tool_name_query):
+    def find_tool(self, tool_name_query, search_scope='all'):
         """
         Find a tool by fuzzy matching the tool name query.
         
         Args:
             tool_name_query (str): The user's tool name query
+            search_scope (str): Scope to search - 'all', 'custom', or 'standard'
             
         Returns:
             tuple: (success: bool, tool_name: str, message: str)
@@ -35,31 +36,38 @@ class ToolManager:
         if not tool_name_query:
             return False, None, "No tool name provided."
             
-        # Get all available tool names (custom tools + standard tools)
+        # Get available tool names based on scope
         all_tool_names = set()
         
-        # Add custom tool names
-        for tool_info in self.tools.values():
-            all_tool_names.add(tool_info["name"])
+        # Add custom tool names if in scope
+        if search_scope in ['all', 'custom']:
+            for tool_info in self.tools.values():
+                all_tool_names.add(tool_info["name"])
             
-        # Add standard tool names if coder has tool_registry
-        if hasattr(self.coder, 'tool_registry'):
-            for tool_class in self.coder.tool_registry.values():
-                schema = tool_class.SCHEMA
-                name = schema.get("function", {}).get("name")
-                if name:
-                    all_tool_names.add(name)
-                    
-        # Add unloaded standard tools if available
-        if hasattr(self.coder, 'unloaded_standard_tools'):
-            for tool_class in self.coder.unloaded_standard_tools.values():
-                schema = tool_class.SCHEMA
-                name = schema.get("function", {}).get("name")
-                if name:
-                    all_tool_names.add(name)
+        # Add standard tool names if in scope
+        if search_scope in ['all', 'standard']:
+            if hasattr(self.coder, 'tool_registry'):
+                for tool_class in self.coder.tool_registry.values():
+                    schema = tool_class.SCHEMA
+                    name = schema.get("function", {}).get("name")
+                    if name:
+                        all_tool_names.add(name)
+                        
+            # Add unloaded standard tools if available
+            if hasattr(self.coder, 'unloaded_standard_tools'):
+                for tool_class in self.coder.unloaded_standard_tools.values():
+                    schema = tool_class.SCHEMA
+                    name = schema.get("function", {}).get("name")
+                    if name:
+                        all_tool_names.add(name)
         
         if not all_tool_names:
-            return False, None, "No tools available."
+            scope_msg = ""
+            if search_scope == 'custom':
+                scope_msg = " No custom tools available."
+            elif search_scope == 'standard':
+                scope_msg = " No standard tools available."
+            return False, None, "No tools available." + scope_msg
             
         # Normalize the query and tool names for comparison
         def normalize_name(name):
@@ -497,10 +505,11 @@ class ToolManager:
             return f"Error deleting tool file: {e}"
 
     def move_tool(self, tool_name, scope):
-        if tool_name not in self.tools:
+        norm_tool_name = tool_name.lower()
+        if norm_tool_name not in self.tools:
             return f"Error: Tool '{tool_name}' not found."
 
-        tool_info = self.tools[tool_name]
+        tool_info = self.tools[norm_tool_name]
         src_path = tool_info["file_path"]
 
         if scope == "global":
@@ -521,7 +530,7 @@ class ToolManager:
         try:
             os.rename(src_path, dest_path)
             # Update the file path in the tool info
-            self.tools[tool_name]["file_path"] = dest_path
+            self.tools[norm_tool_name]["file_path"] = dest_path
             return f"Successfully moved tool '{tool_name}' to {scope} scope."
         except Exception as e:
             return f"Error moving tool: {e}"
