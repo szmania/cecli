@@ -288,13 +288,14 @@ class ToolManager:
                 raise
 
     def unload_tool(self, tool_name):
-        if tool_name in self.tools:
-            tool_info = self.tools[tool_name]
+        norm_tool_name = tool_name.lower()
+        if norm_tool_name in self.tools:
+            tool_info = self.tools[norm_tool_name]
             file_path = tool_info.get("file_path")
             if file_path:
                 self.unloaded_tools.add(file_path)
 
-            del self.tools[tool_name]
+            del self.tools[norm_tool_name]
             self.coder.io.tool_output(f"Unloaded tool '{tool_name}'.")
             return True
         return False
@@ -304,6 +305,21 @@ class ToolManager:
 
     def get_tool_definitions(self):
         return [tool["definition"] for tool in self.tools.values()]
+
+    def delete_tool(self, tool_name):
+        norm_tool_name = tool_name.lower()
+        if norm_tool_name not in self.tools:
+            return f"Error: Tool '{tool_name}' not found."
+
+        tool_info = self.tools[norm_tool_name]
+        file_path = tool_info["file_path"]
+
+        try:
+            os.remove(file_path)
+            del self.tools[norm_tool_name]
+            return f"Successfully deleted tool '{tool_name}' from {file_path}."
+        except Exception as e:
+            return f"Error deleting tool file: {e}"
 
     def move_tool(self, tool_name, scope):
         if tool_name not in self.tools:
