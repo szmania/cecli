@@ -1806,11 +1806,8 @@ class Commands:
             self.io.tool_error("Please provide a tool name or path to unload.")
             return
 
-        unloaded = False
-        # Try to unload as a custom tool by name
-        if self.coder.tool_manager and self.coder.tool_manager.unload_tool(name_or_path):
-            unloaded = True
-        else:
+        # First check if it's a file path
+        if os.path.exists(name_or_path):
             # Try to unload as a custom tool by path
             tool_to_unload = None
             for tool_name, tool_info in self.coder.tool_manager.tools.items():
@@ -1819,21 +1816,46 @@ class Commands:
                     break
             if tool_to_unload:
                 self.coder.tool_manager.unload_tool(tool_to_unload)
-                unloaded = True
+                self.io.tool_output(f"Unloaded tool '{tool_to_unload}' at path '{name_or_path}'.")
+                await self.coder.initialize_mcp_tools()
+                return
+            else:
+                self.io.tool_error(f"No loaded tool found at path '{name_or_path}'.")
+                return
 
+        # If not a file path, treat as a tool name and use fuzzy search
+        if not self.coder.tool_manager:
+            self.io.tool_error("Tool manager not available.")
+            return
+            
+        success, tool_name, message = self.coder.tool_manager.find_tool(name_or_path)
+        if not success:
+            self.io.tool_error(message)
+            return
+            
+        self.io.tool_output(message)  # Show the found tool message
+
+        unloaded = False
+        # Try to unload as a custom tool by name
+        if self.coder.tool_manager.unload_tool(tool_name):
+            unloaded = True
         # Try to unload as a standard tool
-        if not unloaded and hasattr(self.coder, "tool_registry"):
-            norm_name = name_or_path.lower()
+        elif hasattr(self.coder, "tool_registry"):
+            norm_name = tool_name.lower()
             if norm_name in self.coder.tool_registry:
                 tool_class = self.coder.tool_registry.pop(norm_name)
                 self.coder.unloaded_standard_tools[norm_name] = tool_class
-                self.io.tool_output(f"Unloaded standard tool '{name_or_path}'.")
+                self.io.tool_output(f"Unloaded standard tool '{tool_name}'.")
                 unloaded = True
+            # Try to unload from unloaded_standard_tools (already unloaded)
+            elif norm_name in self.coder.unloaded_standard_tools:
+                self.io.tool_error(f"Standard tool '{tool_name}' is already unloaded.")
+                return
 
         if unloaded:
             await self.coder.initialize_mcp_tools()
         else:
-            self.io.tool_error(f"Tool '{name_or_path}' not found or not loaded.")
+            self.io.tool_error(f"Tool '{tool_name}' not found or not loaded.")
 
     async def cmd_tools_move(self, args):
         "Move a tool to a different scope (local or global)."
@@ -1848,10 +1870,18 @@ class Commands:
             self.io.tool_error("Usage: /tools-move <tool_name> <local|global>")
             return
 
-        tool_name, scope = parts
+        tool_name_query, scope = parts
         if not self.coder.tool_manager:
             self.io.tool_error("Tool manager not available.")
             return
+
+        # Use fuzzy search to find the tool
+        success, tool_name, message = self.coder.tool_manager.find_tool(tool_name_query)
+        if not success:
+            self.io.tool_error(message)
+            return
+            
+        self.io.tool_output(message)  # Show the found tool message
 
         tool_info = self.coder.tool_manager.tools.get(tool_name)
         if not tool_info:
@@ -1897,14 +1927,22 @@ class Commands:
             self.io.tool_error("This command is only available in agent mode.")
             return
 
-        tool_name = args.strip()
-        if not tool_name:
+        tool_name_query = args.strip()
+        if not tool_name_query:
             self.io.tool_error("Usage: /tools-rm <tool_name>")
             return
 
         if not self.coder.tool_manager:
             self.io.tool_error("Tool manager not available.")
             return
+
+        # Use fuzzy search to find the tool
+        success, tool_name, message = self.coder.tool_manager.find_tool(tool_name_query)
+        if not success:
+            self.io.tool_error(message)
+            return
+            
+        self.io.tool_output(message)  # Show the found tool message
 
         # Check if it's a standard tool
         if hasattr(self.coder, "tool_registry") and tool_name.lower() in self.coder.tool_registry:

@@ -1,3 +1,4 @@
+import difflib
 import os
 import re
 import subprocess
@@ -15,6 +16,110 @@ class ToolManager:
         self.unloaded_tools = set()
         self.load_dot_env_files()
         self.discovered_tool_files = self.discover_tools()
+
+    def find_tool(self, tool_name_query):
+        """
+        Find a tool by fuzzy matching the tool name query.
+        
+        Args:
+            tool_name_query (str): The user's tool name query
+            
+        Returns:
+            tuple: (success: bool, tool_name: str, message: str)
+                   - If success is True, tool_name contains the matched tool name
+                   - If success is False, message contains error information
+        """
+        if not tool_name_query:
+            return False, None, "No tool name provided."
+            
+        # Get all available tool names (custom tools + standard tools)
+        all_tool_names = set()
+        
+        # Add custom tool names
+        for tool_info in self.tools.values():
+            all_tool_names.add(tool_info["name"])
+            
+        # Add standard tool names if coder has tool_registry
+        if hasattr(self.coder, 'tool_registry'):
+            for tool_class in self.coder.tool_registry.values():
+                schema = tool_class.SCHEMA
+                name = schema.get("function", {}).get("name")
+                if name:
+                    all_tool_names.add(name)
+                    
+        # Add unloaded standard tools if available
+        if hasattr(self.coder, 'unloaded_standard_tools'):
+            for tool_class in self.coder.unloaded_standard_tools.values():
+                schema = tool_class.SCHEMA
+                name = schema.get("function", {}).get("name")
+                if name:
+                    all_tool_names.add(name)
+        
+        if not all_tool_names:
+            return False, None, "No tools available."
+            
+        # Normalize the query and tool names for comparison
+        def normalize_name(name):
+            # Split CamelCase and snake_case
+            name = re.sub('([a-z0-9])([A-Z])', r'\1 \2', name)
+            name = name.replace('_', ' ')
+            return name.lower().split()
+            
+        query_words = normalize_name(tool_name_query)
+        
+        # Calculate similarity scores
+        matches = []
+        for tool_name in all_tool_names:
+            tool_words = normalize_name(tool_name)
+            
+            # Calculate word-level similarity
+            score = 0
+            for q_word in query_words:
+                best_match = 0
+                for t_word in tool_words:
+                    # Use difflib for partial matching
+                    similarity = difflib.SequenceMatcher(None, q_word, t_word).ratio()
+                    if similarity > best_match:
+                        best_match = similarity
+                score += best_match
+                
+            # Normalize score by number of query words
+            if query_words:
+                score /= len(query_words)
+                
+            # Bonus for exact word matches
+            query_set = set(query_words)
+            tool_set = set(tool_words)
+            common_words = query_set.intersection(tool_set)
+            score += len(common_words) * 0.1
+            
+            matches.append((tool_name, score))
+            
+        # Sort by score (highest first)
+        matches.sort(key=lambda x: x[1], reverse=True)
+        
+        # Filter out low-scoring matches
+        good_matches = [match for match in matches if match[1] > 0.3]
+        
+        if not good_matches:
+            return False, None, f"No tool found matching '{tool_name_query}'. Available tools: {', '.join(sorted(all_tool_names)[:10])}..."
+            
+        # Check for a confident match
+        best_match, best_score = good_matches[0]
+        confidence_threshold = 0.7
+        
+        if best_score >= confidence_threshold:
+            # Check if there are other close matches that might cause ambiguity
+            close_matches = [match for match in good_matches[:3] if match[1] >= best_score * 0.8]
+            if len(close_matches) > 1:
+                names = [match[0] for match in close_matches]
+                return False, None, f"Ambiguous tool name '{tool_name_query}'. Did you mean one of: {', '.join(names)}?"
+            else:
+                return True, best_match, f"Found tool '{best_match}' for query '{tool_name_query}'."
+        else:
+            # Not confident enough, show top suggestions
+            top_matches = [match[0] for match in good_matches[:5]]
+            return False, None, f"No confident match for '{tool_name_query}'. Possible matches: {', '.join(top_matches)}."
 
     async def load_discovered_tools_async(self):
         """Loads all tools discovered in local and global tool directories."""
