@@ -69,7 +69,20 @@ class Tool(BaseTool):
         # Check if file already exists before generating code
         file_path = os.path.join(tools_dir, file_name)
         if os.path.exists(file_path):
-            return f"Error: Tool file '{file_name}' already exists in {scope} scope."
+            if await coder.io.confirm_ask(
+                f"Tool file '{file_name}' already exists in {scope} scope. Do you want to load it?"
+            ):
+                if hasattr(coder, "tool_manager"):
+                    success, msg = await coder.tool_manager.load_tool_async(file_path)
+                    if success:
+                        await coder.initialize_mcp_tools()
+                        return f"Successfully loaded existing tool from '{file_path}'."
+                    else:
+                        return f"Error: Failed to load existing tool from '{file_path}': {msg}"
+                else:
+                    return "Error: Tool manager not available to load the tool."
+            else:
+                return f"Operation cancelled. Tool file '{file_name}' was not created or loaded."
 
         # 3. Define Prompt
         tool_creation_prompt_content = """You are an expert software engineer. Your task is to generate the complete Python code for a custom tool for the 'aider' coding assistant.
