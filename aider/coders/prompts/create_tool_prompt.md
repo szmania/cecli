@@ -76,6 +76,9 @@ Important guidelines:
 1. The `name` in the function definition within the JSON schema should be the desired tool name that the LLM will call.
 2.  Handle errors gracefully and return meaningful error messages.
 3.  Use the `coder` object to interact with the project environment, for example `coder.abs_root_path()` for file operations or `coder.io.tool_output()` for messages.
+4.  If your tool requires external dependencies, you must also create a Command tool call to install them in the appropriate virtual environment:
+    - For local tools: `[tool_call(Command, command="{coder.tool_manager.local_tools_python} -m pip install <package_name>")]`
+    - For global tools: `[tool_call(Command, command="{coder.tool_manager.global_tools_python} -m pip install <package_name>")]`
 
 Now, generate the complete Python code for the requested tool.
 You are an expert programmer. Your task is to create a custom tool for aider.
@@ -155,5 +158,8 @@ Important guidelines:
 1. The `name` in the function definition within the JSON schema should be the desired tool name that the LLM will call.
 2.  Handle errors gracefully and return meaningful error messages.
 3.  Use the `coder` object to interact with the project environment, for example `coder.abs_root_path()` for file operations or `coder.io.tool_output()` for messages.
+4.  If your tool requires external dependencies, you must also create a Command tool call to install them in the appropriate virtual environment:
+    - For local tools: `[tool_call(Command, command="{coder.tool_manager.local_tools_python} -m pip install <package_name>")]`
+    - For global tools: `[tool_call(Command, command="{coder.tool_manager.global_tools_python} -m pip install <package_name>")]`
 
 Now, generate the complete Python code for the requested tool.
