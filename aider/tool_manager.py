@@ -447,8 +447,20 @@ class ToolManager:
         file_path = tool_info["file_path"]
 
         try:
+            # First unload the tool to remove it from active tools
+            self.unload_tool(tool_name)
+            
+            # Delete the file from the filesystem
             os.remove(file_path)
-            del self.tools[norm_tool_name]
+            
+            # Remove the file path from discovered tools list to prevent future reload attempts
+            if file_path in self.discovered_tool_files:
+                self.discovered_tool_files.remove(file_path)
+                
+            # Also remove from unloaded tools list since it's now permanently deleted
+            if file_path in self.unloaded_tools:
+                self.unloaded_tools.remove(file_path)
+                
             return f"Successfully deleted tool '{tool_name}' from {file_path}."
         except Exception as e:
             return f"Error deleting tool file: {e}"
