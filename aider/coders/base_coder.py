@@ -3229,6 +3229,8 @@ class Coder:
 
         try:
             if response.choices[0].message.tool_calls:
+                # Clear the existing partial tool calls to ensure we rebuild with final data
+                self.partial_response_tool_calls = []
                 for i, tool_call in enumerate(response.choices[0].message.tool_calls):
                     # Add provider-specific fields if we collected any for this tool
                     tool_id = tool_call.id
@@ -3255,9 +3257,8 @@ class Coder:
                             provider_specific_fields_by_index[i]
                         )
 
-                    # Only append to partial_response_tool_calls if it's empty
-                    if len(self.partial_response_tool_calls) == 0:
-                        self.partial_response_tool_calls.append(tool_call_dict)
+                    # Always append to partial_response_tool_calls with the final consolidated data
+                    self.partial_response_tool_calls.append(tool_call_dict)
 
                 self.partial_response_function_call = (
                     response.choices[0].message.tool_calls[0].function
