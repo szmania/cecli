@@ -1474,7 +1474,9 @@ class Commands:
             )
             if hasattr(self.coder, "context_block_tokens"):
                 available_blocks = list(self.coder.context_block_tokens.keys())
-                formatted_blocks = [name.replace("_", " ").title() for name in available_blocks]
+                formatted_blocks = [
+                    name.replace("_", " ").title() for name in available_blocks
+                ]
                 self.io.tool_output(f"Available blocks: {', '.join(formatted_blocks)}")
                 self.io.tool_output("Use '/context-blocks [block name]' to view a specific block.")
         else:
@@ -1886,6 +1888,36 @@ class Commands:
             return
 
         await self.cmd_add(path)
+
+    async def cmd_tools_rm(self, args):
+        "Delete a custom tool by name."
+        from aider.coders.agent_coder import AgentCoder
+
+        if not isinstance(self.coder, AgentCoder):
+            self.io.tool_error("This command is only available in agent mode.")
+            return
+
+        tool_name = args.strip()
+        if not tool_name:
+            self.io.tool_error("Usage: /tools-rm <tool_name>")
+            return
+
+        if not self.coder.tool_manager:
+            self.io.tool_error("Tool manager not available.")
+            return
+
+        # Check if it's a standard tool
+        if hasattr(self.coder, "tool_registry") and tool_name.lower() in self.coder.tool_registry:
+            self.io.tool_error(
+                f"Cannot delete standard tool '{tool_name}'. Only custom tools can be deleted."
+            )
+            return
+
+        result = self.coder.tool_manager.delete_tool(tool_name)
+        self.io.tool_output(result)
+
+        if "Successfully" in result:
+            await self.coder.initialize_mcp_tools()
 
     def get_help_md(self):
         "Show help about all commands in markdown"
