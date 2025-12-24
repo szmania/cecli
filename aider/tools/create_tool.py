@@ -247,12 +247,30 @@ class Tool(BaseTool):
                     )
 
                     if await coder.io.confirm_ask("Do you want to install these dependencies now?"):
-                        install_command = (
-                            f'"{sys.executable}" -m pip install -r "{requirements_path}"'
-                        )
-                        coder.io.tool_output(f"Running: {install_command}")
+                        # Determine the correct python executable based on scope
+                        if scope == "local":
+                            python_executable = coder.tool_manager.local_tools_python
+                        else:  # global
+                            python_executable = coder.tool_manager.global_tools_python
+                        
+                        # Check if we have a valid python executable
+                        if not python_executable or not os.path.exists(python_executable):
+                            coder.io.tool_error(
+                                f"Python executable for {scope} tools not found. "
+                                "Dependencies not installed."
+                            )
+                            final_message_suffix = (
+                                "\nPython executable for tools not found. "
+                                "Dependencies not installed. "
+                                f"You may need to install them manually from '{requirements_path}'."
+                            )
+                        else:
+                            install_command = (
+                                f'"{python_executable}" -m pip install -r "{requirements_path}"'
+                            )
+                            coder.io.tool_output(f"Running: {install_command}")
 
-                        exit_code, output = await asyncio.to_thread(run_cmd, install_command)
+                            exit_code, output = await asyncio.to_thread(run_cmd, install_command)
 
                         if exit_code == 0:
                             coder.io.tool_output("Dependencies installed successfully.")
