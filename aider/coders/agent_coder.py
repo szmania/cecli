@@ -1157,6 +1157,13 @@ class AgentCoder(Coder):
             if features:
                 result += f"- Enabled features: {', '.join(features)}\n"
 
+            # Add tool environment information
+            if self.tool_manager:
+                if self.tool_manager.local_tools_python:
+                    result += f"- To install dependencies for local tools, use: {self.tool_manager.local_tools_python} -m pip install <package_name>\n"
+                if self.tool_manager.global_tools_python:
+                    result += f"- To install dependencies for global tools, use: {self.tool_manager.global_tools_python} -m pip install <package_name>\n"
+
             result += "</context>"
             return result
         except Exception as e:

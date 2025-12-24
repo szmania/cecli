@@ -14,6 +14,9 @@ class ToolManager:
         self.coder = coder
         self.tools = {}
         self.unloaded_tools = set()
+        self.local_tools_python = None
+        self.global_tools_python = None
+        self._setup_virtual_environments()
         self.load_dot_env_files()
         self.discovered_tool_files = self.discover_tools()
 
@@ -146,6 +149,53 @@ class ToolManager:
 
     def _get_global_tools_dir(self):
         return os.path.join(Path.home(), ".aider", "tools")
+
+    def _get_or_create_tools_venv(self, scope):
+        """Create or retrieve the virtual environment for tools of a given scope."""
+        if scope == "local":
+            tools_dir = self._get_local_tools_dir()
+        elif scope == "global":
+            tools_dir = self._get_global_tools_dir()
+        else:
+            raise ValueError(f"Invalid scope: {scope}")
+
+        if not tools_dir:
+            return None
+
+        venv_path = os.path.join(tools_dir, "venv")
+        
+        # Create virtual environment if it doesn't exist
+        if not os.path.exists(venv_path):
+            self.coder.io.tool_output(f"Creating isolated environment for {scope} tools...")
+            try:
+                subprocess.run([sys.executable, "-m", "venv", venv_path], check=True)
+            except subprocess.CalledProcessError as e:
+                self.coder.io.tool_error(f"Failed to create virtual environment for {scope} tools: {e}")
+                return None
+
+        # Determine the Python executable path based on the platform
+        if sys.platform == "win32":
+            python_executable = os.path.join(venv_path, "Scripts", "python.exe")
+        else:
+            python_executable = os.path.join(venv_path, "bin", "python")
+            
+        # Add the site-packages directory to sys.path
+        if sys.platform == "win32":
+            site_packages = os.path.join(venv_path, "Lib", "site-packages")
+        else:
+            # For Unix-like systems, we need to account for Python version
+            python_version = f"python{sys.version_info.major}.{sys.version_info.minor}"
+            site_packages = os.path.join(venv_path, "lib", python_version, "site-packages")
+            
+        if site_packages not in sys.path:
+            sys.path.insert(0, site_packages)
+            
+        return python_executable
+
+    def _setup_virtual_environments(self):
+        """Set up virtual environments for both local and global tools."""
+        self.local_tools_python = self._get_or_create_tools_venv("local")
+        self.global_tools_python = self._get_or_create_tools_venv("global")
 
     def load_dotenv(self, dotenv_path, dotenv_vars):
         if not os.path.exists(dotenv_path):
@@ -296,8 +346,8 @@ class ToolManager:
                     if package_name:
                         res = await self.coder.io.confirm_ask(
                             f"The tool at '{file_path}' failed to load due to a missing package:"
-                            f" '{package_name}'.\nDo you want to add it to requirements.txt and"
-                            " install it?"
+                            f" '{package_name}'.\nDo you want to install it in the appropriate"
+                            " virtual environment?"
                         )
                         if not res:
                             msg = (
@@ -307,66 +357,40 @@ class ToolManager:
                             self.coder.io.tool_warning(msg)
                             return False, msg
 
-                        # Determine the directory of the tool to find/create requirements.txt
-                        tools_dir = os.path.dirname(file_path)
-                        requirements_path = os.path.join(tools_dir, "requirements.txt")
-
-                        # Check if package is already in requirements.txt
-                        package_already_listed = False
-                        if os.path.exists(requirements_path):
-                            try:
-                                with open(requirements_path, "r") as f:
-                                    existing_requirements = f.read().splitlines()
-                                # Check if package is already listed (exact match or as a dependency)
-                                package_already_listed = any(
-                                    req.strip().split("==")[0].split(">=")[0].split("~=")[0]
-                                    == package_name
-                                    for req in existing_requirements
-                                    if req.strip() and not req.startswith("#")
-                                )
-                            except IOError as io_err:
-                                self.coder.io.tool_warning(
-                                    f"Failed to read {requirements_path}: {io_err}"
-                                )
-
-                        # Add the package to requirements.txt if not already listed
-                        if not package_already_listed:
-                            try:
-                                with open(requirements_path, "a") as f:
-                                    f.write(f"{package_name}\n")
-                                self.coder.io.tool_output(
-                                    f"Added '{package_name}' to {requirements_path}"
-                                )
-                            except IOError as io_err:
-                                error_msg = f"Failed to write to {requirements_path}: {io_err}"
-                                self.coder.io.tool_error(error_msg)
-                                return False, error_msg
+                        # Determine if the tool is local or global
+                        local_tools_dir = self._get_local_tools_dir()
+                        global_tools_dir = self._get_global_tools_dir()
+                        
+                        if local_tools_dir and file_path.startswith(local_tools_dir):
+                            scope = "local"
+                            python_executable = self.local_tools_python
+                        elif global_tools_dir and file_path.startswith(global_tools_dir):
+                            scope = "global"
+                            python_executable = self.global_tools_python
                         else:
-                            self.coder.io.tool_output(
-                                f"'{package_name}' already listed in {requirements_path}"
-                            )
+                            # Fallback to current environment
+                            python_executable = sys.executable
+                            scope = "current"
 
-                        # Install the package
-                        self.coder.io.tool_output(f"Installing '{package_name}'...")
+                        # Install the package in the appropriate environment
+                        self.coder.io.tool_output(f"Installing '{package_name}' in {scope} environment...")
                         try:
                             subprocess.check_call(
-                                [sys.executable, "-m", "pip", "install", package_name]
+                                [python_executable, "-m", "pip", "install", package_name]
                             )
-                            self.coder.io.tool_output(f"Successfully installed '{package_name}'.")
+                            self.coder.io.tool_output(f"Successfully installed '{package_name}' in {scope} environment.")
                             self.coder.io.tool_output(f"Retrying to load tool from {file_path}...")
                             continue  # Retry loading the tool
                         except subprocess.CalledProcessError as install_error:
                             error_msg = (
-                                "Failed to install package"
-                                f" '{package_name}': {install_error}"
+                                f"Failed to install package '{package_name}' in {scope} environment: {install_error}"
                             )
                             self.coder.io.tool_error(error_msg)
                             # Don't loop, let the user handle it.
                             return False, error_msg
                         except FileNotFoundError:
                             error_msg = (
-                                "Failed to install package. `pip` command not found. Is pip"
-                                " installed in the current environment?"
+                                f"Failed to install package in {scope} environment. `pip` command not found."
                             )
                             self.coder.io.tool_error(error_msg)
                             return False, error_msg
