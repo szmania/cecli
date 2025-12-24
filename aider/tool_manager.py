@@ -25,6 +25,10 @@ class ToolManager:
             return
 
         self.coder.io.tool_output("Loading custom tools...")
+        self.coder.io.tool_output(
+            "Note: Tool dependencies will be installed into the same Python environment that Aider"
+            " is running in."
+        )
         for file_path in self.discovered_tool_files:
             if file_path in self.unloaded_tools:
                 continue
@@ -202,17 +206,40 @@ class ToolManager:
                         tools_dir = os.path.dirname(file_path)
                         requirements_path = os.path.join(tools_dir, "requirements.txt")
 
-                        # Add the package to requirements.txt
-                        try:
-                            with open(requirements_path, "a") as f:
-                                f.write(f"{package_name}\n")
+                        # Check if package is already in requirements.txt
+                        package_already_listed = False
+                        if os.path.exists(requirements_path):
+                            try:
+                                with open(requirements_path, "r") as f:
+                                    existing_requirements = f.read().splitlines()
+                                # Check if package is already listed (exact match or as a dependency)
+                                package_already_listed = any(
+                                    req.strip().split("==")[0].split(">=")[0].split("~=")[0]
+                                    == package_name
+                                    for req in existing_requirements
+                                    if req.strip() and not req.startswith("#")
+                                )
+                            except IOError as io_err:
+                                self.coder.io.tool_warning(
+                                    f"Failed to read {requirements_path}: {io_err}"
+                                )
+
+                        # Add the package to requirements.txt if not already listed
+                        if not package_already_listed:
+                            try:
+                                with open(requirements_path, "a") as f:
+                                    f.write(f"{package_name}\n")
+                                self.coder.io.tool_output(
+                                    f"Added '{package_name}' to {requirements_path}"
+                                )
+                            except IOError as io_err:
+                                error_msg = f"Failed to write to {requirements_path}: {io_err}"
+                                self.coder.io.tool_error(error_msg)
+                                return False, error_msg
+                        else:
                             self.coder.io.tool_output(
-                                f"Added '{package_name}' to {requirements_path}"
+                                f"'{package_name}' already listed in {requirements_path}"
                             )
-                        except IOError as io_err:
-                            error_msg = f"Failed to write to {requirements_path}: {io_err}"
-                            self.coder.io.tool_error(error_msg)
-                            return False, error_msg
 
                         # Install the package
                         self.coder.io.tool_output(f"Installing '{package_name}'...")
