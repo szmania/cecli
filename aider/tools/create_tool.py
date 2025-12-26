@@ -32,7 +32,7 @@ class Tool(BaseTool):
                         "type": "string",
                         "enum": ["local", "global"],
                         "default": "local",
-                        "description": "The scope for the new tool. Can be 'local' (default) for the current project or 'global' for all projects.",
+                        "description": "The scope for the new tool. Can be 'local' (or 'l') for the current project or 'global' (or 'g') for all projects. Default is 'local'.",
                     },
                 },
                 "required": ["description", "file_name"],

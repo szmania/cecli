@@ -1693,8 +1693,12 @@ class Commands:
                 if part == "--scope":
                     if i + 1 < len(parts):
                         scope = parts[i + 1].lower()
-                        if scope not in ["local", "global"]:
-                            self.io.tool_error("Scope must be 'local' or 'global'.")
+                        if scope in ("l", "local"):
+                            scope = "local"
+                        elif scope in ("g", "global"):
+                            scope = "global"
+                        else:
+                            self.io.tool_error("Scope must be 'local' (or 'l') or 'global' (or 'g').")
                             return
                         i += 2
                         continue
@@ -1926,36 +1930,6 @@ class Commands:
 
         await self.cmd_add(path)
 
-    async def cmd_tools_rm(self, args):
-        "Delete a custom tool by name."
-        from aider.coders.agent_coder import AgentCoder
-
-        if not isinstance(self.coder, AgentCoder):
-            self.io.tool_error("This command is only available in agent mode.")
-            return
-
-        tool_name_query = args.strip()
-        if not tool_name_query:
-            self.io.tool_error("Usage: /tools-rm <tool_name>")
-            return
-
-        if not self.coder.tool_manager:
-            self.io.tool_error("Tool manager not available.")
-            return
-
-        # Use fuzzy search to find the tool, only looking for custom tools
-        success, tool_name, message = self.coder.tool_manager.find_tool(tool_name_query, search_scope='custom')
-        if not success:
-            self.io.tool_error(message)
-            return
-            
-        self.io.tool_output(message)  # Show the found tool message
-
-        result = self.coder.tool_manager.delete_tool(tool_name)
-        self.io.tool_output(result)
-
-        if "Successfully" in result:
-            await self.coder.initialize_mcp_tools()
 
     def get_help_md(self):
         "Show help about all commands in markdown"
