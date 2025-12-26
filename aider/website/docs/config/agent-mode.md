@@ -257,6 +257,46 @@ Aider-CE provides a suite of commands for managing custom tools directly from th
 | `/tools-edit <path>` | Add a tool's source file to the chat to be edited. |
 | `/tools-rm <tool_name>` | Delete a custom tool by name. |
 
+### Tool Management Examples
+
+**/tools**
+```
+> /tools
+```
+
+**/tools-create**
+```
+> /tools-create "a tool that tells me the weather" --scope l
+> /tools-create my_weather_tool.py "a tool that tells me the weather for a given city" --scope global
+```
+
+**/tools-load**
+```
+> /tools-load my_weather_tool.py
+> /tools-load standard_tool_name
+```
+
+**/tools-unload**
+```
+> /tools-unload my_weather_tool
+> /tools-unload standard_tool_name
+```
+
+**/tools-move**
+```
+> /tools-move my_weather_tool local
+```
+
+**/tools-edit**
+```
+> /tools-edit .aider/tools/my_weather_tool.py
+```
+
+**/tools-rm**
+```
+> /tools-rm my_weather_tool
+```
+
 ### Skills
 
 Agent Mode includes a powerful skills system that allows you to extend the AI's capabilities with custom instructions, reference materials, scripts, and assets. Skills are configured through the `agent-config` parameter in the YAML configuration file.
