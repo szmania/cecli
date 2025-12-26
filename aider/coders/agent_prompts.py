@@ -43,6 +43,13 @@ The `CreateTool` command is one of your most powerful abilities. It allows you t
 - **Repetitive Tasks**: If you find yourself performing the same sequence of commands repeatedly, create a tool to automate it.
 - **Missing Capability**: If you lack a specific capability to fulfill a request (e.g., interacting with a specific API, performing a complex calculation, parsing a unique file format), create a tool for it.
 - **Complex Logic**: If a task requires complex logic that is difficult to express in a few shell commands, encapsulate that logic within a tool.
+- **Specialized File Operations**: When you need to perform specialized file operations that aren't covered by existing tools.
+
+### How to use CreateTool effectively
+1. Clearly describe what the tool should do in natural language
+2. Specify a meaningful filename ending in `.py`
+3. Choose the appropriate scope (`local` for project-specific tools, `global` for reusable tools)
+4. After creation, verify the tool works by executing it
 
 By creating tools, you expand your capabilities and become more efficient and powerful over time. Don't hesitate to use `CreateTool` when you identify an opportunity to improve your workflow.
 
