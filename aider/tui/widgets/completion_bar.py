@@ -93,6 +93,13 @@ class CompletionBar(Widget, can_focus=False):
         self._display_names: list[str] = []
         self._compute_display_names()
 
+    @property
+    def current_selection(self) -> str | None:
+        """Get currently selected suggestion."""
+        if self.suggestions and 0 <= self.selected_index < len(self.suggestions):
+            return self.suggestions[self.selected_index]
+        return None
+
     def _compute_display_names(self) -> None:
         """Compute common directory prefix and short display names."""
         if not self.suggestions:

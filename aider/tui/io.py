@@ -19,15 +19,15 @@ class TextualInputOutput(InputOutput):
             input_queue: queue.Queue for receiving input from TUI
             **kwargs: Passed to InputOutput parent class
         """
+        # Lazy-initialized console for TUI rendering
+        self._tui_console = None
+
         # Initialize parent (fancy_input should already be False from caller)
         super().__init__(**kwargs)
 
         # Store queues
         self.output_queue = output_queue
         self.input_queue = input_queue
-
-        # Lazy-initialized console for TUI rendering
-        self._tui_console = None
 
         # Current task tracking
         self.current_task_id = None

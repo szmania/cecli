@@ -48,6 +48,7 @@ tui-config:
   key_bindings:
     newline: "enter"
     submit: "shift+enter"
+    completion: "tab"
     stop: "escape"
     cycle_forward: "tab"
     cycle_backward: "shift+tab"

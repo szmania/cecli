@@ -309,7 +309,6 @@ class Coder:
         context_compaction_summary_tokens=8192,
         map_cache_dir=".",
         repomap_in_memory=False,
-        preserve_todo_list=False,
         linear_output=False,
     ):
         # initialize from args.map_cache_dir
@@ -324,13 +323,6 @@ class Coder:
 
         self.auto_copy_context = auto_copy_context
         self.auto_accept_architect = auto_accept_architect
-        self.preserve_todo_list = preserve_todo_list
-
-        if self.preserve_todo_list:
-            self.io.tool_warning(
-                "--preserve-todo-list is deprecated; todo lists are now saved and restored with"
-                " sessions. The flag will be removed in a future release."
-            )
 
         self.ignore_mentions = ignore_mentions
         if not self.ignore_mentions:
@@ -2356,6 +2348,8 @@ class Coder:
                         return
             except Exception as e:
                 self.io.tool_error(f"Error processing tool calls: {str(e)}")
+                self.reflected_message = True
+                return
                 # Continue without tool processing
 
             self.num_tool_calls = 0

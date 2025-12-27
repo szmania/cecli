@@ -1198,10 +1198,17 @@ async def main_async(argv=None, input=None, output=None, force_git_root=None, re
     else:
         map_tokens = args.map_tokens
 
-    if args.enable_context_compaction and args.context_compaction_max_tokens is None:
+    if args.enable_context_compaction and (
+        args.context_compaction_max_tokens is None or args.context_compaction_max_tokens < 1
+    ):
         max_input_tokens = main_model.info.get("max_input_tokens")
+        ratio = 0.8
+
+        if args.context_compaction_max_tokens:
+            ratio = args.context_compaction_max_tokens
+
         if max_input_tokens:
-            args.context_compaction_max_tokens = int(max_input_tokens * 0.8)
+            args.context_compaction_max_tokens = int(max_input_tokens * ratio)
 
     try:
         # Load MCP servers from config string or file
@@ -1254,7 +1261,6 @@ async def main_async(argv=None, input=None, output=None, force_git_root=None, re
             context_compaction_summary_tokens=args.context_compaction_summary_tokens,
             map_cache_dir=args.map_cache_dir,
             repomap_in_memory=args.map_memory_cache,
-            preserve_todo_list=args.preserve_todo_list,
             linear_output=args.linear_output,
         )
 

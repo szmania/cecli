@@ -59,8 +59,8 @@ class InputArea(TextArea):
         # Let's assume kwargs might handle it or we set it.
         # Actually, let's just set the default if it's empty.
         if not self.placeholder:
-            submit = self.app._decode_keys(self.app.tui_config["key_bindings"]["submit"])
-            newline = self.app._decode_keys(self.app.tui_config["key_bindings"]["newline"])
+            submit = self.app.get_keys_for("submit")
+            newline = self.app.get_keys_for("newline")
 
             self.placeholder = (
                 f"> Type your message... ({submit} to submit, {newline} for new line)"
@@ -69,6 +69,9 @@ class InputArea(TextArea):
         self.files = []
         self.commands = []
         self.completion_active = False
+
+        self._cycling = False
+        self._completion_prefix = ""
 
         # History support - lazy loaded
         self.history_file = history_file
@@ -81,10 +84,9 @@ class InputArea(TextArea):
         """Alias for text property to maintain compatibility."""
         return self.text
 
-    @value.setter
-    def value(self, new_value: str):
-        """Alias for text property to maintain compatibility."""
-        self.text = new_value
+    @property
+    def completion_prefix(self) -> str:
+        return self._completion_prefix
 
     @property
     def cursor_position(self) -> int:
@@ -99,6 +101,11 @@ class InputArea(TextArea):
         # app.py uses `len(input_area.value)` to set it.
         # So it uses setter.
         return 0  # Dummy getter
+
+    @value.setter
+    def value(self, new_value: str):
+        """Alias for text property to maintain compatibility."""
+        self.text = new_value
 
     @cursor_position.setter
     def cursor_position(self, pos: int):
@@ -203,12 +210,28 @@ class InputArea(TextArea):
 
         self.cursor_position = len(self.text)  # Will move to end
 
+    def set_completion_preview(self, text: str):
+        self._cycling = True
+        self.value = text
+        self.cursor_position = len(text)
+
     def on_key(self, event) -> None:
         """Handle keys for completion and history navigation."""
         if self.disabled:
             return
 
-        if event.key == self.app.tui_config["key_bindings"]["cancel"]:
+        # Reset cycling if not a cycle command
+        is_cycle = self.app.is_key_for("cycle_forward", event.key) or self.app.is_key_for(
+            "cycle_backward", event.key
+        )
+        if not is_cycle:
+            self._cycling = False
+
+        if event.key == "space" and self.completion_active:
+            self.completion_active = False
+            self.post_message(self.CompletionDismiss())
+
+        if self.app.is_key_for("cancel", event.key):
             event.stop()
             event.prevent_default()
             if self.text.strip():
@@ -216,30 +239,23 @@ class InputArea(TextArea):
             self.text = ""
             return
 
-        if event.key == self.app.tui_config["key_bindings"]["submit"]:
+        if self.app.is_key_for("submit", event.key):
             # Submit message
             event.stop()
             event.prevent_default()
             self.post_message(self.Submit(self.text))
             return
 
-        if event.key == self.app.tui_config["key_bindings"]["newline"]:
-            if self.completion_active:
-                # Accept completion
-                self.post_message(self.CompletionAccept())
-                event.stop()
-                event.prevent_default()
-                return
-            else:
-                if self.app.tui_config["key_bindings"]["newline"] != "enter":
-                    self.insert("\n")
+        if self.app.is_key_for("newline", event.key):
+            if self.app.get_keys_for("newline") != "enter":
+                self.insert("\n")
 
-                    current_row, current_col = self.cursor_location
-                    self.cursor_location = (current_row + 1, 0)
+                current_row, current_col = self.cursor_location
+                self.cursor_location = (current_row + 1, 0)
 
-                return
+            return
 
-        if event.key == self.app.tui_config["key_bindings"]["cycle_forward"]:
+        if self.app.is_key_for("cycle_forward", event.key):
             event.stop()
             event.prevent_default()
             if self.completion_active:
@@ -248,7 +264,7 @@ class InputArea(TextArea):
             else:
                 # Request completions
                 self.post_message(self.CompletionRequested(self.text))
-        elif event.key == self.app.tui_config["key_bindings"]["cycle_backward"]:
+        elif self.app.is_key_for("cycle_backward", event.key):
             event.stop()
             event.prevent_default()
             if self.completion_active:
@@ -257,7 +273,7 @@ class InputArea(TextArea):
             else:
                 # Request completions
                 self.post_message(self.CompletionRequested(self.text))
-        elif event.key == self.app.tui_config["key_bindings"]["stop"] and self.completion_active:
+        elif self.app.is_key_for("stop", event.key) and self.completion_active:
             event.stop()
             event.prevent_default()
             self.post_message(self.CompletionDismiss())
@@ -280,6 +296,14 @@ class InputArea(TextArea):
     def on_text_area_changed(self, event) -> None:
         """Update completions as user types."""
         # Note: Event name for TextArea change is 'Changed' but handler is on_text_area_changed
+        if self.disabled:
+            return
+
+        if self._cycling:
+            return
+
+        self._completion_prefix = self.text
+
         if not self.disabled:
             val = self.text
             possible_path = False

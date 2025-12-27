@@ -23,8 +23,8 @@ class Tool(BaseTool):
         "function": {
             "name": "InsertBlock",
             "description": (
-                "Insert a block of content into a file. Only use one of: after_pattern,"
-                " before_pattern, position."
+                "Insert a block of content into a file. Mutually Exclusive Parameters:"
+                " after_pattern, before_pattern, position."
             ),
             "parameters": {
                 "type": "object",

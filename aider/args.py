@@ -350,7 +350,7 @@ def get_parser(default_config_files, git_root):
     )
     group.add_argument(
         "--context-compaction-max-tokens",
-        type=int,
+        type=float,
         default=None,
         help=(
             "The maximum number of tokens in the conversation before context compaction is"

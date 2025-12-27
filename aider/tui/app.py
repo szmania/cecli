@@ -69,40 +69,51 @@ class TUI(App):
         )
 
         self.bind(
-            self.tui_config["key_bindings"]["newline"], "noop", description="New Line", show=True
+            self._encode_keys(self.get_keys_for("newline")),
+            "noop",
+            description="New Line",
+            show=True,
         )
         self.bind(
-            self.tui_config["key_bindings"]["submit"], "noop", description="Submit", show=True
+            self._encode_keys(self.get_keys_for("submit")), "noop", description="Submit", show=True
         )
         self.bind(
-            self.tui_config["key_bindings"]["cycle_forward"],
+            self._encode_keys(self.get_keys_for("cycle_forward")),
             "noop",
             description="Cycle Forward",
             show=True,
         )
         self.bind(
-            self.tui_config["key_bindings"]["cycle_backward"],
+            self._encode_keys(self.get_keys_for("cycle_backward")),
             "noop",
             description="Cycle Backward",
             show=True,
         )
         self.bind(
-            self.tui_config["key_bindings"]["cancel"], "noop", description="Cancel", show=True
+            self._encode_keys(self.get_keys_for("cancel")), "noop", description="Cancel", show=True
         )
 
         self.bind(
-            self.tui_config["key_bindings"]["focus"],
+            self._encode_keys(self.get_keys_for("focus")),
             "focus_input",
             description="Focus Input",
             show=True,
         )
         self.bind(
-            self.tui_config["key_bindings"]["stop"], "interrupt", description="Interrupt", show=True
+            self._encode_keys(self.get_keys_for("stop")),
+            "interrupt",
+            description="Interrupt",
+            show=True,
         )
         self.bind(
-            self.tui_config["key_bindings"]["clear"], "clear_output", description="Clear", show=True
+            self._encode_keys(self.get_keys_for("clear")),
+            "clear_output",
+            description="Clear",
+            show=True,
         )
-        self.bind(self.tui_config["key_bindings"]["focus"], "quit", description="Quit", show=True)
+        self.bind(
+            self._encode_keys(self.get_keys_for("focus")), "quit", description="Quit", show=True
+        )
 
         self.register_theme(BASE_THEME)
         self.theme = "aider"
@@ -267,10 +278,10 @@ class TUI(App):
         try:
             hints = self.query_one(KeyHints)
             if generating:
-                stop = self.app._decode_keys(self.app.tui_config["key_bindings"]["stop"])
+                stop = self.app.get_keys_for("stop")
                 hints.update(f"{stop} to cancel")
             else:
-                submit = self.app._decode_keys(self.app.tui_config["key_bindings"]["submit"])
+                submit = self.app.get_keys_for("submit")
                 hints.update(f"{submit} to submit")
         except Exception:
             pass
@@ -486,16 +497,25 @@ class TUI(App):
         pass
 
     def _encode_keys(self, key):
-        if key == "shift+enter":
-            return "ctrl+j"
+        key = key.replace("shift+enter", "ctrl+j")
 
         return key
 
     def _decode_keys(self, key):
-        if key == "ctrl+j":
-            return "shift+enter"
+        key = key.replace("ctrl+j", "shift+enter")
 
         return key
+
+    def is_key_for(self, type, key):
+        allowed_keys = self.tui_config["key_bindings"][type].split(",")
+        if key in allowed_keys:
+            return True
+
+        return False
+
+    def get_keys_for(self, type):
+        allowed_keys = self.tui_config["key_bindings"][type]
+        return self._decode_keys(allowed_keys)
 
     def _do_quit(self):
         """Perform the actual quit after UI updates."""
@@ -644,7 +664,16 @@ class TUI(App):
         suggestions = []
         commands = self.worker.coder.commands
 
-        if text.startswith("/"):
+        if len(text) and text[-1] == " ":
+            return
+
+        if "@" in text:
+            # Symbol completion triggered by @
+            # Find the @ and get the prefix after it
+            at_index = text.rfind("@")
+            prefix = text[at_index + 1 :]
+            suggestions = self._get_symbol_completions(prefix)
+        elif text.startswith("/"):
             # Command completion
             parts = text.split(maxsplit=1)
             cmd_part = parts[0]
@@ -661,7 +690,7 @@ class TUI(App):
                 cmd_name = cmd_part
                 end_lookup = text.rsplit(maxsplit=1)
 
-                arg_prefix = end_lookup[1]
+                arg_prefix = end_lookup[-1]
                 arg_prefix_lower = arg_prefix.lower()
 
                 # Check if this command needs path-based completion
@@ -689,12 +718,6 @@ class TUI(App):
                                 suggestions = list(cmd_completions)
                     except Exception:
                         pass
-        elif "@" in text:
-            # Symbol completion triggered by @
-            # Find the @ and get the prefix after it
-            at_index = text.rfind("@")
-            prefix = text[at_index + 1 :]
-            suggestions = self._get_symbol_completions(prefix)
         else:
             # Check if last contiguous, no-space separated string contains a forward slash
             # This allows path completions even without a leading slash
@@ -707,6 +730,34 @@ class TUI(App):
                     suggestions = self._get_symbol_completions(last_word)
 
         return [str(s) for s in suggestions[:50]]
+
+    def _get_completed_text(self, current_text: str, completion: str) -> str:
+        """Calculate the new text after applying completion."""
+        if current_text.startswith("/"):
+            parts = current_text.rsplit(maxsplit=1)
+            if len(parts) == 1:
+                # Replace entire command
+                # Only add space if command takes arguments
+                commands = self.worker.coder.commands
+                has_completions = commands.get_completions(completion) is not None
+                if has_completions:
+                    return completion + " "
+                else:
+                    return completion
+            else:
+                # Replace argument
+                return parts[0] + " " + completion
+        elif "@" in current_text:
+            # Replace from @ onwards with the symbol
+            at_index = current_text.rfind("@")
+            return current_text[:at_index] + completion + " "
+        else:
+            # Replace last word with completion
+            words = current_text.rsplit(maxsplit=1)
+            if len(words) > 1:
+                return words[0] + " " + completion
+            else:
+                return completion
 
     def on_input_area_completion_requested(self, message: InputArea.CompletionRequested):
         """Handle completion request - show or update completion bar."""
@@ -743,6 +794,13 @@ class TUI(App):
         try:
             completion_bar = self.query_one("#completion-bar", CompletionBar)
             completion_bar.cycle_next()
+            selected = completion_bar.current_selection
+            if selected:
+                input_area = self.query_one("#input", InputArea)
+                # Use completion_prefix as base
+                base_text = input_area.completion_prefix
+                new_text = self._get_completed_text(base_text, selected)
+                input_area.set_completion_preview(new_text)
         except Exception:
             pass
 
@@ -751,6 +809,13 @@ class TUI(App):
         try:
             completion_bar = self.query_one("#completion-bar", CompletionBar)
             completion_bar.cycle_previous()
+            selected = completion_bar.current_selection
+            if selected:
+                input_area = self.query_one("#input", InputArea)
+                # Use completion_prefix as base
+                base_text = input_area.completion_prefix
+                new_text = self._get_completed_text(base_text, selected)
+                input_area.set_completion_preview(new_text)
         except Exception:
             pass
 
@@ -775,37 +840,17 @@ class TUI(App):
     def on_completion_bar_selected(self, message: CompletionBar.Selected):
         """Handle completion selection."""
         input_area = self.query_one("#input", InputArea)
-        input_area.completion_active = False
 
-        # Insert the completion
-        current = input_area.value
+        # Use stored prefix as base for completion
+        current = input_area.completion_prefix
         selected = message.value
 
-        if current.startswith("/"):
-            parts = current.split(maxsplit=1)
-            if len(parts) == 1:
-                # Replace entire command
-                # Only add space if command takes arguments
-                commands = self.worker.coder.commands
-                has_completions = commands.get_completions(selected) is not None
-                if has_completions:
-                    input_area.value = selected + " "
-                else:
-                    input_area.value = selected
-            else:
-                # Replace argument
-                input_area.value = parts[0] + " " + selected
-        elif "@" in current:
-            # Replace from @ onwards with the symbol
-            at_index = current.rfind("@")
-            input_area.value = current[:at_index] + selected + " "
-        else:
-            # Replace last word with completion
-            words = current.rsplit(maxsplit=1)
-            if len(words) > 1:
-                input_area.value = words[0] + " " + selected
-            else:
-                input_area.value = selected
+        new_text = self._get_completed_text(current, selected)
+
+        # Reset cycling state so the new value is registered as the new prefix
+        input_area._cycling = False
+        input_area.value = new_text
+        input_area.completion_active = False
 
         input_area.focus()
         input_area.cursor_position = len(input_area.value)
@@ -813,5 +858,11 @@ class TUI(App):
     def on_completion_bar_dismissed(self, message: CompletionBar.Dismissed):
         """Handle completion bar dismissal."""
         input_area = self.query_one("#input", InputArea)
+
+        # Restore original text if we were cycling
+        if input_area._cycling:
+            input_area.value = input_area.completion_prefix
+            input_area._cycling = False
+
         input_area.completion_active = False
         input_area.focus()

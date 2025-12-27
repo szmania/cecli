@@ -1414,7 +1414,11 @@ class InputOutput:
 
         # Match b'{...}', b"[...]", '{...}', "[...]"
         # Handle escaped quotes with (?<!\\)
-        text = re.sub(r"b?(['\"])([\{\[].*?)(?<!\\)\1", replace_json, text, flags=re.DOTALL)
+        try:
+            new_text = re.sub(r"b?(['\"])([\{\[].*?)(?<!\\)\1", replace_json, text, flags=re.DOTALL)
+            return new_text
+        except Exception:
+            pass
 
         return text
 

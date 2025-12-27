@@ -16,8 +16,8 @@ class Tool(BaseTool):
         "function": {
             "name": "ShowNumberedContext",
             "description": (
-                "Show numbered lines of context around a pattern or line number. Only use one of:"
-                " pattern, line_number"
+                "Show numbered lines of context around a pattern or line number. Mutually Exclusive"
+                " Parameters: pattern, line_number"
             ),
             "parameters": {
                 "type": "object",

@@ -252,7 +252,7 @@ class TestSessionCommands(TestCase):
 
             io = InputOutput(pretty=False, fancy_input=False, yes=True)
             with mock.patch.object(io, "tool_warning") as mock_tool_warning:
-                await Coder.create(self.GPT35, None, io, preserve_todo_list=True)
+                await Coder.create(self.GPT35, None, io)
 
             self.assertFalse(todo_path.exists())
             self.assertTrue(
