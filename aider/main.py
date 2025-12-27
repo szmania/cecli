@@ -37,7 +37,7 @@ from dotenv import load_dotenv
 
 if sys.platform == "win32":  # Windows asyncio fix. set_event_loop_policy deprecated in 3.16
     if hasattr(asyncio, "set_event_loop_policy"):
-        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+        asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 from prompt_toolkit.enums import EditingMode
 
 from aider import __version__, models, urls, utils
@@ -600,10 +600,10 @@ def custom_tracer(frame, event, arg):
 def main(argv=None, input=None, output=None, force_git_root=None, return_coder=False):
     # Asyncio run workaround for Windows in Python 3.12+. Required from 3.16+
     if sys.platform == "win32":
-        if sys.version_info >= (3, 12) and hasattr(asyncio, "SelectorEventLoop"):
+        if sys.version_info >= (3, 12) and hasattr(asyncio, "ProactorEventLoop"):
             return asyncio.run(
                 main_async(argv, input, output, force_git_root, return_coder),
-                loop_factory=asyncio.SelectorEventLoop,
+                loop_factory=asyncio.ProactorEventLoop,
             )
 
     return asyncio.run(main_async(argv, input, output, force_git_root, return_coder))
