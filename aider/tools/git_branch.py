@@ -113,12 +113,17 @@ class Tool(BaseTool):
                 args.extend(["--format", format])
 
             # Execute git command
-            result = coder.repo.repo.git.branch(*args)
+            result = coder.repo.repo.git.branch(*args).strip()
 
             # If no result and show_current was used, get current branch directly
             if not result and show_current:
-                current_branch = coder.repo.repo.active_branch.name
-                return current_branch
+                try:
+                    head = coder.repo.repo.head
+                    if head.is_detached:
+                        return "HEAD (detached)"
+                    return coder.repo.repo.active_branch.name
+                except ANY_GIT_ERROR:
+                    return "No current branch found."
 
             return result if result else "No branches found matching the criteria."
 

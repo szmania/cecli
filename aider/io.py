@@ -1,6 +1,8 @@
+import ast
 import asyncio
 import base64
 import functools
+import json
 import os
 import re
 import shutil
@@ -1389,11 +1391,39 @@ class InputOutput:
             message = str(message).encode("ascii", errors="replace").decode("ascii")
             self.stream_print(message, style=style)
 
+    def format_json_in_string(self, text):
+        if not isinstance(text, str):
+            return text
+
+        def replace_json(match):
+            full_match = match.group(0)
+            try:
+                # Try to parse as a python literal (e.g. b'{...}')
+                try:
+                    parsed = ast.literal_eval(full_match)
+                    if isinstance(parsed, bytes):
+                        parsed = parsed.decode("utf-8", errors="ignore")
+                    if isinstance(parsed, str):
+                        data = json.loads(parsed, strict=False)
+                        return "\n" + json.dumps(data, indent=2) + "\n"
+                except (ValueError, SyntaxError, json.JSONDecodeError):
+                    pass
+            except Exception:
+                pass
+            return full_match
+
+        # Match b'{...}', b"[...]", '{...}', "[...]"
+        # Handle escaped quotes with (?<!\\)
+        text = re.sub(r"b?(['\"])([\{\[].*?)(?<!\\)\1", replace_json, text, flags=re.DOTALL)
+
+        return text
+
     def tool_success(self, message="", strip=True):
         self._tool_message(message, strip, self.user_input_color)
 
     def tool_error(self, message="", strip=True):
         self.num_error_outputs += 1
+        message = self.format_json_in_string(message)
         self._tool_message(message, strip, self.tool_error_color)
 
     def tool_warning(self, message="", strip=True):

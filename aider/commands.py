@@ -104,6 +104,7 @@ class Commands:
             model_name,
             editor_model=self.coder.main_model.editor_model.name,
             weak_model=self.coder.main_model.weak_model.name,
+            io=self.io,
         )
         await models.sanity_check_models(self.io, model)
 
@@ -188,6 +189,7 @@ class Commands:
             self.coder.main_model.name,
             editor_model=self.coder.main_model.editor_model.name,
             weak_model=model_name,
+            io=self.io,
         )
         await models.sanity_check_models(self.io, model)
         raise SwitchCoder(main_model=model)
@@ -1368,7 +1370,7 @@ class Commands:
                 shutdown_tasks = [
                     server.exit_stack.aclose() for server in self.coder.mcp_servers
                 ]
-                
+
                 # Wait for all shutdowns to complete with a 2-second timeout
                 await asyncio.wait_for(asyncio.gather(*shutdown_tasks, return_exceptions=True), timeout=2.0)
             except asyncio.TimeoutError:
@@ -1732,13 +1734,13 @@ class Commands:
             result = await create_tool.Tool.execute(
                 coder=self.coder, description=description, file_name=file_name, scope=scope
             )
-            
+
             # Display the result to the user
             if result and result.startswith("Error:"):
                 self.io.tool_error(result)
             elif result:
                 self.io.tool_output(result)
-                
+
             await self.coder.initialize_mcp_tools()
 
         except Exception as e:
@@ -1838,12 +1840,12 @@ class Commands:
         if not self.coder.tool_manager:
             self.io.tool_error("Tool manager not available.")
             return
-            
+
         success, tool_name, message = self.coder.tool_manager.find_tool(name_or_path)
         if not success:
             self.io.tool_error(message)
             return
-            
+
         self.io.tool_output(message)  # Show the found tool message
 
         unloaded = False
@@ -1891,7 +1893,7 @@ class Commands:
         if not success:
             self.io.tool_error(message)
             return
-            
+
         self.io.tool_output(message)  # Show the found tool message
 
         tool_info = self.coder.tool_manager.tools.get(tool_name.lower())

@@ -15,7 +15,10 @@ class Tool(BaseTool):
         "type": "function",
         "function": {
             "name": "ShowNumberedContext",
-            "description": "Show numbered lines of context around a pattern or line number.",
+            "description": (
+                "Show numbered lines of context around a pattern or line number. Only use one of:"
+                " pattern, line_number"
+            ),
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -25,10 +28,6 @@ class Tool(BaseTool):
                     "context_lines": {"type": "integer", "default": 3},
                 },
                 "required": ["file_path"],
-                "oneOf": [
-                    {"required": ["pattern"], "not": {"required": ["line_number"]}},
-                    {"required": ["line_number"], "not": {"required": ["pattern"]}},
-                ],
             },
         },
     }

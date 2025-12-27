@@ -264,8 +264,8 @@ def get_parser(default_config_files, git_root):
     group = parser.add_argument_group("TUI Settings")
     group.add_argument(
         "--tui",
-        action="store_true",
-        default=False,
+        action=argparse.BooleanOptionalAction,
+        default=None,
         help="Launch Textual TUI interface (experimental)",
     )
     group.add_argument(
@@ -736,7 +736,7 @@ def get_parser(default_config_files, git_root):
         "--check-update",
         action=argparse.BooleanOptionalAction,
         help="Check for new aider versions on launch",
-        default=False,
+        default=True,
     )
     group.add_argument(
         "--show-release-notes",
@@ -821,12 +821,9 @@ def get_parser(default_config_files, git_root):
     )
     group.add_argument(
         "--linear-output",
-        action="store_true",
-        help=(
-            "Run input and output sequentially instead of using simultaneous streams (default:"
-            " False)"
-        ),
-        default=False,
+        action=argparse.BooleanOptionalAction,
+        help="Run input and output sequentially instead of us simultaneous streams (default: True)",
+        default=True,
     )
     group.add_argument(
         "--debug",

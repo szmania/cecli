@@ -599,7 +599,7 @@ class RepoMap:
     def get_ranked_tags(
         self, chat_fnames, other_fnames, mentioned_fnames, mentioned_idents, progress=True
     ):
-        import networkx as nx
+        import rustworkx
 
         defines = defaultdict(set)
         references = defaultdict(lambda: defaultdict(int))
@@ -717,7 +717,24 @@ class RepoMap:
 
         idents = set(defines.keys()).intersection(set(references.keys()))
 
-        G = nx.MultiDiGraph()
+        G = rustworkx.PyDiGraph(multigraph=True)
+
+        # Collect all unique file names that will be nodes
+        all_files = set()
+        for files in defines.values():
+            all_files.update(files)
+        for ref_dict in references.values():
+            all_files.update(ref_dict.keys())
+        all_files.update(file_imports.keys())
+        all_files.update(personalization.keys())
+
+        # Add all nodes and create mapping from file name to node index
+        file_to_node = {}
+        node_to_file = {}
+        for fname in sorted(all_files):
+            node_idx = G.add_node(fname)
+            file_to_node[fname] = node_idx
+            node_to_file[node_idx] = fname
 
         # Add a small self-edge for every definition that has no references
         # Helps with tree-sitter 0.23.2 with ruby, where "def greet(name)"
@@ -728,7 +745,10 @@ class RepoMap:
             if ident in references:
                 continue
             for definer in defines[ident]:
-                G.add_edge(definer, definer, weight=unreferenced_weight, ident=ident)
+                definer_idx = file_to_node[definer]
+                G.add_edge(
+                    definer_idx, definer_idx, {"weight": unreferenced_weight, "ident": ident}
+                )
 
         for ident in idents:
             if progress:
@@ -819,42 +839,54 @@ class RepoMap:
                     path_distance = len(p1) + len(p2) - (2 * common_count)
 
                     weight = use_mul * 2 ** (-1 * path_distance)
-                    G.add_edge(referencer, definer, weight=weight, key=ident, ident=ident)
+                    referencer_idx = file_to_node[referencer]
+                    definer_idx = file_to_node[definer]
+                    G.add_edge(
+                        referencer_idx,
+                        definer_idx,
+                        {"weight": weight, "key": ident, "ident": ident},
+                    )
 
         self.io.profile("Build Graph")
 
-        if not references:
-            pass
-
+        self.io.profile("PERSONALIZATION START")
+        # Convert personalization from file names to node indices
         if personalization:
-            pers_args = dict(personalization=personalization, dangling=personalization)
+            pers_node = {file_to_node[fname]: val for fname, val in personalization.items()}
+            pers_args = dict(personalization=pers_node, dangling=pers_node)
         else:
             pers_args = dict()
-
+        self.io.profile("PERSONALIZATION END")
         try:
-            ranked = nx.pagerank(G, weight="weight", **pers_args)
+            ranked = rustworkx.pagerank(G, weight_fn=lambda edge: edge["weight"], **pers_args)
         except ZeroDivisionError:
             # Issue #1536
             try:
-                ranked = nx.pagerank(G, weight="weight")
+                ranked = rustworkx.pagerank(G, weight_fn=lambda edge: edge["weight"])
             except ZeroDivisionError:
+                self.io.profile("zero")
                 return []
+            except Exception as e:
+                self.io.profile(e)
+        except Exception as e:
+            self.io.profile(e)
 
         self.io.profile("PageRank")
 
         # distribute the rank from each source node, across all of its out edges
         ranked_definitions = defaultdict(float)
-        for src in G.nodes:
+        for src in G.node_indices():
             if progress:
                 self.io.update_spinner(f"{UPDATING_REPO_MAP_MESSAGE}: {src}")
 
             src_rank = ranked[src]
-            total_weight = sum(data["weight"] for _src, _dst, data in G.out_edges(src, data=True))
+            total_weight = sum(data["weight"] for _src, _dst, data in G.out_edges(src))
             # dump(src, src_rank, total_weight)
-            for _src, dst, data in G.out_edges(src, data=True):
+            for _src, dst, data in G.out_edges(src):
                 data["rank"] = src_rank * data["weight"] / total_weight
                 ident = data["ident"]
-                ranked_definitions[(dst, ident)] += data["rank"]
+                fname = node_to_file[dst]
+                ranked_definitions[(fname, ident)] += data["rank"]
 
         self.io.profile("Distribute Rank")
 
@@ -878,8 +910,9 @@ class RepoMap:
 
         fnames_already_included = set(rt[0] for rt in ranked_tags)
 
-        top_rank = sorted([(rank, node) for (node, rank) in ranked.items()], reverse=True)
-        for rank, fname in top_rank:
+        top_rank = sorted([(rank, node_idx) for (node_idx, rank) in ranked.items()], reverse=True)
+        for rank, node_idx in top_rank:
+            fname = node_to_file[node_idx]
             if fname in rel_other_fnames_without_tags:
                 rel_other_fnames_without_tags.remove(fname)
             if fname not in fnames_already_included:

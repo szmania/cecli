@@ -417,14 +417,17 @@ class GitRepo:
         except ANY_GIT_ERROR as err:
             self.io.tool_error(f"Unable to diff: {err}")
 
-    def diff_commits(self, pretty, from_commit, to_commit):
+    def diff_commits(self, pretty, from_commit, to_commit=None):
         args = []
         if pretty:
             args += ["--color"]
         else:
             args += ["--color=never"]
 
-        args += [from_commit, to_commit]
+        if to_commit is not None:
+            args += [from_commit, to_commit]
+        else:
+            args += [from_commit]
         diffs = self.repo.git.diff(*args, stdout_as_string=False).decode(
             self.io.encoding, "replace"
         )

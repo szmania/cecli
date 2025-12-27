@@ -25,6 +25,7 @@ from aider.sendchat import sanity_check_messages
 from aider.utils import check_pip_install_extra
 
 RETRY_TIMEOUT = 60
+COPY_PASTE_PREFIX = "cp:"
 
 
 DEFAULT_MODEL_NAME = "gpt-4o"
@@ -321,9 +322,29 @@ class Model(ModelSettings):
         retry_timeout=60,
         retry_backoff_factor=2.0,
         retry_on_unavailable=False,
+        io=None,
         override_kwargs=None,
     ):
-        # Map any alias to its canonical name
+        # Determine copy/paste mode and map model aliases
+        provided_model = model or ""
+        if isinstance(provided_model, Model):
+            provided_model = provided_model.name
+        elif not isinstance(provided_model, str):
+            provided_model = str(provided_model)
+
+        self.io = io
+        self.verbose = verbose
+        self.override_kwargs = override_kwargs or {}
+
+        self.copy_paste_mode = False
+        self.copy_paste_transport = "api"
+
+        if provided_model.startswith(COPY_PASTE_PREFIX):
+            model = provided_model.removeprefix(COPY_PASTE_PREFIX)
+            self.enable_copy_paste_mode(transport="clipboard")
+        else:
+            model = provided_model
+
         model = MODEL_ALIASES.get(model, model)
 
         self.name = model
@@ -369,6 +390,9 @@ class Model(ModelSettings):
             self.editor_model_name = None
         else:
             self.get_editor_model(editor_model, editor_edit_format)
+
+        if self.copy_paste_transport == "clipboard":
+            self.streaming = False
 
     def get_model_info(self, model):
         return model_info_manager.get_model_info(model)
@@ -605,9 +629,18 @@ class Model(ModelSettings):
     def __str__(self):
         return self.name
 
+    def enable_copy_paste_mode(self, *, transport="api"):
+        self.copy_paste_mode = True
+        self.copy_paste_transport = transport
+
     def get_weak_model(self, provided_weak_model):
         # If provided_weak_model is False, set weak_model to self
         if provided_weak_model is False:
+            self.weak_model = self
+            self.weak_model_name = None
+            return
+
+        if self.copy_paste_transport == "clipboard":
             self.weak_model = self
             self.weak_model_name = None
             return
@@ -633,6 +666,7 @@ class Model(ModelSettings):
         self.weak_model = Model(
             self.weak_model_name,
             weak_model=False,
+            io=self.io,
         )
         return self.weak_model
 
@@ -640,6 +674,11 @@ class Model(ModelSettings):
         return [self.weak_model, self]
 
     def get_editor_model(self, provided_editor_model, editor_edit_format):
+        if self.copy_paste_transport == "clipboard":
+            provided_editor_model = False
+            self.editor_model_name = self.name
+            self.editor_model = self
+
         # If provided_editor_model is already a Model object, use it directly
         if isinstance(provided_editor_model, Model):
             self.editor_model = provided_editor_model
@@ -658,6 +697,7 @@ class Model(ModelSettings):
             self.editor_model = Model(
                 self.editor_model_name,
                 editor_model=False,
+                io=self.io,
             )
 
         if not self.editor_edit_format:
@@ -1249,6 +1289,9 @@ async def sanity_check_models(io, main_model):
 
 
 async def sanity_check_model(io, model):
+    if getattr(model, "copy_paste_transport", "api") == "clipboard":
+        return False
+
     show = False
 
     if model.missing_keys:

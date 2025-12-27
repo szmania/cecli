@@ -22,7 +22,10 @@ class Tool(BaseTool):
         "type": "function",
         "function": {
             "name": "InsertBlock",
-            "description": "Insert a block of content into a file.",
+            "description": (
+                "Insert a block of content into a file. Only use one of: after_pattern,"
+                " before_pattern, position."
+            ),
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -38,20 +41,6 @@ class Tool(BaseTool):
                     "use_regex": {"type": "boolean", "default": False},
                 },
                 "required": ["file_path", "content"],
-                "oneOf": [
-                    {
-                        "required": ["after_pattern"],
-                        "not": {"required": ["before_pattern", "position"]},
-                    },
-                    {
-                        "required": ["before_pattern"],
-                        "not": {"required": ["after_pattern", "position"]},
-                    },
-                    {
-                        "required": ["position"],
-                        "not": {"required": ["after_pattern", "before_pattern"]},
-                    },
-                ],
             },
         },
     }

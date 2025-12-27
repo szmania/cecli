@@ -205,7 +205,7 @@ If a session fails to load:
 ```
 # Save session with specific model
 /model gpt-5
-/save-session gpt4-session
+/save-session gpt5-session
 
 # Try different model
 /model claude-sonnet-4.5

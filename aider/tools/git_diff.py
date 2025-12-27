@@ -36,7 +36,8 @@ class Tool(BaseTool):
 
         try:
             if branch:
-                diff = coder.repo.diff_commits(False, branch, "HEAD")
+                # Diff working tree against the requested branch/commit
+                diff = coder.repo.diff_commits(False, branch, None)
             else:
                 diff = coder.repo.diff_commits(False, "HEAD", None)
 

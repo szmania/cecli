@@ -278,7 +278,6 @@ nest-asyncio==1.6.0
     # via llama-index-core
 networkx==3.6
     # via
-    #   -r requirements/requirements.in
     #   llama-index-core
     #   torch
 nltk==3.9.2
@@ -292,6 +291,7 @@ numpy==2.3.5
     #   llama-index-core
     #   matplotlib
     #   pandas
+    #   rustworkx
     #   scikit-learn
     #   scipy
     #   soundfile
@@ -508,6 +508,8 @@ rpds-py==0.29.0
     #   referencing
 rsa==4.9.1
     # via google-auth
+rustworkx==0.17.1
+    # via -r requirements/requirements.in
 safetensors==0.7.0
     # via transformers
 scikit-learn==1.7.2

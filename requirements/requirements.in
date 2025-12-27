@@ -15,7 +15,7 @@ beautifulsoup4>=4.13.4
 PyYAML>=6.0.2
 diff-match-patch>=20241021
 pypandoc>=1.15
-litellm>=1.75.0
+litellm>=1.80.0
 flake8>=7.3.0
 importlib_resources
 pyperclip>=1.9.0
@@ -32,19 +32,10 @@ mcp>=1.12.3
 textual>=6.0.0
 truststore
 
-# The proper dependency is networkx[default], but this brings
-# in matplotlib and a bunch of other deps
-# https://github.com/networkx/networkx/blob/d7132daa8588f653eacac7a5bae1ee85a183fa43/pyproject.toml#L57
-# We really only need networkx itself and scipy for the repomap.
-#
-# >3.5 seems to not be available for py3.10
-networkx>=3.4.2
+# Replaced networkx with rustworkx for better performance in repomap
+rustworkx>=0.15.0
 
-# This is the one networkx dependency that we need.
-# Including it here explicitly because we
-# didn't specify networkx[default] above.
-#
-# 1.16 onwards only supports python3.11+
+# scipy is still needed for other parts of the codebase
 scipy>=1.15.3
 
 # GitHub Release action failing on "KeyError: 'home-page'"

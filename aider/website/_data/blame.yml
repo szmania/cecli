@@ -3383,7 +3383,7 @@
     aider/commands.py:
       Paul Gauthier: 28
       Paul Gauthier (aider): 21
-    aider/copypaste.py:
+    aider/helpers/copypaste.py:
       Paul Gauthier: 5
       Paul Gauthier (aider): 60
     aider/exceptions.py:

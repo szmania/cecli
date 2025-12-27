@@ -45,9 +45,9 @@ from aider.args import get_parser
 from aider.coders import Coder
 from aider.coders.base_coder import UnknownEditFormat
 from aider.commands import Commands, SwitchCoder
-from aider.copypaste import ClipboardWatcher
 from aider.deprecated import handle_deprecated_model_args
 from aider.format_settings import format_settings, scrub_sensitive_info
+from aider.helpers.copypaste import ClipboardWatcher
 from aider.helpers.file_searcher import generate_search_path_list
 from aider.history import ChatSummary
 from aider.io import InputOutput
@@ -763,10 +763,11 @@ async def main_async(argv=None, input=None, output=None, force_git_root=None, re
     # TUI mode - create TUI-specific IO
     output_queue = None
     input_queue = None
-    if args.tui:
+    if args.tui or (args.tui is None and not args.linear_output):
         try:
             from aider.tui import create_tui_io
 
+            args.tui = True
             args.linear_output = True
             print("Starting aider TUI...", flush=True)
             io, output_queue, input_queue = create_tui_io(args, editing_mode)
@@ -985,11 +986,24 @@ async def main_async(argv=None, input=None, output=None, force_git_root=None, re
         """
         if not model_name:
             return model_name, {}
+
+        # Check for copy-paste prefix
+        prefix = ""
+        if model_name.startswith(models.COPY_PASTE_PREFIX):
+            prefix = models.COPY_PASTE_PREFIX
+            model_name = model_name[len(prefix) :]
+
+        # Check if the model_name (without prefix) is in override_index
         entry = override_index.get(model_name)
         if not entry:
+            # No override found, return original name with prefix
+            model_name = prefix + model_name
             return model_name, {}
+
         base_model, cfg = entry
-        return base_model, cfg.copy()
+        # Re-add prefix if it was present
+        model_name = prefix + base_model
+        return model_name, cfg.copy()
 
     # Apply overrides (if any) to the selected models
     main_model_name, main_model_overrides = apply_model_overrides(args.model)
@@ -1003,6 +1017,7 @@ async def main_async(argv=None, input=None, output=None, force_git_root=None, re
             weak_model_name,
             weak_model=False,
             verbose=args.verbose,
+            io=io,
             override_kwargs=weak_model_overrides,
         )
 
@@ -1013,6 +1028,7 @@ async def main_async(argv=None, input=None, output=None, force_git_root=None, re
             editor_model_name,
             editor_model=False,
             verbose=args.verbose,
+            io=io,
             override_kwargs=editor_model_overrides,
         )
 
@@ -1057,8 +1073,12 @@ async def main_async(argv=None, input=None, output=None, force_git_root=None, re
         retry_timeout=args.retry_timeout,
         retry_backoff_factor=args.retry_backoff_factor,
         retry_on_unavailable=args.retry_on_unavailable,
+        io=io,
         override_kwargs=main_model_overrides,
     )
+
+    if args.copy_paste and main_model.copy_paste_transport == "api":
+        main_model.enable_copy_paste_mode()
 
     # Check if deprecated remove_reasoning is set
     if main_model.remove_reasoning is not None:
@@ -1540,7 +1560,6 @@ def load_slow_imports(swallow=True):
     try:
         import httpx  # noqa: F401
         import litellm  # noqa: F401
-        import networkx  # noqa: F401
         import numpy  # noqa: F401
     except Exception as e:
         if not swallow:
