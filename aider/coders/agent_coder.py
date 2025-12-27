@@ -1170,6 +1170,7 @@ class AgentCoder(Coder):
     async def process_tool_calls(self, tool_call_response):
         """
         Track tool usage before calling the base implementation.
+        If the `Finished` tool is called, prevent reflection.
         """
         self.agent_finished = False
         await self.auto_save_session()
@@ -1205,7 +1206,15 @@ class AgentCoder(Coder):
         if len(self.tool_call_vectors) > self.max_tool_vector_history:
             self.tool_call_vectors.pop(0)
 
-        return await super().process_tool_calls(tool_call_response)
+        # Execute the tools via the base class
+        res = await super().process_tool_calls(tool_call_response)
+
+        # If the Finished tool was called, it sets self.agent_finished.
+        # We must return False to prevent the reflection loop.
+        if self.agent_finished:
+            return False
+
+        return res
 
     async def reply_completed(self):
         """Process the completed response from the LLM.
