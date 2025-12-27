@@ -222,6 +222,8 @@ class Coder:
                 total_tokens_sent=from_coder.total_tokens_sent,
                 total_tokens_received=from_coder.total_tokens_received,
                 file_watcher=from_coder.file_watcher,
+                mcp_servers=from_coder.mcp_servers,
+                mcp_tools=from_coder.mcp_tools,
             )
             use_kwargs.update(update)  # override to complete the switch
             use_kwargs.update(kwargs)  # override passed kwargs
@@ -292,6 +294,7 @@ class Coder:
         auto_copy_context=False,
         auto_accept_architect=True,
         mcp_servers=None,
+        mcp_tools=None,
         enable_context_compaction=False,
         context_compaction_max_tokens=None,
         context_compaction_summary_tokens=8192,
@@ -331,6 +334,9 @@ class Coder:
         self.suggest_shell_commands = suggest_shell_commands
         self.detect_urls = detect_urls
         self.args = args
+
+        self.mcp_servers = mcp_servers
+        self.mcp_tools = mcp_tools
 
         self.num_cache_warming_pings = num_cache_warming_pings
         self.mcp_servers = mcp_servers
@@ -2682,6 +2688,9 @@ class Coder:
         Initialize tools from all configured MCP servers. MCP Servers that fail to be
         initialized will not be available to the Coder instance.
         """
+        if self.mcp_tools is not None:
+            return
+
         tools = []
 
         async def get_server_tools(server):
