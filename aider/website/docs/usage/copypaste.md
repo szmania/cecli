@@ -90,6 +90,21 @@ and aider will apply the LLMs changes to your local files.
 - Aider will automatically select the best edit format for this copy/paste functionality. 
 Depending on the LLM you have aider use, it will be either `editor-whole` or `editor-diff`.
 
+### No API access? Use `cp:model`
+
+If your only access to an LLM is via a web chat (no API keys, no local models), you can run aider with a model name prefixed by cp:. This performs the entire workflow via copy/paste without making any API calls.
+
+#### What cp: does
+
+- Activates CopyPasteCoder, which never sends requests to any LLM API.
+- Uses the same copy/paste workflow described above
+
+#### Token and cost tracking
+
+- Aider uses the text after cp: as the "model name" for local token counting and cost estimation.
+- If the label matches a known model in aider's pricing tables, aider will estimate tokens/costs using that model's rates; otherwise, costs may show as unknown or zero.
+- With flat-rate web chat plans, you can treat any "estimated cost" displayed by aider as your "savings" versus if you had called an API model.
+
 ## Terms of service
 
 Be sure to review the Terms Of Service of any LLM web chat service you use with

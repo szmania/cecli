@@ -254,6 +254,9 @@ class TextualInputOutput(InputOutput):
             }
         )
 
+    def interrupt_input(self):
+        self.interrupted = True
+
     async def get_input(
         self,
         root,
@@ -278,6 +281,8 @@ class TextualInputOutput(InputOutput):
         Returns:
             User input string
         """
+        self.interrupted = False
+
         # Signal TUI that we're ready for input
         command_names = commands.get_commands() if commands else []
 
@@ -308,6 +313,15 @@ class TextualInputOutput(InputOutput):
         # Wait for input from TUI (blocking in async context)
         # We need to poll the queue since it's not async
         while True:
+            if hasattr(self, "file_watcher") and self.file_watcher:
+                if not self.file_watcher.is_running:
+                    self.file_watcher.start()
+
+                # Check if we were interrupted by a file change
+                if self.interrupted:
+                    cmd = self.file_watcher.process_changes()
+                    return cmd
+
             try:
                 # Non-blocking get with timeout
                 import queue

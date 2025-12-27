@@ -1,5 +1,10 @@
 # This needs to sync with aider/help_pats.py
 
+include requirements/requirements.in
+include requirements/requirements-dev.in
+include requirements/requirements-help.in
+include requirements/requirements-playwright.in
+
 global-exclude .DS_Store
 
 recursive-exclude aider/website/examples *

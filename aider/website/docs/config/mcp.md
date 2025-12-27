@@ -120,3 +120,71 @@ If you encounter issues with MCP servers:
 3. Verify that your JSON or YAML configuration is valid
 
 For more information about specific MCP servers and their capabilities, refer to their respective documentation.
+
+## Common MCP Servers
+
+Here are some commonly used MCP servers that can enhance aider's capabilities:
+
+### Context7
+
+Context7 MCP provides up-to-date, version-specific documentation and code examples directly from the source into your LLM prompts, eliminating outdated information and hallucinations. It offers a streamlined integration experience with built-in caching mechanisms and is optimized for explorative agentic workflows.
+
+```yaml
+mcp-servers:
+  mcpServers:
+    context7:
+      transport: http
+      url: https://mcp.context7.com/mcp
+```
+
+### DeepWiki
+
+DeepWiki MCP is an unofficial server that crawls Deepwiki URLs, converts pages to Markdown, and returns them as a single document or a list. It features domain safety, HTML sanitization, and link rewriting to provide clean, structured documentation from Deepwiki repositories.
+
+```yaml
+mcp-servers:
+  mcpServers:
+    deepwiki:
+      transport: http
+      url: https://mcp.deepwiki.com/mcp
+```
+
+### Serena
+
+Serena MCP provides LSP support for the current project, offering code analysis, symbol navigation, and project-specific tooling. It runs as a local stdio server and provides context-aware development assistance directly within the IDE environment.
+
+```yaml
+mcp-servers:
+  mcpServers:
+    serena:
+      transport: stdio
+      command: uvx
+      args: [
+        "--from",
+        "git+https://github.com/oraios/serena",
+        "serena",
+        "start-mcp-server",
+        "--context",
+        "ide",
+        "--project",
+        "{project path}"
+      ]
+```
+
+### Chrome DevTools
+
+Chrome DevTools MCP provides browser automation and debugging capabilities through Chrome's DevTools Protocol, enabling web page interaction, network monitoring, and performance analysis. It connects to a running Chrome instance and offers tools for web development testing and automation. Note: the configuration below requires you to start chrome with remote debugging enabled before
+starting the coding agent.
+
+```yaml
+mcp-servers:
+  mcpServers:
+    chrome-devtools:
+      transport: stdio
+      command: npx
+      args: [
+        "chrome-devtools-mcp@latest",
+        "--browser-url",
+        "http://127.0.0.1:9222"
+      ]
+```

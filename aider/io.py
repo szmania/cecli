@@ -753,6 +753,7 @@ class InputOutput:
                 await asyncio.sleep(0)
             else:
                 self.input_task = asyncio.create_task(self.get_input(None, [], [], []))
+                await asyncio.sleep(0)
 
     async def get_input(
         self,

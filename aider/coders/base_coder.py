@@ -2879,7 +2879,11 @@ class Coder:
             msg["reasoning_content"] = self.partial_response_reasoning_content
 
         # Only add a message if it's not empty.
-        if msg is not None:
+        if msg is not None and (
+            msg.get("content", None)
+            or msg.get("tool_calls", None)
+            or msg.get("function_call", None)
+        ):
             self.cur_messages.append(msg)
 
     def get_file_mentions(self, content, ignore_current=False):

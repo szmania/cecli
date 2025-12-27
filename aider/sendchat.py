@@ -160,6 +160,14 @@ def ensure_alternating_roles(messages):
         msg = messages[i]
         role = msg.get("role")
 
+        if (
+            role == "assistant"
+            and not msg.get("content", None)
+            and not msg.get("tool_calls", None)
+            and not msg.get("function_call", None)
+        ):
+            msg["content"] = "(empty response)"
+
         # Handle tool call sequences atomically
         if role == "assistant" and "tool_calls" in msg and msg["tool_calls"]:
             # Start of tool sequence - collect all related messages

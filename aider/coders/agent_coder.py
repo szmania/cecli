@@ -297,7 +297,7 @@ class AgentCoder(Coder):
             config["tools_excludelist"] = []
 
         if "include_context_blocks" in config:
-            self.allowed_context_blocks = set(config["context_blocks"])
+            self.allowed_context_blocks = set(config["include_context_blocks"])
         else:
             self.allowed_context_blocks = {
                 "context_summary",
@@ -1249,7 +1249,7 @@ class AgentCoder(Coder):
             self.tool_usage_history = []
             if self.files_edited_by_tools:
                 _ = await self.auto_commit(self.files_edited_by_tools)
-            return True
+            return False
 
         # Since we are no longer suppressing, the partial_response_content IS the final content.
         # We might want to update it to the processed_content (without tool calls) if we don't

@@ -42,6 +42,14 @@ class ArchitectCoder(AskCoder):
         kwargs["cache_prompts"] = False
         kwargs["num_cache_warming_pings"] = 0
         kwargs["summarize_from_coder"] = False
+        kwargs["mcp_servers"] = []  # Empty to skip initialization
+
+        coder = await Coder.create(**kwargs)
+        # Transfer MCP state to avoid re-initialization
+        coder.mcp_servers = self.mcp_servers
+        coder.mcp_tools = self.mcp_tools
+        # Transfer TUI app weak reference
+        coder.tui = self.tui
 
         new_kwargs = dict(io=self.io, from_coder=self)
         new_kwargs.update(kwargs)

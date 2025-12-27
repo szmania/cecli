@@ -79,6 +79,7 @@ class FileWatcher:
         self.watcher_thread = None
         self.changed_files = set()
         self.gitignores = gitignores
+        self.is_running = False
 
         self.gitignore_spec = load_gitignores(
             [Path(g) for g in self.gitignores] if self.gitignores else []
@@ -165,6 +166,7 @@ class FileWatcher:
         self.stop_event = threading.Event()
         self.changed_files = set()
 
+        self.is_running = True
         self.watcher_thread = threading.Thread(target=self.watch_files, daemon=True)
         self.watcher_thread.start()
 
@@ -247,6 +249,7 @@ class FileWatcher:
                 for ln, comment in zip(line_nums, comments):
                     res += f"  Line {ln}: {comment}\n"
 
+        self.is_running = False
         return res
 
     def get_ai_comments(self, filepath):

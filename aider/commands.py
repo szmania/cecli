@@ -1649,19 +1649,29 @@ class Commands:
 
         from aider.coders.base_coder import Coder
 
+        user_msg = args
+
         original_main_model = self.coder.main_model
         original_edit_format = self.coder.edit_format
+        kwargs = {
+            "io": self.coder.io,
+            "from_coder": self.coder,
+            "edit_format": edit_format,
+            "summarize_from_coder": False,
+            "num_cache_warming_pings": 0,
+            "aider_commit_hashes": self.coder.aider_commit_hashes,
+            "args": self.coder.args,
+        }
 
-        coder = await Coder.create(
-            io=self.io,
-            from_coder=self.coder,
-            edit_format=edit_format,
-            summarize_from_coder=False,
-            num_cache_warming_pings=0,
-            aider_commit_hashes=self.coder.aider_commit_hashes,
-        )
+        kwargs["mcp_servers"] = []  # Empty to skip initialization
 
-        user_msg = args
+        coder = await Coder.create(**kwargs)
+        # Transfer MCP state to avoid re-initialization
+        coder.mcp_servers = self.coder.mcp_servers
+        coder.mcp_tools = self.coder.mcp_tools
+        # Transfer TUI app weak reference
+        coder.tui = self.coder.tui
+
         await coder.generate(user_message=user_msg, preproc=False)
         self.coder.aider_commit_hashes = coder.aider_commit_hashes
 
@@ -1953,7 +1963,7 @@ class Commands:
         res += "\n"
         return res
 
-    def cmd_voice(self, args):
+    async def cmd_voice(self, args):
         "Record and transcribe voice input"
 
         if not self.voice:
@@ -1971,13 +1981,18 @@ class Commands:
                 return
 
         try:
-            text = self.voice.record_and_transcribe(None, language=self.voice_language)
+            self.coder.io.update_spinner("Recording...")
+            text = await self.voice.record_and_transcribe(None, language=self.voice_language)
         except litellm.OpenAIError as err:
             self.io.tool_error(f"Unable to use OpenAI whisper model: {err}")
             return
 
         if text:
             self.io.placeholder = text
+
+        if self.coder.tui and self.coder.tui():
+            self.coder.tui().set_input_value(text)
+            self.coder.tui().refresh()
 
     def cmd_paste(self, args):
         """Paste image/text from the clipboard into the chat.\
