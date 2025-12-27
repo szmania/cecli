@@ -1385,13 +1385,8 @@ class Commands:
             await asyncio.sleep(0.5)
             return
 
-        try:
-            if self.coder.args.linear_output:
-                os._exit(0)
-            else:
-                sys.exit()
-        except Exception:
-            sys.exit()
+        # Let the main loop handle the exit
+        return
 
     async def cmd_quit(self, args):
         "Exit the application"
@@ -1927,6 +1922,177 @@ class Commands:
             await self.coder.tool_manager.load_tool_async(dest_path)
             await self.coder.initialize_mcp_tools()
 
+    async def cmd_tools_load(self, args):
+        "Load a tool from a file, glob pattern, or a standard tool by name."
+        from aider.coders.agent_coder import AgentCoder
+
+        if not isinstance(self.coder, AgentCoder):
+            self.io.tool_error("This command is only available in agent mode.")
+            return
+
+        name_or_path = args.strip()
+        if not name_or_path:
+            self.io.tool_error("Please provide a tool name or path to load.")
+            return
+
+        # Try to load a previously unloaded standard tool
+        norm_name = name_or_path.lower()
+        if hasattr(self.coder, "unloaded_standard_tools") and norm_name in self.coder.unloaded_standard_tools:
+            tool_class = self.coder.unloaded_standard_tools.pop(norm_name)
+            self.coder.tool_registry[norm_name] = tool_class
+            self.io.tool_output(f"Loaded standard tool '{name_or_path}'.")
+            await self.coder.initialize_mcp_tools()
+            return
+
+        # Check if it's already a loaded standard tool
+        if hasattr(self.coder, "tool_registry") and norm_name in self.coder.tool_registry:
+            self.io.tool_output(f"Standard tool '{name_or_path}' is already loaded.")
+            return
+
+        # Check if it's already a loaded custom tool
+        if self.coder.tool_manager and name_or_path in self.coder.tool_manager.tools:
+            self.io.tool_output(f"Custom tool '{name_or_path}' is already loaded.")
+            return
+
+        # Try to load as a custom tool from path/glob
+        try:
+            if any(c in name_or_path for c in "*?[]"):
+                paths = glob.glob(name_or_path, recursive=True)
+            else:
+                paths = [name_or_path] if os.path.exists(name_or_path) else []
+
+            if not paths:
+                self.io.tool_error(f"No file(s) found for '{name_or_path}'.")
+                return
+
+            loaded_any = False
+            for path in paths:
+                if path.endswith(".py") and os.path.isfile(path):
+                    success, msg = await self.coder.tool_manager.load_tool_async(path)
+                    if success:
+                        loaded_any = True
+                    else:
+                        self.io.tool_error(f"Failed to load tool from {path}: {msg}")
+
+            if loaded_any:
+                await self.coder.initialize_mcp_tools()
+            elif paths:
+                self.io.tool_error(f"No python tools found for pattern '{name_or_path}'.")
+
+        except Exception as e:
+            self.io.tool_error(f"Error loading tool(s) from '{name_or_path}': {e}")
+
+    async def cmd_tools_unload(self, args):
+        "Unload a standard or custom tool by name or file path."
+        from aider.coders.agent_coder import AgentCoder
+
+        if not isinstance(self.coder, AgentCoder):
+            self.io.tool_error("This command is only available in agent mode.")
+            return
+
+        name_or_path = args.strip()
+        if not name_or_path:
+            self.io.tool_error("Please provide a tool name or path to unload.")
+            return
+
+        # First check if it's a file path
+        if os.path.exists(name_or_path):
+            # Try to unload as a custom tool by path
+            tool_to_unload = None
+            for tool_name, tool_info in self.coder.tool_manager.tools.items():
+                if tool_info.get("file_path") == name_or_path:
+                    tool_to_unload = tool_name
+                    break
+            if tool_to_unload:
+                self.coder.tool_manager.unload_tool(tool_to_unload)
+                self.io.tool_output(f"Unloaded tool '{tool_to_unload}' at path '{name_or_path}'.")
+                await self.coder.initialize_mcp_tools()
+                return
+            else:
+                self.io.tool_error(f"No loaded tool found at path '{name_or_path}'.")
+                return
+
+        # If not a file path, treat as a tool name and use fuzzy search
+        if not self.coder.tool_manager:
+            self.io.tool_error("Tool manager not available.")
+            return
+
+        success, tool_name, message = self.coder.tool_manager.find_tool(name_or_path)
+        if not success:
+            self.io.tool_error(message)
+            return
+
+        self.io.tool_output(message)  # Show the found tool message
+
+        unloaded = False
+        # Try to unload as a custom tool by name
+        if self.coder.tool_manager.unload_tool(tool_name):
+            unloaded = True
+        # Try to unload as a standard tool
+        elif hasattr(self.coder, "tool_registry"):
+            norm_name = tool_name.lower()
+            if norm_name in self.coder.tool_registry:
+                tool_class = self.coder.tool_registry.pop(norm_name)
+                self.coder.unloaded_standard_tools[norm_name] = tool_class
+                self.io.tool_output(f"Unloaded standard tool '{tool_name}'.")
+                unloaded = True
+            # Try to unload from unloaded_standard_tools (already unloaded)
+            elif norm_name in self.coder.unloaded_standard_tools:
+                self.io.tool_error(f"Standard tool '{tool_name}' is already unloaded.")
+                return
+
+        if unloaded:
+            await self.coder.initialize_mcp_tools()
+        else:
+            self.io.tool_error(f"Tool '{tool_name}' not found or not loaded.")
+
+    async def cmd_tools_move(self, args):
+        "Move a tool to a different scope (local or global)."
+        from aider.coders.agent_coder import AgentCoder
+
+        if not isinstance(self.coder, AgentCoder):
+            self.io.tool_error("This command is only available in agent mode.")
+            return
+
+        parts = args.strip().split()
+        if len(parts) != 2:
+            self.io.tool_error("Usage: /tools-move <tool_name> <local|global>")
+            return
+
+        tool_name_query, scope = parts
+        if not self.coder.tool_manager:
+            self.io.tool_error("Tool manager not available.")
+            return
+
+        # Use fuzzy search to find the tool, only looking for custom tools
+        success, tool_name, message = self.coder.tool_manager.find_tool(tool_name_query, search_scope='custom')
+        if not success:
+            self.io.tool_error(message)
+            return
+
+        self.io.tool_output(message)  # Show the found tool message
+
+        tool_info = self.coder.tool_manager.tools.get(tool_name.lower())
+        if not tool_info:
+            self.io.tool_error(f"Custom tool '{tool_name}' not found.")
+            return
+
+        src_path = tool_info["file_path"]
+        result = self.coder.tool_manager.move_tool(tool_name, scope)
+        self.io.tool_output(result)
+
+        if "Successfully" in result:
+            if scope == "global":
+                dest_dir = self.coder.tool_manager._get_global_tools_dir()
+            else:
+                dest_dir = self.coder.tool_manager._get_local_tools_dir()
+
+            dest_path = os.path.join(dest_dir, os.path.basename(src_path))
+
+            self.coder.tool_manager.unload_tool(tool_name)
+            await self.coder.tool_manager.load_tool_async(dest_path)
+            await self.coder.initialize_mcp_tools()
+
     async def cmd_tools_edit(self, args):
         "Add a tool's source file to the chat to be edited."
         from aider.coders.agent_coder import AgentCoder
@@ -1942,6 +2108,38 @@ class Commands:
 
         await self.cmd_add(path)
 
+    async def cmd_tools_rm(self, args):
+        "Delete a custom tool by name."
+        from aider.coders.agent_coder import AgentCoder
+
+        if not isinstance(self.coder, AgentCoder):
+            self.io.tool_error("This command is only available in agent mode.")
+            return
+
+        tool_name_query = args.strip()
+        if not tool_name_query:
+            self.io.tool_error("Usage: /tools-rm <tool_name>")
+            return
+
+        if not self.coder.tool_manager:
+            self.io.tool_error("Tool manager not available.")
+            return
+
+        # Use fuzzy search to find the tool, only looking for custom tools
+        success, tool_name, message = self.coder.tool_manager.find_tool(
+            tool_name_query, search_scope="custom"
+        )
+        if not success:
+            self.io.tool_error(message)
+            return
+
+        self.io.tool_output(message)  # Show the found tool message
+
+        result = self.coder.tool_manager.remove_tool(tool_name)
+        self.io.tool_output(result)
+
+        if "Successfully" in result:
+            await self.coder.initialize_mcp_tools()
 
     def get_help_md(self):
         "Show help about all commands in markdown"
