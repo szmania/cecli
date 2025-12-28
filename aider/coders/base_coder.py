@@ -3509,10 +3509,29 @@ class Coder:
         return RepoMap.get_file_stub(fname, self.io)
 
     def get_rel_fname(self, fname):
-        try:
-            return os.path.relpath(fname, self.root)
-        except ValueError:
-            return fname
+        if self.repo:
+            try:
+                # Use pathlib.Path for robust path operations
+                abs_fname_path = Path(fname).resolve()
+                abs_root_path = Path(self.root).resolve()
+
+                # Check if the file is within the project root
+                abs_fname_path.relative_to(abs_root_path)
+                
+                # If it is, return the relative path from the repo root
+                return self.repo.get_rel_path(str(abs_fname_path))
+            except ValueError:
+                # If it's not within the project root, return the absolute path
+                return str(Path(fname).resolve())
+
+        # Fallback for when there is no repo
+        if Path(fname).is_absolute():
+            try:
+                return str(Path(fname).relative_to(self.root))
+            except ValueError:
+                return fname  # Return absolute path if not relative to root
+
+        return fname
 
     def get_inchat_relative_files(self):
         files = [self.get_rel_fname(fname) for fname in self.abs_fnames]
