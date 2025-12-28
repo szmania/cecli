@@ -458,7 +458,13 @@ class ToolManager:
                     "Please fix the code in the file. The most likely cause is an incorrect import or class structure. "
                     "Ensure the tool inherits from `aider.tools.utils.base_tool.BaseTool` and has the correct `SCHEMA` and `execute` method structure. "
                     "Since the entire file is in context, you must replace the whole file content. "
-                    "To do this, you MUST use a `SEARCH/REPLACE` block. The `SEARCH` part must contain the entire original file content, and the `REPLACE` part must contain the new, corrected content. "
+                    "To do this, you MUST use a `SEARCH/REPLACE` block with the following exact syntax. Do not wrap it in a code fence.\n\n"
+                    f"{file_path}\n"
+                    "<<<<<<< SEARCH\n"
+                    "<the entire original content of the file>\n"
+                    "=======\n"
+                    "<the entire new content of the file>\n"
+                    ">>>>>>> REPLACE\n\n"
                     "Do not use any other editing method."
                 )
 
@@ -467,7 +473,7 @@ class ToolManager:
                 try:
                     self.coder.is_fixing_tool = True
                     self.coder.args.pretty = False
-                    await self.coder.run(with_message=fix_prompt)
+                    await self.coder.run(with_message=fix_prompt, preproc=False)
                 finally:
                     self.coder.args.pretty = original_pretty
                     self.coder.is_fixing_tool = False
