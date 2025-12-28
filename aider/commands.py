@@ -1386,7 +1386,7 @@ class Commands:
             return
 
         # Let the main loop handle the exit
-        return
+        sys.exit()
 
     async def cmd_quit(self, args):
         "Exit the application"
