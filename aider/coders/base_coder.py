@@ -3566,6 +3566,8 @@ class Coder:
         return all_files - inchat_files - read_only_files - stub_files
 
     def check_for_dirty_commit(self, path):
+        if getattr(self, "is_fixing_tool", False):
+            return
         if not self.repo:
             return
         if not self.dirty_commits:
