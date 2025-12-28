@@ -1373,21 +1373,6 @@ class Commands:
         "Exit the application"
         self.coder.event("exit", reason="/exit")
 
-        # Handle MCP server shutdowns concurrently with timeout to prevent hanging
-        if self.coder.mcp_servers:
-            try:
-                # Create tasks for all server shutdowns
-                shutdown_tasks = [
-                    server.exit_stack.aclose() for server in self.coder.mcp_servers
-                ]
-
-                # Wait for all shutdowns to complete with a 2-second timeout
-                await asyncio.wait_for(asyncio.gather(*shutdown_tasks, return_exceptions=True), timeout=2.0)
-            except asyncio.TimeoutError:
-                self.io.tool_warning("Timeout while closing MCP server connections. Proceeding with exit.")
-            except Exception as e:
-                self.io.tool_warning(f"Error during MCP server shutdown: {e}")
-
         # Check if running in TUI mode - use graceful exit to restore terminal
         if hasattr(self.io, "request_exit"):
             self.io.request_exit()
@@ -1396,7 +1381,7 @@ class Commands:
             return
 
         # Let the main loop handle the exit
-        return
+        raise SystemExit()
 
     async def cmd_quit(self, args):
         "Exit the application"

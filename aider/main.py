@@ -1580,11 +1580,22 @@ async def graceful_exit(coder=None, exit_code=0):
         if hasattr(coder, "_autosave_future"):
             await coder._autosave_future
 
-        for server in coder.mcp_servers:
+        # Handle MCP server shutdowns concurrently with timeout to prevent hanging
+        if coder.mcp_servers:
             try:
-                await server.exit_stack.aclose()
-            except Exception:
-                pass
+                # Create tasks for all server shutdowns
+                shutdown_tasks = [
+                    server.exit_stack.aclose() for server in coder.mcp_servers
+                ]
+
+                # Wait for all shutdowns to complete with a 2-second timeout
+                await asyncio.wait_for(asyncio.gather(*shutdown_tasks, return_exceptions=True), timeout=2.0)
+            except asyncio.TimeoutError:
+                if coder.io:
+                    coder.io.tool_warning("Timeout while closing MCP server connections. Proceeding with exit.")
+            except Exception as e:
+                if coder.io:
+                    coder.io.tool_warning(f"Error during MCP server shutdown: {e}")
 
     # Commenting since this can sometimes case hanging
     # await asyncio.sleep(0.5)
