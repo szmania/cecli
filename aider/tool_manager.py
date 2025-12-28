@@ -14,6 +14,7 @@ class ToolManager:
         self.coder = coder
         self.tools = {}
         self.unloaded_tools = set()
+        self.attempted_installs = set()  # Track package installation attempts
         self.local_tools_python = None
         self.global_tools_python = None
         self._setup_virtual_environments()
@@ -351,72 +352,87 @@ class ToolManager:
                         package_name = match.group(1).split(".")[0]
 
                     if package_name:
-                        res = await self.coder.io.confirm_ask(
-                            f"The tool at '{file_path}' failed to load due to a missing package:"
-                            f" '{package_name}'.\nDo you want to install it in the appropriate"
-                            " virtual environment?"
-                        )
-                        if not res:
-                            msg = (
-                                "Tool loading aborted. Missing package"
-                                f" '{package_name}' was not installed."
-                            )
-                            self.coder.io.tool_warning(msg)
-                            return False, msg
-
-                        # Determine if the tool is local or global
-                        local_tools_dir = self._get_local_tools_dir()
-                        global_tools_dir = self._get_global_tools_dir()
-                        
-                        if local_tools_dir and file_path.startswith(local_tools_dir):
-                            scope = "local"
-                            python_executable = self.local_tools_python
-                        elif global_tools_dir and file_path.startswith(global_tools_dir):
-                            scope = "global"
-                            python_executable = self.global_tools_python
+                        # Check if we've already tried to install this package for this tool
+                        install_key = (file_path, package_name)
+                        if install_key in self.attempted_installs:
+                            # We've already tried installing this package, skip to fix prompt
+                            pass
                         else:
-                            # Fallback to current environment
-                            python_executable = sys.executable
-                            scope = "current"
+                            # Track this installation attempt
+                            self.attempted_installs.add(install_key)
+                            
+                            res = await self.coder.io.confirm_ask(
+                                f"The tool at '{file_path}' failed to load due to a missing package:"
+                                f" '{package_name}'.\nDo you want to install it in the appropriate"
+                                " virtual environment?",
+                                allow_never=True
+                            )
+                            if not res:
+                                msg = (
+                                    "Tool loading aborted. Missing package"
+                                    f" '{package_name}' was not installed."
+                                )
+                                self.coder.io.tool_warning(msg)
+                                # Add to unloaded tools to prevent further attempts
+                                self.unloaded_tools.add(file_path)
+                                return False, msg
 
-                        # Install the package in the appropriate environment
-                        self.coder.io.tool_output(f"Installing '{package_name}' in {scope} environment...")
-                        try:
-                            # Use the correct Python executable for the tool's scope
-                            if scope == "local":
-                                python_exe = self.local_tools_python
-                            elif scope == "global":
-                                python_exe = self.global_tools_python
+                            # Determine if the tool is local or global
+                            local_tools_dir = self._get_local_tools_dir()
+                            global_tools_dir = self._get_global_tools_dir()
+                            
+                            if local_tools_dir and file_path.startswith(local_tools_dir):
+                                scope = "local"
+                                python_executable = self.local_tools_python
+                            elif global_tools_dir and file_path.startswith(global_tools_dir):
+                                scope = "global"
+                                python_executable = self.global_tools_python
                             else:
-                                python_exe = sys.executable  # Fallback
+                                # Fallback to current environment
+                                python_executable = sys.executable
+                                scope = "current"
 
-                            subprocess.check_call(
-                                [python_exe, "-m", "pip", "install", package_name]
-                            )
-                            self.coder.io.tool_output(f"Successfully installed '{package_name}' in {scope} environment.")
-                            self.coder.io.tool_output(f"Retrying to load tool from {file_path}...")
-                            continue  # Retry loading the tool
-                        except subprocess.CalledProcessError as install_error:
-                            error_msg = (
-                                f"Failed to install package '{package_name}' in {scope} environment: {install_error}"
-                            )
-                            self.coder.io.tool_error(error_msg)
-                            # Don't loop, let the user handle it.
-                            return False, error_msg
-                        except FileNotFoundError:
-                            error_msg = (
-                                f"Failed to install package in {scope} environment. `pip` command not found."
-                            )
-                            self.coder.io.tool_error(error_msg)
-                            return False, error_msg
+                            # Install the package in the appropriate environment
+                            self.coder.io.tool_output(f"Installing '{package_name}' in {scope} environment...")
+                            try:
+                                # Use the correct Python executable for the tool's scope
+                                if scope == "local":
+                                    python_exe = self.local_tools_python
+                                elif scope == "global":
+                                    python_exe = self.global_tools_python
+                                else:
+                                    python_exe = sys.executable  # Fallback
+
+                                subprocess.check_call(
+                                    [python_exe, "-m", "pip", "install", package_name]
+                                )
+                                self.coder.io.tool_output(f"Successfully installed '{package_name}' in {scope} environment.")
+                                self.coder.io.tool_output(f"Retrying to load tool from {file_path}...")
+                                continue  # Retry loading the tool
+                            except subprocess.CalledProcessError as install_error:
+                                error_msg = (
+                                    f"Failed to install package '{package_name}' in {scope} environment: {install_error}"
+                                )
+                                self.coder.io.tool_error(error_msg)
+                                # Don't loop, let the user handle it.
+                                return False, error_msg
+                            except FileNotFoundError:
+                                error_msg = (
+                                    f"Failed to install package in {scope} environment. `pip` command not found."
+                                )
+                                self.coder.io.tool_error(error_msg)
+                                return False, error_msg
 
                 msg = f"Failed to load tool from {file_path}: {e}"
                 self.coder.io.tool_error(msg)
 
                 res = await self.coder.io.confirm_ask(
-                    f"The tool at '{file_path}' failed to load. Do you want to try and fix it?"
+                    f"The tool at '{file_path}' failed to load. Do you want to try and fix it?",
+                    allow_never=True
                 )
                 if not res:
+                    # Add to unloaded tools to prevent further attempts
+                    self.unloaded_tools.add(file_path)
                     return False, msg
 
                 self.coder.io.tool_output(f"Attempting to fix the failed tool {file_path}...")
