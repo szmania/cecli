@@ -449,7 +449,7 @@ class ToolManager:
                 self.coder.io.tool_output(f"Attempting to fix the failed tool {file_path}...")
 
                 # Add file to context and make it editable
-                self.coder.add_rel_fname(file_path)
+                await self.coder.commands.cmd_add(f'"{file_path}"', is_tool_file=True)
 
                 # Formulate a prompt for the LLM to fix the file
                 try:
