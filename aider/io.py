@@ -1188,6 +1188,7 @@ class InputOutput:
         allow_never=False,
         allow_tweak=False,
         acknowledge=False,
+        allow_skip_all=False,
     ):
         self.num_user_asks += 1
 
@@ -1208,7 +1209,7 @@ class InputOutput:
             if allow_tweak:
                 valid_responses.append("tweak")
                 options += "/(T)weak"
-            if group or group_response:
+            if group or group_response or allow_skip_all:
                 if not explicit_yes_required or group_response:
                     options += "/(A)ll"
                 options += "/(S)kip all"
@@ -1287,6 +1288,9 @@ class InputOutput:
                     self.tool_error(error_message)
 
             res = res.lower()[0]
+
+            if res == "s" and allow_skip_all:
+                return "skip_all"
 
             if res == "d" and allow_never:
                 self.never_prompts.add(question_id)
