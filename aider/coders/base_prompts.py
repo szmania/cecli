@@ -31,15 +31,14 @@ Any other messages in the chat may contain outdated versions of the files' conte
 
     files_no_full_files = "I am not sharing any files that you can edit yet."
 
-    files_no_full_files_with_repo_map = """Don't try and edit any existing code without asking me to add the files to the chat!
-Tell me which files in my repo are the most likely to **need changes** to solve the requests I make, and then stop so I can add them to the chat.
+    files_no_full_files_with_repo_map = """You have a repository map available. If you need to see the full content of a file to propose changes, just mention the file path in your response. I will then add it to the chat for you.
+Do not ask me to add files, just mention them.
 Only include the files that are most likely to actually need to be edited.
 Don't include files that might contain relevant context, just files that will need to be changed.
 """  # noqa: E501
 
     files_no_full_files_with_repo_map_reply = (
-        "Ok, based on your requests I will suggest which files need to be edited and then"
-        " stop and wait for your approval."
+        "Ok, I will mention any files that need to be edited, and you will add them to the chat for me."
     )
 
     repo_content_prefix = """Here are summaries of some files present in my git repository.
