@@ -15,6 +15,7 @@ class ToolManager:
         self.tools = {}
         self.unloaded_tools = set()
         self.attempted_installs = set()  # Track package installation attempts
+        self.skip_all_installs = False
         self.local_tools_python = None
         self.global_tools_python = None
         self._setup_virtual_environments()
@@ -351,6 +352,12 @@ class ToolManager:
                         package_name = match.group(1).split(".")[0]
 
                     if package_name:
+                        if self.skip_all_installs:
+                            msg = f"Skipping installation of '{package_name}' due to user request."
+                            self.coder.io.tool_warning(msg)
+                            self.unloaded_tools.add(file_path)
+                            return False, msg
+
                         # Check if we've already tried to install this package for this tool
                         install_key = (file_path, package_name)
                         if install_key in self.attempted_installs:
@@ -359,13 +366,18 @@ class ToolManager:
                         else:
                             # Track this installation attempt
                             self.attempted_installs.add(install_key)
-                            
+
                             res = await self.coder.io.confirm_ask(
                                 f"The tool at '{file_path}' failed to load due to a missing package:"
                                 f" '{package_name}'.\nDo you want to install it in the appropriate"
                                 " virtual environment?",
-                                allow_never=True
+                                allow_never=True,
+                                allow_skip_all=True,
                             )
+                            if res == "skip_all":
+                                self.skip_all_installs = True
+                                res = False
+
                             if not res:
                                 msg = (
                                     "Tool loading aborted. Missing package"
