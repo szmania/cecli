@@ -452,24 +452,12 @@ class ToolManager:
                 await self.coder.commands.cmd_add(f'"{file_path}"', is_tool_file=True)
 
                 # Formulate a prompt for the LLM to fix the file
-                try:
-                    # Path to the prompt file
-                    prompt_path = (
-                        Path(__file__).parent / "coders" / "prompts" / "create_tool_prompt.md"
-                    )
-                    with open(prompt_path, "r") as f:
-                        tool_creation_instructions = f.read()
-                except FileNotFoundError:
-                    tool_creation_instructions = (
-                        "Please ensure the tool is a valid Python module with a `Tool` class"
-                        " inheriting from `BaseTool`."
-                    )
-
                 fix_prompt = (
-                    f"{tool_creation_instructions}\n\n"
-                    f"The tool at '{file_path}' failed to load with this error:\n"
+                    f"The tool file `{file_path}` is in the chat context, but it failed to load with the following error:\n"
                     f"```\n{e}\n```\n\n"
-                    f"Please fix the code in `{file_path}` according to the instructions above."
+                    "Please use your file editing tools to fix the code in the file. The most likely cause is an incorrect import or class structure. "
+                    "Ensure the tool inherits from `aider.tools.utils.base_tool.BaseTool` and has the correct `SCHEMA` and `execute` method structure. "
+                    "Since the entire file is in context, you can replace the whole file content if that's easiest."
                 )
 
                 # Temporarily disable pretty output to avoid nested rich.live issues
