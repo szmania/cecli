@@ -1080,6 +1080,16 @@ class Commands:
                         if hasattr(self.coder, "_calculate_context_block_tokens"):
                             self.coder._calculate_context_block_tokens()
 
+        if is_tool_file:
+            # For tool files, we just need to refresh the state of the current coder
+            # without a full recreation, to avoid the file being filtered out again.
+            if hasattr(self.coder, "use_enhanced_context") and self.coder.use_enhanced_context:
+                if hasattr(self.coder, "_calculate_context_block_tokens"):
+                    self.coder._calculate_context_block_tokens()
+            if self.coder.repo_map:
+                self.coder.get_repo_map(force_refresh=True)
+            return
+
         if self.coder.repo_map:
             map_tokens = self.coder.repo_map.max_map_tokens
             map_mul_no_files = self.coder.repo_map.map_mul_no_files
