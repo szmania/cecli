@@ -280,6 +280,8 @@ class ToolManager:
         if file_path in self.unloaded_tools:
             self.unloaded_tools.remove(file_path)
 
+        fix_attempted = False
+
         while True:
             try:
                 module_name = Path(file_path).stem
@@ -340,8 +342,7 @@ class ToolManager:
                         " `Tool` class inheriting from `BaseTool` or `get_tool_definition()` and"
                         " `_execute()` functions."
                     )
-                    self.coder.io.tool_warning(msg)
-                    return False, msg
+                    raise ValueError(msg)
             except Exception as e:
                 # Handle ImportError specifically for missing packages
                 if isinstance(e, ImportError):
@@ -423,6 +424,12 @@ class ToolManager:
                                 self.coder.io.tool_error(error_msg)
                                 return False, error_msg
 
+                if fix_attempted:
+                    msg = f"Tool '{file_path}' still fails to load after a fix attempt. Skipping."
+                    self.coder.io.tool_error(msg)
+                    self.unloaded_tools.add(file_path)
+                    return False, msg
+
                 msg = f"Failed to load tool from {file_path}: {e}"
                 self.coder.io.tool_error(msg)
 
@@ -435,6 +442,7 @@ class ToolManager:
                     self.unloaded_tools.add(file_path)
                     return False, msg
 
+                fix_attempted = True
                 self.coder.io.tool_output(f"Attempting to fix the failed tool {file_path}...")
 
                 # Add file to context and make it editable
