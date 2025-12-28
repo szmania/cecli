@@ -351,7 +351,7 @@ class ToolManager:
                         # get 'requests' from 'requests.exceptions'
                         package_name = match.group(1).split(".")[0]
 
-                    if package_name:
+                    if package_name and package_name != "aider":
                         if self.skip_all_installs:
                             msg = f"Skipping installation of '{package_name}' due to user request."
                             self.coder.io.tool_warning(msg)
@@ -455,9 +455,11 @@ class ToolManager:
                 fix_prompt = (
                     f"The tool file `{file_path}` is in the chat context, but it failed to load with the following error:\n"
                     f"```\n{e}\n```\n\n"
-                    "Please use your file editing tools to fix the code in the file. The most likely cause is an incorrect import or class structure. "
+                    "Please fix the code in the file. The most likely cause is an incorrect import or class structure. "
                     "Ensure the tool inherits from `aider.tools.utils.base_tool.BaseTool` and has the correct `SCHEMA` and `execute` method structure. "
-                    "Since the entire file is in context, you can replace the whole file content if that's easiest."
+                    "Since the entire file is in context, you must replace the whole file content. "
+                    "To do this, you MUST use a `SEARCH/REPLACE` block. The `SEARCH` part must contain the entire original file content, and the `REPLACE` part must contain the new, corrected content. "
+                    "Do not use any other editing method."
                 )
 
                 # Temporarily disable pretty output to avoid nested rich.live issues
