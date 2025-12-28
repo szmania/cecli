@@ -1410,12 +1410,8 @@ class Coder:
                     if not self.suppress_announcements_for_next_prompt:
                         self.show_announcements()
                     self.suppress_announcements_for_next_prompt = True
-
-                    # Stop spinner before showing announcements or getting input
-                    self.io.stop_spinner()
-                    self.copy_context()
-
-                # Check if we should recreate input
+    def get_rel_fname(self, fname):
+        return os.path.relpath(fname, self.root)
                 if not coroutines.is_active(self.io.input_task):
                     self.io.ring_bell()
                     await self.io.recreate_input()
