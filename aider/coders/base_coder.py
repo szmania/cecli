@@ -140,6 +140,7 @@ class Coder:
     compact_context_completed = True
     suppress_announcements_for_next_prompt = False
     tool_reflection = False
+    is_fixing_tool = False
     # Task coordination state variables
     input_running = False
     output_running = False
@@ -2750,11 +2751,19 @@ class Coder:
         self.mcp_tools = tools
 
     def get_tool_list(self):
-        """Get a flattened list of all MCP tools."""
+        """
+        Get a flattened list of all MCP tools.
+        If is_fixing_tool is True, only return local tools.
+        """
         tool_list = []
         if self.mcp_tools:
-            for _, server_tools in self.mcp_tools:
-                tool_list.extend(server_tools)
+            if getattr(self, "is_fixing_tool", False):
+                for server_name, server_tools in self.mcp_tools:
+                    if server_name == "local_tools":
+                        tool_list.extend(server_tools)
+            else:
+                for _, server_tools in self.mcp_tools:
+                    tool_list.extend(server_tools)
         return tool_list
 
     async def reply_completed(self):
