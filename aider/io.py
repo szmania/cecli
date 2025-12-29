@@ -362,6 +362,10 @@ class InputOutput:
         self.output_task = None
         self.linear = False
 
+        # Auto-completer caching
+        self.completer = None
+        self.completer_keys = None
+
         # State tracking for confirmation input
         self.confirmation_in_progress = False
         self.confirmation_acknowledgement = False
@@ -794,19 +798,28 @@ class InputOutput:
         inp = ""
         multiline_input = False
 
-        style = self._get_style()
-
-        completer_instance = ThreadedCompleter(
-            AutoCompleter(
-                root,
-                rel_fnames,
-                addable_rel_fnames,
-                commands,
-                self.encoding,
-                abs_read_only_fnames=(abs_read_only_fnames or set())
-                | (abs_read_only_stubs_fnames or set()),
-            )
+        # Create completer keys for caching
+        all_abs_read_only = (abs_read_only_fnames or set()) | (abs_read_only_stubs_fnames or set())
+        completer_keys = (
+            tuple(sorted(rel_fnames)),
+            tuple(sorted(addable_rel_fnames)),
+            tuple(sorted(list(all_abs_read_only))),
         )
+
+        # Only recreate completer if file context has changed
+        if self.completer is None or self.completer_keys != completer_keys:
+            self.completer_keys = completer_keys
+            self.completer = ThreadedCompleter(
+                AutoCompleter(
+                    root,
+                    rel_fnames,
+                    addable_rel_fnames,
+                    commands,
+                    self.encoding,
+                    abs_read_only_fnames=all_abs_read_only,
+                )
+            )
+        completer_instance = self.completer
 
         def suspend_to_bg(event):
             """Suspend currently running application."""
