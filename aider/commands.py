@@ -1672,9 +1672,6 @@ class Commands:
         kwargs["mcp_servers"] = []  # Empty to skip initialization
 
         coder = await Coder.create(**kwargs)
-        # Transfer MCP state to avoid re-initialization
-        coder.mcp_servers = self.coder.mcp_servers
-        coder.mcp_tools = self.coder.mcp_tools
         # Transfer TUI app weak reference
         coder.tui = self.coder.tui
 
