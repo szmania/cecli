@@ -1715,9 +1715,35 @@ class InputOutput:
                 self.chat_history_file = None  # Disable further attempts to write
 
     def format_files_for_input(self, rel_fnames, rel_read_only_fnames, rel_read_only_stubs_fnames):
+        # Normalize all paths to absolute paths for consistent comparison
+        def normalize_path(path):
+            """Convert path to absolute and resolve symlinks"""
+            if os.path.isabs(path):
+                return os.path.abspath(path)
+            return os.path.abspath(os.path.join(self.root, path))
+        
+        # Create sets of normalized absolute paths for efficient lookup
+        read_only_abs_paths = {normalize_path(f) for f in (rel_read_only_fnames or [])}
+        read_only_stubs_abs_paths = {normalize_path(f) for f in (rel_read_only_stubs_fnames or [])}
+        all_read_only_abs_paths = read_only_abs_paths | read_only_stubs_abs_paths
+        
+        # Create a mapping from normalized absolute paths back to original display names
+        path_mapping = {}
+        for f in (rel_read_only_fnames or []):
+            path_mapping[normalize_path(f)] = f
+        for f in (rel_read_only_stubs_fnames or []):
+            path_mapping[normalize_path(f)] = f"{f} (stub)"
+        
+        # Identify editable files by excluding read-only files using normalized paths
+        editable_files = []
+        for f in sorted(rel_fnames):
+            abs_path = normalize_path(f)
+            if abs_path not in all_read_only_abs_paths:
+                editable_files.append(f)
+        
         # Optimization for large number of files
         total_files = (
-            len(rel_fnames)
+            len(editable_files)
             + len(rel_read_only_fnames or [])
             + len(rel_read_only_stubs_fnames or [])
         )
@@ -1726,7 +1752,7 @@ class InputOutput:
         if total_files > 50:
             read_only_count = len(rel_read_only_fnames or [])
             stub_file_count = len(rel_read_only_stubs_fnames or [])
-            editable_count = len([f for f in rel_fnames if f not in (rel_read_only_fnames or [])])
+            editable_count = len(editable_files)
 
             summary = f"{editable_count} editable file(s)"
             if read_only_count > 0:
@@ -1746,9 +1772,8 @@ class InputOutput:
             for fname in sorted(rel_read_only_stubs_fnames or []):
                 lines.append(f"{fname} (read only stub)")
             # Handle editable files
-            for fname in sorted(rel_fnames):
-                if fname not in rel_read_only_fnames and fname not in rel_read_only_stubs_fnames:
-                    lines.append(fname)
+            for fname in sorted(editable_files):
+                lines.append(fname)
             return "\n".join(lines) + "\n"
 
         output = StringIO()
@@ -1777,11 +1802,6 @@ class InputOutput:
                 console.print(Columns(files_with_label))
 
         # Handle editable files
-        editable_files = [
-            f
-            for f in sorted(rel_fnames)
-            if f not in rel_read_only_fnames and f not in rel_read_only_stubs_fnames
-        ]
         if editable_files:
             files_with_label = editable_files
             if rel_read_only_fnames or rel_read_only_stubs_fnames:
