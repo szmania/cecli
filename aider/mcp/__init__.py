@@ -106,7 +106,7 @@ def _parse_mcp_servers_from_file(file_path, io, verbose=False, mcp_transport="st
     resolved_file_path = _resolve_mcp_config_path(file_path, io, verbose)
 
     try:
-        with open(resolved_file_path, "r") as f:
+        with open(resolved_file_path, "r", encoding="utf-8-sig") as f:
             config = json.load(f)
 
         if verbose:
@@ -132,8 +132,8 @@ def _parse_mcp_servers_from_file(file_path, io, verbose=False, mcp_transport="st
             io.tool_warning(f"No 'mcpServers' key found in MCP config file: {file_path}")
     except FileNotFoundError:
         io.tool_warning(f"MCP config file not found: {file_path}")
-    except json.JSONDecodeError:
-        io.tool_error(f"Invalid JSON in MCP config file: {file_path}")
+    except json.JSONDecodeError as e:
+        io.tool_error(f"Invalid JSON in MCP config file: {file_path}: {e}")
     except Exception as e:
         io.tool_error(f"Error loading MCP config from file: {e}")
 
