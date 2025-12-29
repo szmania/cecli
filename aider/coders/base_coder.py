@@ -3527,17 +3527,17 @@ class Coder:
                 abs_fname_path.relative_to(abs_root_path)
                 
                 # If it is, return the relative path from the repo root
-                return os.path.relpath(fname, self.root)
+                return str(abs_fname_path.relative_to(abs_root_path))
             except ValueError:
                 # If it's not within the project root, return the absolute path
-                return str(Path(fname).resolve())
+                return str(abs_fname_path)
 
         # Fallback for when there is no repo
         if Path(fname).is_absolute():
             try:
                 return str(Path(fname).relative_to(self.root))
             except ValueError:
-                return fname  # Return absolute path if not relative to root
+                return str(Path(fname))  # Return absolute path if not relative to root
 
         return fname
 
@@ -3600,7 +3600,10 @@ class Coder:
         if not self.dirty_commits:
             return
         # Only check dirty status if the file is within the project root
-        if not Path(self.abs_root_path(path)).is_relative_to(self.root):
+        try:
+            Path(self.abs_root_path(path)).relative_to(self.root)
+        except ValueError:
+            # File is not within the project root
             return
         if not self.repo.is_dirty(path):
             return
@@ -3617,9 +3620,11 @@ class Coder:
         full_path = self.abs_root_path(path)
         if self.repo:
             # Only check path_in_repo if the file is within the project root
-            if Path(full_path).is_relative_to(self.root):
+            try:
+                Path(full_path).relative_to(self.root)
                 need_to_add = not self.repo.path_in_repo(path)
-            else:
+            except ValueError:
+                # File is not within the project root
                 need_to_add = False
         else:
             need_to_add = False

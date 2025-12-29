@@ -1015,11 +1015,16 @@ class Commands:
         for matched_file in sorted(all_matched_files):
             abs_file_path = self.coder.abs_root_path(matched_file)
 
-            if not is_tool_file and not abs_file_path.startswith(self.coder.root) and not is_image_file(matched_file):
-                self.io.tool_error(
-                    f"Can not add {abs_file_path}, which is not within {self.coder.root}"
-                )
-                continue
+            if not is_tool_file:
+                try:
+                    Path(abs_file_path).relative_to(self.coder.root)
+                except ValueError:
+                    # File is not within the project root
+                    if not is_image_file(matched_file):
+                        self.io.tool_error(
+                            f"Can not add {abs_file_path}, which is not within {self.coder.root}"
+                        )
+                        continue
 
             if (
                 self.coder.repo
