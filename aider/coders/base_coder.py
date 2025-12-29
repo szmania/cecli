@@ -3260,7 +3260,7 @@ class Coder:
                 self.partial_response_tool_calls = []
                 for i, tool_call in enumerate(response.choices[0].message.tool_calls):
                     # Add provider-specific fields if we collected any for this tool
-                    tool_id = tool_call.id
+                    tool_id = getattr(tool_call, 'id', None)
 
                     # Try ID first
                     if tool_id in provider_specific_fields_by_id:
@@ -3272,10 +3272,21 @@ class Coder:
                         tool_call.provider_specific_fields = provider_specific_fields_by_index[i]
 
                     # Create dictionary version with provider-specific fields
-                    tool_call_dict = tool_call.model_dump()
+                    try:
+                        tool_call_dict = tool_call.model_dump()
+                    except Exception:
+                        # Fallback if model_dump fails
+                        tool_call_dict = {
+                            "id": getattr(tool_call, "id", ""),
+                            "type": getattr(tool_call, "type", "function"),
+                            "function": {
+                                "name": getattr(tool_call.function, "name", ""),
+                                "arguments": getattr(tool_call.function, "arguments", ""),
+                            }
+                        }
 
                     # Add provider-specific fields to the dictionary too (in case model_dump() doesn't include them)
-                    if tool_id in provider_specific_fields_by_id:
+                    if tool_id and tool_id in provider_specific_fields_by_id:
                         tool_call_dict["provider_specific_fields"] = provider_specific_fields_by_id[
                             tool_id
                         ]
