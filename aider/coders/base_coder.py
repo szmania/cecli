@@ -2610,7 +2610,7 @@ class Coder:
                             if not args:
                                 continue
                             new_tool_call = tool_call.model_copy(deep=True)
-                            new_tool_call.function.arguments = json.dumps(args)
+                            new_tool_call.function.arguments = json.dumps(args, ensure_ascii=False)
 
                             call_result = await experimental_mcp_client.call_openai_tool(
                                 session=session,
@@ -2623,12 +2623,18 @@ class Coder:
                                     if hasattr(item, "resource"):  # EmbeddedResource
                                         resource = item.resource
                                         if hasattr(resource, "text"):  # TextResourceContents
-                                            content_parts.append(resource.text)
+                                            # Ensure text content is properly encoded
+                                            try:
+                                                text_content = resource.text
+                                                if isinstance(text_content, str):
+                                                    content_parts.append(text_content)
+                                            except (UnicodeDecodeError, TypeError):
+                                                pass
                                         elif hasattr(resource, "blob"):  # BlobResourceContents
                                             try:
                                                 decoded_blob = base64.b64decode(
                                                     resource.blob
-                                                ).decode("utf-8")
+                                                ).decode("utf-8", errors="replace")
                                                 content_parts.append(decoded_blob)
                                             except (UnicodeDecodeError, TypeError):
                                                 # Handle non-text blobs gracefully
@@ -2641,7 +2647,13 @@ class Coder:
                                                     f" {name} ({mime_type})]"
                                                 )
                                     elif hasattr(item, "text"):  # TextContent
-                                        content_parts.append(item.text)
+                                        # Ensure text content is properly encoded
+                                        try:
+                                            text_content = item.text
+                                            if isinstance(text_content, str):
+                                                content_parts.append(text_content)
+                                        except (UnicodeDecodeError, TypeError):
+                                            pass
 
                             result_text = "".join(content_parts)
                             all_results_content.append(result_text)
