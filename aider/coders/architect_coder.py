@@ -9,18 +9,9 @@ class ArchitectCoder(Coder):
     edit_format = "architect"
     gpt_prompts = ArchitectPrompts()
     auto_accept_architect = False
+    max_tool_calls = 5
 
     async def process_tool_calls(self, tool_call_response):
-        if self.partial_response_tool_calls:
-            self.io.tool_error(
-                "The architect model attempted to use a tool, which is not supported in this mode."
-            )
-            self.io.tool_error("Please rephrase your request to generate a plan without tool use.")
-            # Pop the assistant message that contains the tool call to prevent loops
-            if self.cur_messages and self.cur_messages[-1].get("role") == "assistant":
-                self.cur_messages.pop()
-            return False
-
         return await super().process_tool_calls(tool_call_response)
 
     async def reply_completed(self):
