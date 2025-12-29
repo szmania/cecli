@@ -1311,12 +1311,10 @@ class Coder:
             if self.mcp_servers:
                 for server in self.mcp_servers:
                     await server.disconnect()
-            litellm.shutdown()
             # Clean up MCP servers and litellm to prevent RuntimeError on exit
             if self.mcp_servers:
                 for server in self.mcp_servers:
                     await server.disconnect()
-            litellm.shutdown()
 
     async def _run_parallel(self, with_message=None, preproc=True):
         try:
@@ -2852,7 +2850,7 @@ class Coder:
 
     def event(self, event_name, **kwargs):
         """Handle events from commands or other parts of the system.
-        
+
         This method can be overridden by subclasses to implement event handling.
         """
         # Base implementation does nothing - can be overridden by subclasses
@@ -3535,7 +3533,7 @@ class Coder:
 
                 # Check if the file is within the project root
                 abs_fname_path.relative_to(abs_root_path)
-                
+
                 # If it is, return the relative path from the repo root
                 return str(abs_fname_path.relative_to(abs_root_path))
             except ValueError:
