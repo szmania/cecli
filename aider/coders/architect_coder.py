@@ -11,6 +11,9 @@ class ArchitectCoder(AskCoder):
     gpt_prompts = ArchitectPrompts()
     auto_accept_architect = False
 
+    def get_tool_list(self):
+        return []
+
     async def reply_completed(self):
         content = self.partial_response_content
 
