@@ -438,6 +438,9 @@ class AgentCoder(Coder):
                 if norm_tool_name in self.tool_registry:
                     tool_module = self.tool_registry[norm_tool_name]
                     for params in parsed_args_list:
+                        # Skip empty parameter sets
+                        if not params:
+                            continue
                         # Use the process_response function from the tool module
                         result = tool_module.process_response(self, params)
                         # Handle async functions
@@ -450,6 +453,9 @@ class AgentCoder(Coder):
                     tool_info = self.tool_manager.tools[norm_tool_name]
                     execute_func = tool_info["execute"]
                     for params in parsed_args_list:
+                        # Skip empty parameter sets
+                        if not params:
+                            continue
                         # Pass the coder instance to the execute function
                         if asyncio.iscoroutinefunction(execute_func):
                             tasks.append(execute_func(coder=self, **params))
@@ -470,6 +476,9 @@ class AgentCoder(Coder):
                                 )
                                 if server:
                                     for params in parsed_args_list:
+                                        # Skip empty parameter sets
+                                        if not params:
+                                            continue
                                         tasks.append(
                                             self._execute_mcp_tool(server, norm_tool_name, params)
                                         )
@@ -1460,6 +1469,9 @@ class AgentCoder(Coder):
             if len(json_chunks) >= 1:
                 tool_calls = []
                 for chunk in json_chunks:
+                    # Skip empty chunks
+                    if not chunk.strip():
+                        continue
                     try:
                         json_obj = json.loads(chunk)
                         # Check if this looks like a tool call JSON object

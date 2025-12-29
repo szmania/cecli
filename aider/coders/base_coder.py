@@ -2594,6 +2594,9 @@ class Coder:
 
                         all_results_content = []
                         for args in parsed_args_list:
+                            # Skip empty argument sets
+                            if not args:
+                                continue
                             new_tool_call = tool_call.model_copy(deep=True)
                             new_tool_call.function.arguments = json.dumps(args)
 
