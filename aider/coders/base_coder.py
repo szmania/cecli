@@ -690,8 +690,11 @@ class Coder:
         if key in self.abs_root_path_cache:
             return self.abs_root_path_cache[key]
 
-        res = Path(self.root) / path
-        res = utils.safe_abs_path(res)
+        if Path(path).is_absolute():
+            res = utils.safe_abs_path(path)
+        else:
+            res = Path(self.root) / path
+            res = utils.safe_abs_path(res)
         self.abs_root_path_cache[key] = res
         return res
 
@@ -1410,14 +1413,12 @@ class Coder:
                     if not self.suppress_announcements_for_next_prompt:
                         self.show_announcements()
                     self.suppress_announcements_for_next_prompt = True
-    def get_rel_fname(self, fname):
-        return os.path.relpath(fname, self.root)
+
                 if not coroutines.is_active(self.io.input_task):
                     self.io.ring_bell()
                     await self.io.recreate_input()
 
                 await asyncio.sleep(0.1)  # Small yield to prevent tight loop
-
             except KeyboardInterrupt:
                 self.io.set_placeholder("")
                 self.keyboard_interrupt()
@@ -3515,7 +3516,7 @@ class Coder:
                 abs_fname_path.relative_to(abs_root_path)
                 
                 # If it is, return the relative path from the repo root
-                return self.repo.get_rel_path(str(abs_fname_path))
+                return os.path.relpath(fname, self.root)
             except ValueError:
                 # If it's not within the project root, return the absolute path
                 return str(Path(fname).resolve())
@@ -3587,6 +3588,9 @@ class Coder:
             return
         if not self.dirty_commits:
             return
+        # Only check dirty status if the file is within the project root
+        if not Path(self.abs_root_path(path)).is_relative_to(self.root):
+            return
         if not self.repo.is_dirty(path):
             return
 
@@ -3601,7 +3605,11 @@ class Coder:
     async def allowed_to_edit(self, path):
         full_path = self.abs_root_path(path)
         if self.repo:
-            need_to_add = not self.repo.path_in_repo(path)
+            # Only check path_in_repo if the file is within the project root
+            if Path(full_path).is_relative_to(self.root):
+                need_to_add = not self.repo.path_in_repo(path)
+            else:
+                need_to_add = False
         else:
             need_to_add = False
 

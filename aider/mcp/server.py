@@ -72,6 +72,11 @@ class McpServer:
             try:
                 await self.exit_stack.aclose()
                 self.session = None
+            except RuntimeError as e:
+                if "Attempted to exit cancel scope in a different task" in str(e):
+                    logging.debug(f"Ignored cross-task cancel scope exit error during cleanup of {self.name}")
+                else:
+                    logging.error(f"Runtime error during cleanup of server {self.name}: {e}")
             except Exception as e:
                 logging.error(f"Error during cleanup of server {self.name}: {e}")
 

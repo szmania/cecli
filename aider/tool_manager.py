@@ -16,6 +16,7 @@ class ToolManager:
         self.unloaded_tools = set()
         self.attempted_installs = set()  # Track package installation attempts
         self.skip_all_installs = False
+        self.skip_all_fixes = False
         self.local_tools_python = None
         self.global_tools_python = None
         self._setup_virtual_environments()
@@ -436,11 +437,21 @@ class ToolManager:
 
                 msg = f"Failed to load tool from {file_path}: {e}"
                 self.coder.io.tool_error(msg)
+                if self.skip_all_fixes:
+                    msg = f"Skipping fix for '{file_path}' due to user request."
+                    self.coder.io.tool_warning(msg)
+                    self.unloaded_tools.add(file_path)
+                    return False, msg
 
                 res = await self.coder.io.confirm_ask(
                     f"The tool at '{file_path}' failed to load. Do you want to try and fix it?",
-                    allow_never=True
+                    allow_never=True,
+                    allow_skip_all=True,
                 )
+                if res == "skip_all":
+                    self.skip_all_fixes = True
+                    res = False
+
                 if not res:
                     # Add to unloaded tools to prevent further attempts
                     self.unloaded_tools.add(file_path)
@@ -465,15 +476,17 @@ class ToolManager:
                     "=======\n"
                     "<the entire new content of the file>\n"
                     ">>>>>>> REPLACE\n\n"
-                    "Do not use any other editing method."
+                    "Do not use any other editing method. "
+                    "If you are unable to fix the file, please explain why and do not attempt to use any other tools."
                 )
 
-                # Temporarily disable pretty output to avoid nested rich.live issues
+                # Temporarily disable pretty output and preprocessing to avoid nested rich.live issues and loops
                 original_pretty = self.coder.args.pretty
                 try:
                     self.coder.is_fixing_tool = True
                     self.coder.args.pretty = False
-                    await self.coder.run(with_message=fix_prompt, preproc=False)
+                    # Use run_one with preproc=False to avoid implicit file adds and loops
+                    await self.coder.run_one(user_message=fix_prompt, preproc=False)
                 finally:
                     self.coder.args.pretty = original_pretty
                     self.coder.is_fixing_tool = False
