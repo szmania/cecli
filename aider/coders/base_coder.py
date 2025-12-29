@@ -224,8 +224,18 @@ class Coder:
                 total_tokens_received=from_coder.total_tokens_received,
                 file_watcher=from_coder.file_watcher,
                 mcp_servers=from_coder.mcp_servers,
-                mcp_tools=from_coder.mcp_tools,
             )
+            
+            # Handle MCP tools transfer with special logic for agent mode transitions
+            # If switching FROM agent mode TO any other mode, clear the tools
+            # Otherwise, carry them over as before
+            if from_coder.edit_format == "agent" and edit_format != "agent":
+                # Transitioning away from agent mode - clear tools
+                update["mcp_tools"] = None
+            else:
+                # Not transitioning away from agent mode - keep tools
+                update["mcp_tools"] = from_coder.mcp_tools
+                
             use_kwargs.update(update)  # override to complete the switch
             use_kwargs.update(kwargs)  # override passed kwargs
 
