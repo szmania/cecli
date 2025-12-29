@@ -2,10 +2,10 @@ import asyncio
 
 from ..commands import SwitchCoder
 from .architect_prompts import ArchitectPrompts
-from .base_coder import BaseCoder, Coder
+from .base_coder import Coder
 
 
-class ArchitectCoder(BaseCoder):
+class ArchitectCoder(Coder):
     edit_format = "architect"
     gpt_prompts = ArchitectPrompts()
     auto_accept_architect = False
