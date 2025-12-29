@@ -1934,19 +1934,46 @@ class Commands:
             await self.coder.initialize_mcp_tools()
 
     async def cmd_tools_edit(self, args):
-        "Add a tool's source file to the chat to be edited."
+        "Add a tool's source file to the chat to be edited, by path or description."
         from aider.coders.agent_coder import AgentCoder
 
         if not isinstance(self.coder, AgentCoder):
             self.io.tool_error("This command is only available in agent mode.")
             return
 
-        path = args.strip()
-        if not path:
-            self.io.tool_error("Please provide the path to the tool file to edit.")
+        path_or_query = args.strip()
+        if not path_or_query:
+            self.io.tool_error("Please provide the path or a description of the tool file to edit.")
             return
 
-        await self.cmd_add(path, is_tool_file=True)
+        # Check if the argument is a file path
+        if os.path.exists(path_or_query):
+            await self.cmd_add(path_or_query, is_tool_file=True)
+            return
+
+        # If not a path, treat as a query to find the tool
+        if not self.coder.tool_manager:
+            self.io.tool_error("Tool manager not available to search for tools by description.")
+            return
+
+        # Use fuzzy search to find the tool, only looking for custom tools
+        success, tool_name, message = self.coder.tool_manager.find_tool(
+            path_or_query, search_scope="custom"
+        )
+        if not success:
+            self.io.tool_error(message)
+            return
+
+        self.io.tool_output(message)  # Show the found tool message
+
+        tool_info = self.coder.tool_manager.tools.get(tool_name.lower())
+        if not tool_info or "file_path" not in tool_info:
+            self.io.tool_error(f"Could not find file path for custom tool '{tool_name}'.")
+            return
+
+        file_path = tool_info["file_path"]
+        self.io.tool_output(f"Found tool '{tool_name}' at path '{file_path}'. Adding to chat...")
+        await self.cmd_add(file_path, is_tool_file=True)
 
     async def cmd_tools_rm(self, args):
         "Delete a custom tool by name."
@@ -1980,6 +2007,62 @@ class Commands:
 
         if "Successfully" in result:
             await self.coder.initialize_mcp_tools()
+
+    def completions_tools_move(self):
+        "Return available custom tool names for completion for /tools-move"
+        from aider.coders.agent_coder import AgentCoder
+
+        if not isinstance(self.coder, AgentCoder):
+            return []
+
+        tool_names = []
+
+        # Custom tools only
+        if self.coder.tool_manager:
+            for tool_info in self.coder.tool_manager.tools.values():
+                tool_names.append(tool_info["name"])
+
+        return sorted(list(set(tool_names)))
+
+    def completions_tools_unload(self):
+        "Return available tool names for completion for /tools-unload"
+        from aider.coders.agent_coder import AgentCoder
+
+        if not isinstance(self.coder, AgentCoder):
+            return []
+
+        tool_names = []
+
+        # Standard tools
+        if hasattr(self.coder, "tool_registry"):
+            for tool_class in self.coder.tool_registry.values():
+                schema = tool_class.SCHEMA
+                name = schema.get("function", {}).get("name")
+                if name:
+                    tool_names.append(name)
+
+        # Custom tools
+        if self.coder.tool_manager:
+            for tool_info in self.coder.tool_manager.tools.values():
+                tool_names.append(tool_info["name"])
+
+        return sorted(list(set(tool_names)))
+
+    def completions_tools_edit(self):
+        "Return available custom tool names for completion for /tools-edit"
+        from aider.coders.agent_coder import AgentCoder
+
+        if not isinstance(self.coder, AgentCoder):
+            return []
+
+        tool_names = []
+
+        # Custom tools only
+        if self.coder.tool_manager:
+            for tool_info in self.coder.tool_manager.tools.values():
+                tool_names.append(tool_info["name"])
+
+        return sorted(list(set(tool_names)))
 
     def get_help_md(self):
         "Show help about all commands in markdown"
