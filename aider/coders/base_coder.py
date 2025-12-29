@@ -2590,6 +2590,8 @@ class Coder:
                         if args_string:
                             json_chunks = utils.split_concatenated_json(args_string)
                             for chunk in json_chunks:
+                                if not chunk.strip():
+                                    continue
                                 try:
                                     parsed_args_list.append(json.loads(chunk))
                                 except json.JSONDecodeError:
