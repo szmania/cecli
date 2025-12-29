@@ -9,7 +9,6 @@ class ArchitectCoder(Coder):
     edit_format = "architect"
     gpt_prompts = ArchitectPrompts()
     auto_accept_architect = False
-    max_tool_calls = 5
 
     async def process_tool_calls(self, tool_call_response):
         return await super().process_tool_calls(tool_call_response)
