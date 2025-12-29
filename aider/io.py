@@ -1060,10 +1060,12 @@ class InputOutput:
                 pass
 
     async def stop_task_streams(self):
-        input_task = asyncio.create_task(self.stop_input_task())
-        output_task = asyncio.create_task(self.stop_output_task())
-
-        await asyncio.wait([input_task, output_task], return_when=asyncio.ALL_COMPLETED)
+        try:
+            await self.stop_input_task()
+            await self.stop_output_task()
+        except RuntimeError as e:
+            if "no running event loop" not in str(e):
+                raise
 
     def add_to_input_history(self, inp):
         if not self.input_history_file:
