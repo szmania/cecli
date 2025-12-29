@@ -1386,16 +1386,7 @@ class Commands:
             # Forcefully terminate the worker thread to prevent second prompt
             raise SystemExit()
 
-        # For non-TUI, gracefully stop tasks
-        if hasattr(self.coder, "input_running") and self.coder.input_running:
-            self.coder.input_running = False
-            self.coder.output_running = False
-            if self.coder.io.input_task:
-                self.coder.io.input_task.cancel()
-            if self.coder.io.output_task:
-                self.coder.io.output_task.cancel()
-
-        # Let the main loop handle the exit
+        # For non-TUI, let the main loop handle the exit
         raise SystemExit()
 
     async def cmd_quit(self, args):
