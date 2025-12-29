@@ -1383,7 +1383,8 @@ class Commands:
             self.io.request_exit()
             # Give TUI time to process the exit message
             await asyncio.sleep(0.5)
-            return
+            # Forcefully terminate the worker thread to prevent second prompt
+            raise SystemExit()
 
         # For non-TUI, gracefully stop tasks
         if hasattr(self.coder, "input_running"):
