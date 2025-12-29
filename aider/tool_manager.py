@@ -507,6 +507,27 @@ class ToolManager:
             return True
         return False
 
+    def remove_tool(self, tool_name):
+        norm_tool_name = tool_name.lower()
+        if norm_tool_name not in self.tools:
+            return f"Error: Tool '{tool_name}' not found."
+
+        tool_info = self.tools[norm_tool_name]
+        file_path = tool_info.get("file_path")
+
+        if not file_path or not os.path.exists(file_path):
+            # If there's no file path, we can still unload it
+            self.unload_tool(tool_name)
+            return f"Warning: Tool '{tool_name}' had no associated file to delete, but was unloaded."
+
+        try:
+            os.remove(file_path)
+            # unload_tool also removes the tool from the self.tools dictionary
+            self.unload_tool(tool_name)
+            return f"Successfully deleted tool '{tool_name}' and its file."
+        except Exception as e:
+            return f"Error deleting tool file '{file_path}': {e}"
+
     def list_tools(self):
         return list(self.tools.keys())
 
