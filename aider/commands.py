@@ -1883,7 +1883,7 @@ class Commands:
 
         parts = args.strip().split()
         if len(parts) != 2:
-            self.io.tool_error("Usage: /tools-move <tool_name> <local|global>")
+            self.io.tool_error("Usage: /tools-mv <tool_name> <local|global>")
             return
 
         tool_name_query, scope = parts
