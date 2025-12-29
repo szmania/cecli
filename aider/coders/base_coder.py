@@ -1458,7 +1458,7 @@ class Coder:
                     if self.io.output_task.done():
                         exception = self.io.output_task.exception()
                         if exception:
-                            if isinstance(exception, SwitchCoder):
+                            if isinstance(exception, (SwitchCoder, SystemExit)):
                                 await self.io.output_task
                                 raise exception
 
