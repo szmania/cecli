@@ -912,6 +912,8 @@ class InputOutput:
             if multiline_input:
                 show = self.prompt_prefix
 
+            style = self._get_style()
+
             try:
                 if self.prompt_session:
                     # Use placeholder if set, then clear it
