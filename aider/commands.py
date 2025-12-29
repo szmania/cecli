@@ -1385,6 +1385,16 @@ class Commands:
             await asyncio.sleep(0.5)
             return
 
+        # For non-TUI, gracefully stop tasks
+        if hasattr(self.coder, "input_running"):
+            self.coder.input_running = False
+        if hasattr(self.coder, "output_running"):
+            self.coder.output_running = False
+        if self.coder.io.input_task:
+            self.coder.io.input_task.cancel()
+        if self.coder.io.output_task:
+            self.coder.io.output_task.cancel()
+
         # Let the main loop handle the exit
         raise SystemExit()
 
