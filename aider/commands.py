@@ -1995,8 +1995,8 @@ class Commands:
         if "Successfully" in result:
             await self.coder.initialize_mcp_tools()
 
-    def completions_tools_move(self):
-        "Return available custom tool names for completion for /tools-move"
+    def completions_tools_mv(self):
+        "Return available custom tool names for completion for /tools-mv"
         from aider.coders.agent_coder import AgentCoder
 
         if not isinstance(self.coder, AgentCoder):
