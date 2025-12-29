@@ -8,6 +8,12 @@ def _parse_mcp_servers_from_json_string(json_string, io, verbose=False, mcp_tran
     """Parse MCP servers from a JSON string."""
     servers = []
 
+    # Handle empty or whitespace-only strings
+    if not json_string or not json_string.strip():
+        if verbose:
+            io.tool_output("Empty MCP config string provided, skipping JSON string parsing")
+        return servers
+
     try:
         config = json.loads(json_string)
         if verbose:
@@ -107,7 +113,17 @@ def _parse_mcp_servers_from_file(file_path, io, verbose=False, mcp_transport="st
 
     try:
         with open(resolved_file_path, "r", encoding="utf-8-sig") as f:
-            config = json.load(f)
+            # Read the file content first
+            content = f.read().strip()
+            
+            # Handle empty files
+            if not content:
+                if verbose:
+                    io.tool_output(f"Empty MCP config file: {file_path}, skipping parsing")
+                return servers
+            
+            # Try to parse JSON
+            config = json.loads(content)
 
         if verbose:
             io.tool_output(f"Loading MCP servers from file: {file_path}")
@@ -124,6 +140,8 @@ def _parse_mcp_servers_from_file(file_path, io, verbose=False, mcp_transport="st
                     servers.append(McpServer(server_config))
                 elif transport == "http":
                     servers.append(HttpStreamingServer(server_config))
+                elif transport == "sse":
+                    servers.append(SseServer(server_config))
 
             if verbose:
                 io.tool_output(f"Loaded {len(servers)} MCP servers from {file_path}")

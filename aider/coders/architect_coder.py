@@ -44,6 +44,9 @@ class ArchitectCoder(Coder):
         kwargs["cache_prompts"] = False
         kwargs["num_cache_warming_pings"] = 0
         kwargs["summarize_from_coder"] = False
+        # Remove the empty mcp_servers assignment to preserve context
+        # kwargs["mcp_servers"] = []  # This line was causing loss of MCP context
+        
         editor_coder = await Coder.create(**kwargs)
         # Transfer TUI app weak reference
         editor_coder.tui = self.tui
