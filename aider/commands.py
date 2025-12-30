@@ -1386,8 +1386,15 @@ class Commands:
             # Forcefully terminate the worker thread to prevent second prompt
             raise SystemExit()
 
-        # For non-TUI, let the main loop handle the exit
-        raise SystemExit()
+        # For non-TUI, signal the main loops to stop
+        self.coder.input_running = False
+        self.coder.output_running = False
+
+        # Also cancel the input task to unblock the prompt
+        if self.io.input_task:
+            self.io.input_task.cancel()
+
+        # Don't raise SystemExit, let the loops terminate gracefully.
 
     async def cmd_quit(self, args):
         "Exit the application"
