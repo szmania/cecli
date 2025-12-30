@@ -258,6 +258,15 @@ Aider-CE provides a suite of commands for managing custom tools directly from th
 | `/tools-rm <tool_name>` | Delete a custom tool by name. |
 | `/tools-reload` | Reload all custom tools from both local and global directories. |
 
+### Skill Management Commands
+
+Aider-CE provides commands for managing skills from the chat interface.
+
+| Command | Description |
+| :--- | :--- |
+| `/load-skill <skill_name>` | Load a skill into the current session. |
+| `/remove-skill <skill_name>` | Remove a loaded skill from the current session. |
+
 ### Tool Management Examples
 
 **/tools**
@@ -306,6 +315,32 @@ Aider-CE provides a suite of commands for managing custom tools directly from th
 ### Skills
 
 Agent Mode includes a powerful skills system that allows you to extend the AI's capabilities with custom instructions, reference materials, scripts, and assets. Skills are configured through the `agent-config` parameter in the YAML configuration file.
+
+#### Skills vs. Tools
+
+While both skills and tools extend aider's capabilities, they serve different purposes:
+
+*   **Tools** are executable Python scripts that perform specific actions (e.g., running a command, fetching a URL). They are created with `/tools-create` and have a defined input/output schema.
+*   **Skills** are packages of knowledge and instructions that teach the AI *how* to perform a task. A skill is a directory containing a `SKILL.md` file with instructions, and can also include reference scripts, examples, and other assets. Skills don't execute directly; instead, they are loaded into the AI's context to guide its reasoning.
+
+#### Creating a Skill
+
+You can create a skill manually or ask aider to create one for you.
+
+**Manual Creation:**
+
+1.  **Create a directory** for your skill (e.g., `my_new_skill`). This directory must be inside one of the paths specified in `skills_paths` in your `agent-config`.
+2.  **Create a `SKILL.md` file** inside the skill directory. This file should contain the instructions, guidelines, and reference information for the AI.
+3.  (Optional) Add any other relevant files like scripts, examples, or data files into the skill directory.
+4.  Use the `/load-skill my_new_skill` command to make the skill available to the AI.
+
+**Asking Aider to Create a Skill:**
+
+You can also instruct aider to create a skill for you. For example:
+
+> "Create a new skill called 'django-testing'. It should contain best practices for writing tests for Django models and views. Include examples of using `TestCase` and `RequestFactory`. Place it in the global skills directory."
+
+Aider will then create the necessary directory and `SKILL.md` file.
 
 For complete documentation on creating and using skills, including skill directory structure, SKILL.md format, and best practices, see the [Skills documentation](https://github.com/dwash96/aider-ce/blob/main/aider/website/docs/config/skills.md).
 
