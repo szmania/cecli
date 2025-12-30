@@ -1,13 +1,14 @@
 import os
 import tempfile
 import asyncio
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, patch, AsyncMock
 
 import pytest
 
 from aider.coders.agent_coder import AgentCoder
 from aider.commands import Commands
 from aider.io import InputOutput
+from aider.tool_manager import ToolManager
 
 
 @pytest.fixture
@@ -16,6 +17,7 @@ def mock_coder():
     coder.root = os.getcwd()
     coder.io = MagicMock(spec=InputOutput)
     coder.get_rel_fname.side_effect = lambda x: x
+    coder.tool_manager = MagicMock(spec=ToolManager)
     return coder
 
 
@@ -25,7 +27,10 @@ def commands(mock_coder):
 
 
 def test_tools_list(commands, mock_coder):
-    mock_coder.tool_manager.list_tools.return_value = ["tool1", "tool2"]
+    mock_coder.tool_manager.tools = {
+        "tool1": {"name": "tool1", "definition": {"function": {"description": "desc1"}}},
+        "tool2": {"name": "tool2", "definition": {"function": {"description": "desc2"}}},
+    }
     mock_coder.unloaded_standard_tools = {}
     mock_coder.tool_registry = {
         "tool3": MagicMock(SCHEMA={"function": {"name": "tool3", "description": "desc3"}}),
@@ -34,12 +39,9 @@ def test_tools_list(commands, mock_coder):
 
     with patch.object(commands.io, "tool_output") as mock_output:
         commands.cmd_tools("")
-        
-        # Check that the tool manager's list_tools method was called
-        mock_coder.tool_manager.list_tools.assert_called_once()
 
         # Verify that the output contains the tool names
-        output = "".join(call[0][0] for call in mock_output.call_args_list)
+        output = "".join(call[0][0] for call in mock_output.call_args_list if call[0])
         assert "tool1" in output
         assert "tool2" in output
         assert "tool3" in output
@@ -57,13 +59,16 @@ def test_tools_create(commands, mock_coder):
 
 
 def test_tools_load(commands, mock_coder):
-    with patch.object(mock_coder.tool_manager, "load_tool_async") as mock_load:
+    with patch("os.path.exists", return_value=True), patch.object(
+        mock_coder.tool_manager, "load_tool_async", new_callable=AsyncMock
+    ) as mock_load:
         asyncio.run(commands.cmd_tools_load("my-tool.py"))
         mock_load.assert_called_once_with("my-tool.py")
 
 
 
 def test_tools_unload(commands, mock_coder):
+    mock_coder.tool_manager.find_tool.return_value = (True, "my-tool", "Found tool.")
     with patch.object(mock_coder.tool_manager, "unload_tool") as mock_unload:
         asyncio.run(commands.cmd_tools_unload("my-tool"))
         mock_unload.assert_called_once_with("my-tool")
@@ -71,6 +76,7 @@ def test_tools_unload(commands, mock_coder):
 
 
 def test_tools_mv(commands, mock_coder):
+    mock_coder.tool_manager.find_tool.return_value = (True, "my-tool", "Found tool.")
     with patch.object(mock_coder.tool_manager, "move_tool") as mock_move:
         asyncio.run(commands.cmd_tools_mv("my-tool local"))
         mock_move.assert_called_once_with("my-tool", "local")
@@ -78,13 +84,16 @@ def test_tools_mv(commands, mock_coder):
 
 
 def test_tools_edit(commands, mock_coder):
-    with patch.object(commands, "cmd_add") as mock_add:
+    mock_coder.tool_manager.find_tool.return_value = (True, "my-tool", "Found tool.")
+    mock_coder.tool_manager.tools = {"my-tool": {"file_path": "/path/to/my-tool.py"}}
+    with patch.object(commands, "cmd_add", new_callable=AsyncMock) as mock_add:
         asyncio.run(commands.cmd_tools_edit("my-tool"))
-        mock_add.assert_called_once_with("my-tool", is_tool_file=True)
+        mock_add.assert_called_once_with("/path/to/my-tool.py", is_tool_file=True)
 
 
 
 def test_tools_rm(commands, mock_coder):
+    mock_coder.tool_manager.find_tool.return_value = (True, "my-tool", "Found tool.")
     with patch.object(mock_coder.tool_manager, "remove_tool") as mock_remove:
         asyncio.run(commands.cmd_tools_rm("my-tool"))
         mock_remove.assert_called_once_with("my-tool")
@@ -92,6 +101,11 @@ def test_tools_rm(commands, mock_coder):
 
 
 def test_tools_reload(commands, mock_coder):
-    with patch.object(mock_coder.tool_manager, "reload_all_tools") as mock_reload:
+    mock_coder.tool_manager.tools = {
+        "my-tool": {"name": "my-tool", "file_path": "path/to/my-tool.py"}
+    }
+    mock_coder.tool_manager._get_local_tools_dir.return_value = None
+    mock_coder.tool_manager._get_global_tools_dir.return_value = None
+    with patch("os.path.exists", return_value=True):
         asyncio.run(commands.cmd_tools_reload(""))
-        mock_reload.assert_called_once()
+        mock_coder.tool_manager.unload_tool.assert_called_once_with("my-tool")
