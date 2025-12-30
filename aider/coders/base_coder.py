@@ -225,7 +225,6 @@ class Coder:
                 file_watcher=from_coder.file_watcher,
                 mcp_servers=from_coder.mcp_servers,
                 add_gitignore_files=from_coder.add_gitignore_files,
-                add_gitignore_files=from_coder.add_gitignore_files,
             )
 
             # Handle MCP tools transfer with special logic for agent mode transitions
