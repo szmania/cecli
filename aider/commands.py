@@ -1903,7 +1903,7 @@ class Commands:
         else:
             self.io.tool_error(f"Tool '{tool_name}' not found or not loaded.")
 
-    async def cmd_tools_move(self, args):
+    async def cmd_tools_mv(self, args):
         "Move a tool to a different scope (local or global)."
         from aider.coders.agent_coder import AgentCoder
 
