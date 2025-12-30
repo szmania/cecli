@@ -253,9 +253,10 @@ Aider-CE provides a suite of commands for managing custom tools directly from th
 | `/tools-create [<file_name.py>] <description> [--scope <local\|l\|global\|g>]` | Create a new custom tool from a description. A file name is optional and will be generated if not provided. |
 | `/tools-load <name_or_path>` | Load a tool from a file, glob pattern, or a standard tool by name. |
 | `/tools-unload <name_or_path>` | Unload a standard or custom tool by name or file path. |
-| `/tools-move <tool_name> <local\|global>` | Move a tool to a different scope (local or global). |
+| `/tools-mv <tool_name> <local\|global>` | Move a tool to a different scope (local or global). |
 | `/tools-edit <path>` | Add a tool's source file to the chat to be edited. |
 | `/tools-rm <tool_name>` | Delete a custom tool by name. |
+| `/tools-reload` | Reload all custom tools from both local and global directories. |
 
 ### Tool Management Examples
 
@@ -282,9 +283,14 @@ Aider-CE provides a suite of commands for managing custom tools directly from th
 > /tools-unload standard_tool_name
 ```
 
-**/tools-move**
+**/tools-mv**
 ```
-> /tools-move my_weather_tool local
+> /tools-mv my_weather_tool local
+```
+
+**/tools-reload**
+```
+> /tools-reload
 ```
 
 **/tools-edit**
