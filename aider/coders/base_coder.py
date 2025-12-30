@@ -3876,12 +3876,20 @@ class Coder:
         if not self.repo or not self.auto_commits or self.dry_run:
             return
 
+        # Filter out tool files (located in .aider/tools/) from the commit
+        project_files = []
+        for file_path in edited:
+            if file_path.startswith(".aider/tools/"):
+                self.io.tool_output(f"Skipping commit for tool file: {file_path}")
+            else:
+                project_files.append(file_path)
+
         if not context:
             context = self.get_context_from_history(self.cur_messages)
 
         try:
             res = await self.repo.commit(
-                fnames=edited, context=context, aider_edits=True, coder=self
+                fnames=project_files, context=context, aider_edits=True, coder=self
             )
             if res:
                 self.show_auto_commit_outcome(res)
