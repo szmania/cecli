@@ -51,6 +51,22 @@ from .waiting import Spinner
 NOTIFICATION_MESSAGE = "Aider is waiting for your input"
 
 
+class SafeFileHistory(FileHistory):
+    def store_string(self, string: str) -> None:
+        """
+        Add string to history, replacing invalid unicode characters.
+        """
+        # Save to file.
+        with open(self.filename, "ab") as f:
+
+            def write(t: str) -> None:
+                f.write(t.encode("utf-8", "replace"))
+
+            write("\n# %s\n" % time.time())
+            for line in string.split("\n"):
+                write(f"+{line}\n")
+
+
 def ensure_hash_prefix(color):
     """Ensure hex color values have a # prefix."""
     if not color:
