@@ -1087,7 +1087,7 @@ class InputOutput:
         if not self.input_history_file:
             return
         try:
-            FileHistory(self.input_history_file).append_string(inp)
+            SafeFileHistory(self.input_history_file).append_string(inp)
             # Also add to the in-memory history if it exists
             if self.prompt_session and self.prompt_session.history:
                 self.prompt_session.history.append_string(inp)
