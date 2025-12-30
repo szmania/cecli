@@ -1386,11 +1386,9 @@ class Commands:
             # Forcefully terminate the worker thread to prevent second prompt
             raise SystemExit()
 
-        # For non-TUI, signal the main loops to stop
-        self.coder.input_running = False
-        self.coder.output_running = False
-
-        # Also cancel the input task to unblock the prompt
+        # For non-TUI, just raise SystemExit.
+        # This will be caught by the main_async function which handles cleanup.
+        raise SystemExit()
         if self.io.input_task:
             self.io.input_task.cancel()
 

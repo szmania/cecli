@@ -1324,10 +1324,6 @@ class Coder:
             return
         finally:
             await self.io.stop_task_streams()
-            # Clean up MCP servers and litellm to prevent RuntimeError on exit
-            if self.mcp_servers:
-                for server in self.mcp_servers:
-                    await server.disconnect()
 
     async def _run_parallel(self, with_message=None, preproc=True):
         try:
@@ -1390,10 +1386,6 @@ class Coder:
             return
         finally:
             await self.io.stop_task_streams()
-            # Clean up MCP servers and litellm to prevent RuntimeError on exit
-            if self.mcp_servers:
-                for server in self.mcp_servers:
-                    await server.disconnect()
 
     async def input_task(self, preproc):
         """
