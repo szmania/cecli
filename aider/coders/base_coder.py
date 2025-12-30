@@ -225,7 +225,7 @@ class Coder:
                 file_watcher=from_coder.file_watcher,
                 mcp_servers=from_coder.mcp_servers,
             )
-            
+
             # Handle MCP tools transfer with special logic for agent mode transitions
             # If switching FROM agent mode TO any other mode, clear the tools
             # Otherwise, carry them over as before
@@ -235,7 +235,7 @@ class Coder:
             else:
                 # Not transitioning away from agent mode - keep tools
                 update["mcp_tools"] = from_coder.mcp_tools
-                
+
             use_kwargs.update(update)  # override to complete the switch
             use_kwargs.update(kwargs)  # override passed kwargs
 
@@ -458,7 +458,7 @@ class Coder:
             else:
                 # No repo, use path as-is
                 fname_path = Path(fname)
-                
+
             if self.repo and self.repo.git_ignored_file(fname_path) and not self.add_gitignore_files:
                 self.io.tool_warning(f"Skipping {fname} that matches gitignore spec.")
                 continue
@@ -3652,7 +3652,7 @@ class Coder:
 
     async def allowed_to_edit(self, path):
         full_path = self.abs_root_path(path)
-        
+
         # First check if file is already in chat - if so, allow editing regardless of other checks
         if full_path in self.abs_fnames:
             self.check_for_dirty_commit(path)
@@ -3670,7 +3670,7 @@ class Coder:
             need_to_add = False
 
         if self.repo and self.repo.git_ignored_file(path) and not self.add_gitignore_files:
-            self.io.tool_warning(f"Skipping edits to {path} that matches gitignore spec.")
+            self.io.tool_warning(f"Skipping edits to {path} that matches gitignore spec. add_gitignore_files: {self.add_gitignore_files}")
             return
 
         if not Path(full_path).exists():
