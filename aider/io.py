@@ -1267,16 +1267,7 @@ class InputOutput:
                 while True:
                     try:
                         if self.prompt_session:
-                            await self.recreate_input()
-
-                            if coroutines.is_active(self.input_task):
-                                self.prompt_session.message = question
-                                self.prompt_session.app.invalidate()
-                            else:
-                                await asyncio.sleep(0)
-
-                            res = await self.input_task
-                            await asyncio.sleep(0)
+                            res = await self.prompt_session.prompt_async(question, style=self._get_style())
                         else:
                             res = await asyncio.get_event_loop().run_in_executor(
                                 None, input, question
