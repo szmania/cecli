@@ -3664,13 +3664,13 @@ class Coder:
         else:
             need_to_add = False
 
-        if full_path in self.abs_fnames:
-            self.check_for_dirty_commit(path)
-            return True
-
         if self.repo and self.repo.git_ignored_file(path) and not self.add_gitignore_files:
             self.io.tool_warning(f"Skipping edits to {path} that matches gitignore spec.")
             return
+
+        if full_path in self.abs_fnames:
+            self.check_for_dirty_commit(path)
+            return True
 
         if not Path(full_path).exists():
             if not await self.io.confirm_ask("Create new file?", subject=path):
