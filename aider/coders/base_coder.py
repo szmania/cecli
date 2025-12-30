@@ -3653,6 +3653,12 @@ class Coder:
 
     async def allowed_to_edit(self, path):
         full_path = self.abs_root_path(path)
+        
+        # First check if file is already in chat - if so, allow editing regardless of other checks
+        if full_path in self.abs_fnames:
+            self.check_for_dirty_commit(path)
+            return True
+
         if self.repo:
             # Only check path_in_repo if the file is within the project root
             try:
@@ -3667,10 +3673,6 @@ class Coder:
         if self.repo and self.repo.git_ignored_file(path) and not self.add_gitignore_files:
             self.io.tool_warning(f"Skipping edits to {path} that matches gitignore spec.")
             return
-
-        if full_path in self.abs_fnames:
-            self.check_for_dirty_commit(path)
-            return True
 
         if not Path(full_path).exists():
             if not await self.io.confirm_ask("Create new file?", subject=path):
