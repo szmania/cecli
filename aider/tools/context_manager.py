@@ -54,7 +54,7 @@ class Tool(BaseTool):
     }
 
     @classmethod
-    async def execute(cls, coder, action, count=1, file_paths=None):
+    async def execute(cls, coder, action, count=1, file_paths=None, **kwargs):
         if action == "analyze":
             summary = coder.get_context_summary()
             if not summary:
