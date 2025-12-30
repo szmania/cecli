@@ -1,5 +1,6 @@
 import os
 import tempfile
+import asyncio
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -45,12 +46,14 @@ def test_tools_list(commands, mock_coder):
         assert "tool4" in output
 
 
-        def test_tools_create(commands, mock_coder):
+        
+def test_tools_create(commands, mock_coder):
     with patch("aider.tools.create_tool.Tool.execute") as mock_create:
         asyncio.run(commands.cmd_tools_create("my-tool.py 'a new tool'"))
         mock_create.assert_called_once_with(
             coder=mock_coder, description="a new tool", file_name="my-tool.py", scope="local"
         )
+
 
 
 def test_tools_load(commands, mock_coder):
@@ -59,10 +62,12 @@ def test_tools_load(commands, mock_coder):
         mock_load.assert_called_once_with("my-tool.py")
 
 
+
 def test_tools_unload(commands, mock_coder):
     with patch.object(mock_coder.tool_manager, "unload_tool") as mock_unload:
         asyncio.run(commands.cmd_tools_unload("my-tool"))
         mock_unload.assert_called_once_with("my-tool")
+
 
 
 def test_tools_mv(commands, mock_coder):
@@ -71,16 +76,19 @@ def test_tools_mv(commands, mock_coder):
         mock_move.assert_called_once_with("my-tool", "local")
 
 
+
 def test_tools_edit(commands, mock_coder):
     with patch.object(commands, "cmd_add") as mock_add:
         asyncio.run(commands.cmd_tools_edit("my-tool"))
         mock_add.assert_called_once_with("my-tool", is_tool_file=True)
 
 
+
 def test_tools_rm(commands, mock_coder):
     with patch.object(mock_coder.tool_manager, "remove_tool") as mock_remove:
         asyncio.run(commands.cmd_tools_rm("my-tool"))
         mock_remove.assert_called_once_with("my-tool")
+
 
 
 def test_tools_reload(commands, mock_coder):
