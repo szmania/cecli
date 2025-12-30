@@ -1762,52 +1762,82 @@ class Commands:
             self.io.tool_error("Please provide a tool name or path to load.")
             return
 
-        # Try to load a previously unloaded standard tool
-        norm_name = name_or_path.lower()
+        # First check if it's a file path or glob pattern
+        if os.path.exists(name_or_path) or any(c in name_or_path for c in "*?[]"):
+            # Try to load as a custom tool from path/glob
+            try:
+                if any(c in name_or_path for c in "*?[]"):
+                    paths = glob.glob(name_or_path, recursive=True)
+                else:
+                    paths = [name_or_path] if os.path.exists(name_or_path) else []
+
+                if not paths:
+                    self.io.tool_error(f"No file(s) found for '{name_or_path}'.")
+                    return
+
+                loaded_any = False
+                for path in paths:
+                    if path.endswith(".py") and os.path.isfile(path):
+                        success, msg = await self.coder.tool_manager.load_tool_async(path)
+                        if success:
+                            loaded_any = True
+                        else:
+                            self.io.tool_error(f"Failed to load tool from {path}: {msg}")
+
+                if loaded_any:
+                    await self.coder.initialize_mcp_tools()
+                elif paths:
+                    self.io.tool_error(f"No python tools found for pattern '{name_or_path}'.")
+
+            except Exception as e:
+                self.io.tool_error(f"Error loading tool(s) from '{name_or_path}': {e}")
+            return
+
+        # If not a file path/glob, treat as a tool name and use fuzzy search
+        if not self.coder.tool_manager:
+            self.io.tool_error("Tool manager not available.")
+            return
+
+        # Use fuzzy search to find the tool
+        success, tool_name, message = self.coder.tool_manager.find_tool(name_or_path)
+        if not success:
+            self.io.tool_error(message)
+            return
+
+        self.io.tool_output(message)  # Show the found tool message
+
+        # Try to reload as a custom tool by name
+        norm_name = tool_name.lower()
+        if norm_name in self.coder.tool_manager.tools:
+            tool_info = self.coder.tool_manager.tools[norm_name]
+            file_path = tool_info.get("file_path")
+            if file_path:
+                # Unload and reload the tool
+                self.coder.tool_manager.unload_tool(tool_name)
+                success, msg = await self.coder.tool_manager.load_tool_async(file_path)
+                if success:
+                    self.io.tool_output(f"Reloaded custom tool '{tool_name}'.")
+                    await self.coder.initialize_mcp_tools()
+                else:
+                    self.io.tool_error(f"Failed to reload tool '{tool_name}': {msg}")
+            else:
+                self.io.tool_error(f"Custom tool '{tool_name}' has no file path.")
+            return
+
+        # Try to load as a standard tool
         if hasattr(self.coder, "unloaded_standard_tools") and norm_name in self.coder.unloaded_standard_tools:
             tool_class = self.coder.unloaded_standard_tools.pop(norm_name)
             self.coder.tool_registry[norm_name] = tool_class
-            self.io.tool_output(f"Loaded standard tool '{name_or_path}'.")
+            self.io.tool_output(f"Loaded standard tool '{tool_name}'.")
             await self.coder.initialize_mcp_tools()
             return
 
         # Check if it's already a loaded standard tool
         if hasattr(self.coder, "tool_registry") and norm_name in self.coder.tool_registry:
-            self.io.tool_output(f"Standard tool '{name_or_path}' is already loaded.")
+            self.io.tool_output(f"Standard tool '{tool_name}' is already loaded.")
             return
 
-        # Check if it's already a loaded custom tool
-        if self.coder.tool_manager and name_or_path in self.coder.tool_manager.tools:
-            self.io.tool_output(f"Custom tool '{name_or_path}' is already loaded.")
-            return
-
-        # Try to load as a custom tool from path/glob
-        try:
-            if any(c in name_or_path for c in "*?[]"):
-                paths = glob.glob(name_or_path, recursive=True)
-            else:
-                paths = [name_or_path] if os.path.exists(name_or_path) else []
-
-            if not paths:
-                self.io.tool_error(f"No file(s) found for '{name_or_path}'.")
-                return
-
-            loaded_any = False
-            for path in paths:
-                if path.endswith(".py") and os.path.isfile(path):
-                    success, msg = await self.coder.tool_manager.load_tool_async(path)
-                    if success:
-                        loaded_any = True
-                    else:
-                        self.io.tool_error(f"Failed to load tool from {path}: {msg}")
-
-            if loaded_any:
-                await self.coder.initialize_mcp_tools()
-            elif paths:
-                self.io.tool_error(f"No python tools found for pattern '{name_or_path}'.")
-
-        except Exception as e:
-            self.io.tool_error(f"Error loading tool(s) from '{name_or_path}': {e}")
+        self.io.tool_error(f"Tool '{tool_name}' could not be loaded.")
 
     async def cmd_tools_unload(self, args):
         "Unload a standard or custom tool by name or file path."
@@ -2070,6 +2100,90 @@ class Commands:
 
         res += "\n"
         return res
+
+    async def cmd_tools_reload(self, args):
+        "Reload all custom tools from both local and global directories."
+        from aider.coders.agent_coder import AgentCoder
+
+        if not isinstance(self.coder, AgentCoder):
+            self.io.tool_error("This command is only available in agent mode.")
+            return
+
+        if not self.coder.tool_manager:
+            self.io.tool_error("Tool manager not available.")
+            return
+
+        # Get currently loaded custom tool file paths
+        loaded_custom_tool_paths = []
+        for tool_info in self.coder.tool_manager.tools.values():
+            file_path = tool_info.get("file_path")
+            if file_path:
+                loaded_custom_tool_paths.append(file_path)
+
+        # Discover all tool files in local and global directories
+        tool_directories = []
+        
+        # Local tools directory
+        local_tools_dir = self.coder.tool_manager._get_local_tools_dir()
+        if local_tools_dir:
+            tool_directories.append(local_tools_dir)
+            
+        # Global tools directory
+        global_tools_dir = self.coder.tool_manager._get_global_tools_dir()
+        if global_tools_dir:
+            tool_directories.append(global_tools_dir)
+
+        all_tool_files = set()
+        for directory in tool_directories:
+            if os.path.exists(directory):
+                for file_name in os.listdir(directory):
+                    if file_name.endswith(".py") and not file_name.startswith("_"):
+                        file_path = os.path.join(directory, file_name)
+                        all_tool_files.add(file_path)
+
+        # Add loaded custom tool paths that might not be in the standard directories
+        for path in loaded_custom_tool_paths:
+            if os.path.exists(path):
+                all_tool_files.add(path)
+
+        if not all_tool_files:
+            self.io.tool_output("No tool files found to reload.")
+            return
+
+        # Unload all currently loaded custom tools
+        unloaded_tools = []
+        for tool_name in list(self.coder.tool_manager.tools.keys()):
+            tool_info = self.coder.tool_manager.tools[tool_name]
+            if "file_path" in tool_info:
+                self.coder.tool_manager.unload_tool(tool_info["name"])
+                unloaded_tools.append(tool_info["name"])
+
+        # Load/reload all tool files
+        loaded_count = 0
+        failed_tools = []
+        for file_path in all_tool_files:
+            try:
+                success, msg = await self.coder.tool_manager.load_tool_async(file_path)
+                if success:
+                    loaded_count += 1
+                else:
+                    failed_tools.append((file_path, msg))
+            except Exception as e:
+                failed_tools.append((file_path, str(e)))
+
+        # Initialize MCP tools
+        await self.coder.initialize_mcp_tools()
+
+        # Report results
+        self.io.tool_output(f"Reloaded {loaded_count} tool(s) from {len(all_tool_files)} file(s).")
+        
+        if unloaded_tools:
+            self.io.tool_output(f"Unloaded {len(unloaded_tools)} previously loaded tool(s).")
+            
+        if failed_tools:
+            self.io.tool_error("Failed to load the following tools:")
+            for file_path, error in failed_tools:
+                self.io.tool_error(f"  {file_path}: {error}")
 
     async def cmd_voice(self, args):
         "Record and transcribe voice input"
