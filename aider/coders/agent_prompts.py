@@ -80,6 +80,17 @@ Use these for precision and safety.
     4. As a last resort, if removing files is not enough, use `[tool_call(ContextManager, action='clear_history')]` to clear the chat history. Use this sparingly as it can cause you to lose track of the overall goal.
 </context>
 
+<context name="context_window_management">
+## Context Window Management
+- **Monitor Context**: Pay attention to the `context_summary` block. If context usage exceeds 80% of the model's limit, proactively remove files you are finished with using the `Remove` tool.
+- **Context Limit Errors**: If you receive an error that the context window is exceeded, you MUST use the `ContextManager` tool to resolve it.
+- **`ContextManager` Usage**:
+    1. Start with `[tool_call(ContextManager, action='analyze')]` to understand the current context usage.
+    2. Use `[tool_call(ContextManager, action='remove_largest', count=N)]` to remove the `N` largest files. Start with a small `N` and increase if needed.
+    3. Alternatively, use `[tool_call(ContextManager, action='remove', file_paths=['path/to/file.ext'])]` to remove specific files you no longer need.
+    4. As a last resort, if removing files is not enough, use `[tool_call(ContextManager, action='clear_history')]` to clear the chat history. Use this sparingly as it can cause you to lose track of the overall goal.
+</context>
+
 Always reply to the user in {language}.
 """
 
