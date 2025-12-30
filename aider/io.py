@@ -487,7 +487,7 @@ class InputOutput:
             if self.editingmode == EditingMode.VI:
                 session_kwargs["cursor"] = ModalCursorShapeConfig()
             if self.input_history_file is not None:
-                session_kwargs["history"] = FileHistory(self.input_history_file)
+                session_kwargs["history"] = SafeFileHistory(self.input_history_file)
             try:
                 self.prompt_session = PromptSession(**session_kwargs)
                 self.console = Console()  # pretty console
