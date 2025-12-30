@@ -451,29 +451,36 @@ class Coder:
             self.root = self.repo.root
 
         for fname in fnames:
-            fname = Path(fname)
-            if self.repo and self.repo.git_ignored_file(fname) and not self.add_gitignore_files:
+            # Resolve paths relative to repo root when available, otherwise use current directory
+            if self.repo:
+                # Construct path relative to repository root
+                fname_path = Path(self.root) / fname
+            else:
+                # No repo, use path as-is
+                fname_path = Path(fname)
+                
+            if self.repo and self.repo.git_ignored_file(fname_path) and not self.add_gitignore_files:
                 self.io.tool_warning(f"Skipping {fname} that matches gitignore spec.")
                 continue
 
-            if self.repo and self.repo.ignored_file(fname):
+            if self.repo and self.repo.ignored_file(fname_path):
                 self.io.tool_warning(f"Skipping {fname} that matches aiderignore spec.")
                 continue
 
-            if not fname.exists():
-                if utils.touch_file(fname):
+            if not fname_path.exists():
+                if utils.touch_file(fname_path):
                     self.io.tool_output(f"Creating empty file {fname}")
                 else:
                     self.io.tool_warning(f"Can not create {fname}, skipping.")
                     continue
 
-            if not fname.is_file():
+            if not fname_path.is_file():
                 self.io.tool_warning(f"Skipping {fname} that is not a normal file.")
                 continue
 
-            fname = str(fname.resolve())
+            fname_path = str(fname_path.resolve())
 
-            self.abs_fnames.add(fname)
+            self.abs_fnames.add(fname_path)
             self.check_added_files()
 
         if not self.repo:
