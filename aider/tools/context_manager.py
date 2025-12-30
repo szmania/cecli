@@ -1,3 +1,4 @@
+import math
 import os
 from aider.tools.utils.base_tool import BaseTool
 
@@ -40,6 +41,11 @@ class Tool(BaseTool):
                         "type": "array",
                         "description": "List of file paths to remove. Used with 'remove' action.",
                         "items": {"type": "string"},
+                    },
+                    "keep_percent": {
+                        "type": "integer",
+                        "description": "Percentage of recent messages to keep when clearing history (e.g., 25 keeps the most recent 25% of history)",
+                        "default": 25,
                     },
                 },
                 "required": ["action"],
@@ -117,9 +123,21 @@ class Tool(BaseTool):
             return "\n".join(result)
 
         elif action == "clear_history":
-            num_messages = len(coder.done_messages)
-            coder.done_messages.clear()
-            return f"Cleared {num_messages} messages from chat history."
+            keep_percent = kwargs.get("keep_percent", 25)
+            total_messages = len(coder.done_messages)
+            
+            if total_messages == 0:
+                return "No messages in chat history to clear."
+                
+            # Calculate number of messages to keep (at least 1)
+            messages_to_keep = max(1, math.ceil(total_messages * keep_percent / 100))
+            
+            # Keep only the most recent messages
+            kept_messages = coder.done_messages[-messages_to_keep:]
+            coder.done_messages[:] = kept_messages
+            
+            cleared_count = total_messages - messages_to_keep
+            return f"Cleared {cleared_count} messages from chat history. Kept the most recent {keep_percent}% ({messages_to_keep} out of {total_messages}) messages."
 
         else:
             return "Error: Invalid action specified."
