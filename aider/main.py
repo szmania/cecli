@@ -600,7 +600,15 @@ def custom_tracer(frame, event, arg):
 def main(argv=None, input=None, output=None, force_git_root=None, return_coder=False):
     # Asyncio run workaround for Windows in Python 3.12+. Required from 3.16+
     if sys.platform == "win32":
-        if sys.version_info >= (3, 12) and hasattr(asyncio, "ProactorEventLoop"):
+        # The pydev debugger that ships with some IDEs patches asyncio.run() and breaks
+        # the loop_factory argument.
+        is_pydev_debugger = "pydevd" in sys.modules
+
+        if (
+            sys.version_info >= (3, 12)
+            and hasattr(asyncio, "ProactorEventLoop")
+            and not is_pydev_debugger
+        ):
             return asyncio.run(
                 main_async(argv, input, output, force_git_root, return_coder),
                 loop_factory=asyncio.ProactorEventLoop,
