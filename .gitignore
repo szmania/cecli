@@ -1,2 +1,39 @@
-"ignored.txt" 
+# Ignore everything
+*
+
+# But descend into directories
+!*/
+
+# Recursively allow files under subtree
+!/.github/**
+!/aider/**
+!/benchmark/**
+!/docker/**
+!/requirements/**
+!/scripts/**
+!/tests/**
+
+# Specific Files
+!/.dockerignore
+!/.flake8
+!/.gitattributes
+!/.gitignore
+!/.pre-commit-config.yaml
+!/CHANGELOG.md
+!/CNAME
+!/CONTRIBUTING.metadata
+!/HISTORY.md
+!/LICENSE.txt
+!/MANIFEST.in
+!/pyproject.toml
+!/pytest.ini
+!/README.md
+!/requirements.txt
+
+# Ignore specific files
 .aider*
+aider/__version__.py
+aider/_version.py
+*.pyc
+env/
+.aider.plans.md
