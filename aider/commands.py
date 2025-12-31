@@ -2787,6 +2787,12 @@ class Commands:
         session_manager = sessions.SessionManager(self.coder, self.io)
         session_manager.save_session(args.strip())
 
+    def completions_save_session(self):
+        """Return available session names for completion"""
+        session_manager = sessions.SessionManager(self.coder, self.io)
+        sessions_list = session_manager.list_sessions()
+        return [session_info["name"] for session_info in sessions_list]
+
     def cmd_list_sessions(self, args):
         """List all saved sessions in .aider/sessions/"""
         session_manager = sessions.SessionManager(self.coder, self.io)
