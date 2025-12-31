@@ -2961,7 +2961,7 @@ Just show me the edits I need to make.
                 global_dir = self.coder.tool_manager._get_global_tools_dir()
 
                 scope = "unknown"
-                if local_dir and file_path.startswith(local_dir):
+                if local_dir and isinstance(file_path, str) and file_path.startswith(local_dir):
                     scope = "local"
                 elif global_dir and file_path.startswith(global_dir):
                     scope = "global"
