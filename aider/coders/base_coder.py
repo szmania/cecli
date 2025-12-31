@@ -3878,10 +3878,24 @@ class Coder:
         if not self.repo or not self.auto_commits or self.dry_run:
             return
 
-        # Filter out tool files (located in .aider/tools/) from the commit
+        # Filter out tool files from the commit
         project_files = []
         for file_path in edited:
-            if file_path.startswith(".aider/tools/"):
+            is_tool_file = False
+            if hasattr(self, "tool_manager") and self.tool_manager:
+                local_tools_dir = self.tool_manager._get_local_tools_dir()
+                global_tools_dir = self.tool_manager._get_global_tools_dir()
+
+                abs_file_path = os.path.abspath(file_path)
+
+                if local_tools_dir and abs_file_path.startswith(os.path.abspath(local_tools_dir)):
+                    is_tool_file = True
+                elif global_tools_dir and abs_file_path.startswith(
+                    os.path.abspath(global_tools_dir)
+                ):
+                    is_tool_file = True
+
+            if is_tool_file:
                 self.io.tool_output(f"Skipping commit for tool file: {file_path}")
             else:
                 project_files.append(file_path)
