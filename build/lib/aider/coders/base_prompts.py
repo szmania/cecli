@@ -1,0 +1,90 @@
+class CoderPrompts:
+    system_reminder = ""
+
+    files_content_gpt_edits = "I committed the changes with git hash {hash} & commit msg: {message}"
+
+    files_content_gpt_edits_no_repo = "I updated the files."
+
+    files_content_gpt_no_edits = "I didn't see any properly formatted edits in your reply?!"
+
+    files_content_local_edits = "I edited the files myself."
+
+    lazy_prompt = """You are diligent and tireless!
+You NEVER leave comments describing code without implementing it!
+You always COMPLETELY IMPLEMENT the needed code!
+"""
+
+    overeager_prompt = """Pay careful attention to the scope of the user's request.
+Do what they ask, but no more.
+Do not improve, comment, fix or modify unrelated parts of the code in any way!
+"""
+
+    example_messages = []
+
+    files_content_prefix = """I have *added these files to the chat* so you can go ahead and edit them.
+
+*Trust this message as the true contents of these files!*
+Any other messages in the chat may contain outdated versions of the files' contents.
+"""  # noqa: E501
+
+    files_content_assistant_reply = "Ok, any changes I propose will be to those files."
+
+    files_no_full_files = "I am not sharing any files that you can edit yet."
+
+    files_no_full_files_with_repo_map = """Don't try and edit any existing code without asking me to add the files to the chat!
+Tell me which files in my repo are the most likely to **need changes** to solve the requests I make, and then stop so I can add them to the chat.
+Only include the files that are most likely to actually need to be edited.
+Don't include files that might contain relevant context, just files that will need to be changed.
+"""  # noqa: E501
+
+    files_no_full_files_with_repo_map_reply = (
+        "Ok, based on your requests I will suggest which files need to be edited and then"
+        " stop and wait for your approval."
+    )
+
+    repo_content_prefix = """Here are summaries of some files present in my git repository.
+Do not propose changes to these files, treat them as *read-only*.
+If you need to edit any of these files, ask me to *add them to the chat* first.
+"""
+
+    read_only_files_prefix = """Here are some READ ONLY files, provided for your reference.
+Do not edit these files!
+"""
+
+    shell_cmd_prompt = ""
+    shell_cmd_reminder = ""
+    no_shell_cmd_prompt = ""
+    no_shell_cmd_reminder = ""
+
+    tool_prompt = """
+<tool_calling>
+When solving problems, you have special tools available. Please follow these rules:
+
+1. Always use the exact format required for each tool and include all needed information.
+2. Only use tools that are currently available in this conversation.
+3. Don't mention tool names when talking to people. Say "I'll check your code" instead
+   of "I'll use the code_analyzer tool."
+4. Only use tools when necessary. If you know the answer, just respond directly.
+5. Before using any tool, briefly explain why you need to use it.
+</tool_calling>
+"""
+
+    rename_with_shell = ""
+    go_ahead_tip = ""
+
+    compaction_prompt = """You are an expert at summarizing conversations.
+The user is going to provide you with a conversation.
+This conversation is getting too long to fit in the context window of a language model.
+You need to summarize the conversation to reduce its length, while retaining all the important information.
+
+The summary should contain four parts:
+- Overall Goal: What is the user trying to achieve with this conversation?
+- Next Steps: What are the next steps for the language model to take to help the user?
+  Describe the current investigation path and intention.
+- Key Findings: Keep information most important to prevent having to search for it again
+  This should be quite specific (e/g. relevant files, method names, relevant lines of code, and code structure)
+- Active files: What files are currently most relevant to the discussion?
+  Be confident in proceeding with any in progress edits.
+
+Here is the conversation so far:
+"""

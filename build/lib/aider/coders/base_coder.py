@@ -140,7 +140,6 @@ class Coder:
     compact_context_completed = True
     suppress_announcements_for_next_prompt = False
     tool_reflection = False
-    is_fixing_tool = False
     # Task coordination state variables
     input_running = False
     output_running = False
@@ -224,19 +223,8 @@ class Coder:
                 total_tokens_received=from_coder.total_tokens_received,
                 file_watcher=from_coder.file_watcher,
                 mcp_servers=from_coder.mcp_servers,
-                add_gitignore_files=from_coder.add_gitignore_files,
+                mcp_tools=from_coder.mcp_tools,
             )
-
-            # Handle MCP tools transfer with special logic for agent mode transitions
-            # If switching FROM agent mode TO any other mode, clear the tools
-            # Otherwise, carry them over as before
-            if from_coder.edit_format == "agent" and edit_format != "agent":
-                # Transitioning away from agent mode - clear tools
-                update["mcp_tools"] = None
-            else:
-                # Not transitioning away from agent mode - keep tools
-                update["mcp_tools"] = from_coder.mcp_tools
-
             use_kwargs.update(update)  # override to complete the switch
             use_kwargs.update(kwargs)  # override passed kwargs
 
@@ -452,36 +440,29 @@ class Coder:
             self.root = self.repo.root
 
         for fname in fnames:
-            # Resolve paths relative to repo root when available, otherwise use current directory
-            if self.repo:
-                # Construct path relative to repository root
-                fname_path = Path(self.root) / fname
-            else:
-                # No repo, use path as-is
-                fname_path = Path(fname)
-
-            if self.repo and self.repo.git_ignored_file(fname_path) and not self.add_gitignore_files:
+            fname = Path(fname)
+            if self.repo and self.repo.git_ignored_file(fname) and not self.add_gitignore_files:
                 self.io.tool_warning(f"Skipping {fname} that matches gitignore spec.")
                 continue
 
-            if self.repo and self.repo.ignored_file(fname_path):
+            if self.repo and self.repo.ignored_file(fname):
                 self.io.tool_warning(f"Skipping {fname} that matches aiderignore spec.")
                 continue
 
-            if not fname_path.exists():
-                if utils.touch_file(fname_path):
+            if not fname.exists():
+                if utils.touch_file(fname):
                     self.io.tool_output(f"Creating empty file {fname}")
                 else:
                     self.io.tool_warning(f"Can not create {fname}, skipping.")
                     continue
 
-            if not fname_path.is_file():
+            if not fname.is_file():
                 self.io.tool_warning(f"Skipping {fname} that is not a normal file.")
                 continue
 
-            fname_path = str(fname_path.resolve())
+            fname = str(fname.resolve())
 
-            self.abs_fnames.add(fname_path)
+            self.abs_fnames.add(fname)
             self.check_added_files()
 
         if not self.repo:
@@ -708,11 +689,8 @@ class Coder:
         if key in self.abs_root_path_cache:
             return self.abs_root_path_cache[key]
 
-        if Path(path).is_absolute():
-            res = utils.safe_abs_path(path)
-        else:
-            res = Path(self.root) / path
-            res = utils.safe_abs_path(res)
+        res = Path(self.root) / path
+        res = utils.safe_abs_path(res)
         self.abs_root_path_cache[key] = res
         return res
 
@@ -1432,11 +1410,17 @@ class Coder:
                         self.show_announcements()
                     self.suppress_announcements_for_next_prompt = True
 
+                    # Stop spinner before showing announcements or getting input
+                    self.io.stop_spinner()
+                    self.copy_context()
+
+                # Check if we should recreate input
                 if not coroutines.is_active(self.io.input_task):
                     self.io.ring_bell()
                     await self.io.recreate_input()
 
                 await asyncio.sleep(0.1)  # Small yield to prevent tight loop
+
             except KeyboardInterrupt:
                 self.io.set_placeholder("")
                 self.keyboard_interrupt()
@@ -1476,7 +1460,7 @@ class Coder:
                     if self.io.output_task.done():
                         exception = self.io.output_task.exception()
                         if exception:
-                            if isinstance(exception, (SwitchCoder, SystemExit)):
+                            if isinstance(exception, SwitchCoder):
                                 await self.io.output_task
                                 raise exception
 
@@ -2590,8 +2574,6 @@ class Coder:
                         if args_string:
                             json_chunks = utils.split_concatenated_json(args_string)
                             for chunk in json_chunks:
-                                if not chunk.strip():
-                                    continue
                                 try:
                                     parsed_args_list.append(json.loads(chunk))
                                 except json.JSONDecodeError:
@@ -2606,11 +2588,8 @@ class Coder:
 
                         all_results_content = []
                         for args in parsed_args_list:
-                            # Skip empty argument sets
-                            if not args:
-                                continue
                             new_tool_call = tool_call.model_copy(deep=True)
-                            new_tool_call.function.arguments = json.dumps(args, ensure_ascii=False)
+                            new_tool_call.function.arguments = json.dumps(args)
 
                             call_result = await experimental_mcp_client.call_openai_tool(
                                 session=session,
@@ -2623,18 +2602,12 @@ class Coder:
                                     if hasattr(item, "resource"):  # EmbeddedResource
                                         resource = item.resource
                                         if hasattr(resource, "text"):  # TextResourceContents
-                                            # Ensure text content is properly encoded
-                                            try:
-                                                text_content = resource.text
-                                                if isinstance(text_content, str):
-                                                    content_parts.append(text_content)
-                                            except (UnicodeDecodeError, TypeError):
-                                                pass
+                                            content_parts.append(resource.text)
                                         elif hasattr(resource, "blob"):  # BlobResourceContents
                                             try:
                                                 decoded_blob = base64.b64decode(
                                                     resource.blob
-                                                ).decode("utf-8", errors="replace")
+                                                ).decode("utf-8")
                                                 content_parts.append(decoded_blob)
                                             except (UnicodeDecodeError, TypeError):
                                                 # Handle non-text blobs gracefully
@@ -2647,13 +2620,7 @@ class Coder:
                                                     f" {name} ({mime_type})]"
                                                 )
                                     elif hasattr(item, "text"):  # TextContent
-                                        # Ensure text content is properly encoded
-                                        try:
-                                            text_content = item.text
-                                            if isinstance(text_content, str):
-                                                content_parts.append(text_content)
-                                        except (UnicodeDecodeError, TypeError):
-                                            pass
+                                        content_parts.append(item.text)
 
                             result_text = "".join(content_parts)
                             all_results_content.append(result_text)
@@ -2783,19 +2750,11 @@ class Coder:
         self.mcp_tools = tools
 
     def get_tool_list(self):
-        """
-        Get a flattened list of all MCP tools.
-        If is_fixing_tool is True, only return local tools.
-        """
+        """Get a flattened list of all MCP tools."""
         tool_list = []
         if self.mcp_tools:
-            if getattr(self, "is_fixing_tool", False):
-                for server_name, server_tools in self.mcp_tools:
-                    if server_name == "local_tools":
-                        tool_list.extend(server_tools)
-            else:
-                for _, server_tools in self.mcp_tools:
-                    tool_list.extend(server_tools)
+            for _, server_tools in self.mcp_tools:
+                tool_list.extend(server_tools)
         return tool_list
 
     async def reply_completed(self):
@@ -2877,7 +2836,7 @@ class Coder:
 
     def event(self, event_name, **kwargs):
         """Handle events from commands or other parts of the system.
-
+        
         This method can be overridden by subclasses to implement event handling.
         """
         # Base implementation does nothing - can be overridden by subclasses
@@ -3295,7 +3254,7 @@ class Coder:
                 self.partial_response_tool_calls = []
                 for i, tool_call in enumerate(response.choices[0].message.tool_calls):
                     # Add provider-specific fields if we collected any for this tool
-                    tool_id = getattr(tool_call, 'id', None)
+                    tool_id = tool_call.id
 
                     # Try ID first
                     if tool_id in provider_specific_fields_by_id:
@@ -3307,21 +3266,10 @@ class Coder:
                         tool_call.provider_specific_fields = provider_specific_fields_by_index[i]
 
                     # Create dictionary version with provider-specific fields
-                    try:
-                        tool_call_dict = tool_call.model_dump()
-                    except Exception:
-                        # Fallback if model_dump fails
-                        tool_call_dict = {
-                            "id": getattr(tool_call, "id", ""),
-                            "type": getattr(tool_call, "type", "function"),
-                            "function": {
-                                "name": getattr(tool_call.function, "name", ""),
-                                "arguments": getattr(tool_call.function, "arguments", ""),
-                            }
-                        }
+                    tool_call_dict = tool_call.model_dump()
 
                     # Add provider-specific fields to the dictionary too (in case model_dump() doesn't include them)
-                    if tool_id and tool_id in provider_specific_fields_by_id:
+                    if tool_id in provider_specific_fields_by_id:
                         tool_call_dict["provider_specific_fields"] = provider_specific_fields_by_id[
                             tool_id
                         ]
@@ -3552,29 +3500,10 @@ class Coder:
         return RepoMap.get_file_stub(fname, self.io)
 
     def get_rel_fname(self, fname):
-        if self.repo:
-            try:
-                # Use pathlib.Path for robust path operations
-                abs_fname_path = Path(fname).resolve()
-                abs_root_path = Path(self.root).resolve()
-
-                # Check if the file is within the project root
-                abs_fname_path.relative_to(abs_root_path)
-
-                # If it is, return the relative path from the repo root
-                return str(abs_fname_path.relative_to(abs_root_path))
-            except ValueError:
-                # If it's not within the project root, return the absolute path
-                return str(abs_fname_path)
-
-        # Fallback for when there is no repo
-        if Path(fname).is_absolute():
-            try:
-                return str(Path(fname).relative_to(self.root))
-            except ValueError:
-                return str(Path(fname))  # Return absolute path if not relative to root
-
-        return fname
+        try:
+            return os.path.relpath(fname, self.root)
+        except ValueError:
+            return fname
 
     def get_inchat_relative_files(self):
         files = [self.get_rel_fname(fname) for fname in self.abs_fnames]
@@ -3628,17 +3557,9 @@ class Coder:
         return all_files - inchat_files - read_only_files - stub_files
 
     def check_for_dirty_commit(self, path):
-        if getattr(self, "is_fixing_tool", False):
-            return
         if not self.repo:
             return
         if not self.dirty_commits:
-            return
-        # Only check dirty status if the file is within the project root
-        try:
-            Path(self.abs_root_path(path)).relative_to(self.root)
-        except ValueError:
-            # File is not within the project root
             return
         if not self.repo.is_dirty(path):
             return
@@ -3653,24 +3574,16 @@ class Coder:
 
     async def allowed_to_edit(self, path):
         full_path = self.abs_root_path(path)
+        if self.repo:
+            need_to_add = not self.repo.path_in_repo(path)
+        else:
+            need_to_add = False
 
-        # First check if file is already in chat - if so, allow editing regardless of other checks
         if full_path in self.abs_fnames:
             self.check_for_dirty_commit(path)
             return True
 
-        if self.repo:
-            # Only check path_in_repo if the file is within the project root
-            try:
-                Path(full_path).relative_to(self.root)
-                need_to_add = not self.repo.path_in_repo(path)
-            except ValueError:
-                # File is not within the project root
-                need_to_add = False
-        else:
-            need_to_add = False
-
-        if self.repo and self.repo.git_ignored_file(path) and not self.add_gitignore_files:
+        if self.repo and self.repo.git_ignored_file(path):
             self.io.tool_warning(f"Skipping edits to {path} that matches gitignore spec.")
             return
 
@@ -3687,7 +3600,7 @@ class Coder:
                 # Seems unlikely that we needed to create the file, but it was
                 # actually already part of the repo.
                 # But let's only add if we need to, just to be safe.
-                if need_to_add and not self.repo.git_ignored_file(path):
+                if need_to_add:
                     self.repo.repo.git.add(full_path)
 
             self.abs_fnames.add(full_path)
@@ -3695,13 +3608,13 @@ class Coder:
             return True
 
         if not await self.io.confirm_ask(
-            f"Allow edits to file that has not been added to the chat? ({full_path}) - [{self.abs_fnames}]",
+            "Allow edits to file that has not been added to the chat?",
             subject=path,
         ):
             self.io.tool_output(f"Skipping edits to {path}")
             return
 
-        if need_to_add and not self.repo.git_ignored_file(path):
+        if need_to_add:
             self.repo.repo.git.add(full_path)
 
         self.abs_fnames.add(full_path)
@@ -3878,37 +3791,12 @@ class Coder:
         if not self.repo or not self.auto_commits or self.dry_run:
             return
 
-        # Filter out tool files from the commit
-        project_files = []
-        for file_path in edited:
-            is_tool_file = False
-            if hasattr(self, "tool_manager") and self.tool_manager:
-                local_tools_dir = self.tool_manager._get_local_tools_dir()
-                global_tools_dir = self.tool_manager._get_global_tools_dir()
-
-                abs_file_path = os.path.abspath(file_path)
-
-                if local_tools_dir and abs_file_path.startswith(os.path.abspath(local_tools_dir)):
-                    is_tool_file = True
-                elif global_tools_dir and abs_file_path.startswith(
-                    os.path.abspath(global_tools_dir)
-                ):
-                    is_tool_file = True
-
-            if is_tool_file:
-                self.io.tool_output(f"Skipping commit for tool file: {file_path}")
-            elif self.repo and self.repo.git_ignored_file(file_path):
-                self.io.tool_output(f"Skipping commit for gitignored file: {file_path}")
-                continue
-            else:
-                project_files.append(file_path)
-
         if not context:
             context = self.get_context_from_history(self.cur_messages)
 
         try:
             res = await self.repo.commit(
-                fnames=project_files, context=context, aider_edits=True, coder=self
+                fnames=edited, context=context, aider_edits=True, coder=self
             )
             if res:
                 self.show_auto_commit_outcome(res)

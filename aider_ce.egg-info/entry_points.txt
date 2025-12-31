@@ -1,0 +1,4 @@
+[console_scripts]
+aider-ce = aider.main:main
+ce.cli = aider.main:main
+cecli = aider.main:main

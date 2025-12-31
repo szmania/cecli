@@ -1,0 +1,112 @@
+/*
+ * Aider CE TUI Styles
+ *
+ * Uses Textual theme variables for consistent theming.
+ * Theme defined in app.py (AIDER_THEME).
+ */
+
+* {
+    background: $background;
+    scrollbar-background: $surface;
+    scrollbar-background-hover: $surface;
+    scrollbar-background-active: $surface;
+    scrollbar-color: $secondary;
+    scrollbar-color-hover: $accent;  
+    scrollbar-color-active: $accent;     
+}
+
+Screen {
+    background: $background;
+    layout: vertical;
+    padding: 0;
+    margin: 0;
+    border: none;    
+}
+
+/* Output area */
+#output {
+    height: 1fr;
+    width: 100%;
+    background: $surface;
+    padding: 0 0 0 1;
+    margin: 0;
+    scrollbar-size: 1 1;
+}
+
+/* Input area - floating card style */
+#input-container {
+    height: auto;
+    max-height: 33%;
+    min-height: 0;
+    padding: 0 0 0 1;
+    margin: 0 1 0 1;
+    border: round $accent 50%;
+    background: $surface;
+}
+
+#input {
+    max-height: 1fr;
+    height: auto;
+    min-height: 3;
+    background: $surface;
+    border: none;
+    padding: 0 0 0 0;
+    margin: 0 2 0 0;
+    scrollbar-size: 1 1;
+}
+
+#input:focus {
+    background: $surface;
+}
+
+/* Generic Input and TextArea styling */
+Input, TextArea {
+    background: $surface;
+    border: none;
+}
+
+Input:focus, TextArea:focus {
+    border: none;
+    background: $surface;
+}
+
+Input > .input--placeholder, TextArea > .text-area--placeholder  {
+    color: $secondary;
+    background: $surface;
+}
+
+/* File List below input */
+#file-list {
+    padding: 0 0 0 0;
+    margin: 0;
+    background: $surface;
+    color: $secondary;
+    height: auto;
+    min-height: 0;
+    dock: bottom
+}
+
+#file-list.empty {
+    height: 0;
+    margin: 0;
+    padding: 0;    
+    display: none;
+}
+
+/* Key hints below input */
+#key-hints {
+    height: 1;
+    width: 100%;
+    text-align: right;
+    color: $secondary;
+    padding: 0 2 0 0;
+    margin: 0 0 1 0;
+}
+/* Footer - same background as everything else */
+#footer {
+    height: 1;
+    width: 100%;
+    background: $surface;
+    color: $accent;
+    padding: 0 1;
+}
