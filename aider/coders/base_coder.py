@@ -3671,7 +3671,7 @@ class Coder:
             need_to_add = False
 
         if self.repo and self.repo.git_ignored_file(path) and not self.add_gitignore_files:
-            self.io.tool_warning(f"Skipping edits to {path} that matches gitignore spec. add_gitignore_files: {self.add_gitignore_files}")
+            self.io.tool_warning(f"Skipping edits to {path} that matches gitignore spec.")
             return
 
         if not Path(full_path).exists():
