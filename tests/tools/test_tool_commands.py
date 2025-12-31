@@ -18,6 +18,8 @@ def mock_coder():
     coder.io = MagicMock(spec=InputOutput)
     coder.get_rel_fname.side_effect = lambda x: x
     coder.tool_manager = MagicMock(spec=ToolManager)
+    coder.tool_manager.tools = {}
+    coder.tool_registry = {}
     return coder
 
 
@@ -28,9 +30,18 @@ def commands(mock_coder):
 
 def test_tools_list(commands, mock_coder):
     mock_coder.tool_manager.tools = {
-        "tool1": {"name": "tool1", "definition": {"function": {"description": "desc1"}}},
-        "tool2": {"name": "tool2", "definition": {"function": {"description": "desc2"}}},
+        "tool1": {
+            "name": "tool1",
+            "definition": {"function": {"description": "desc1"}},
+            "file_path": "path/to/tool1.py",
+        },
+        "tool2": {
+            "name": "tool2",
+            "definition": {"function": {"description": "desc2"}},
+            "file_path": "path/to/tool2.py",
+        },
     }
+    mock_coder.tool_manager._get_local_tools_dir.return_value = "path/to"
     mock_coder.unloaded_standard_tools = {}
     mock_coder.tool_registry = {
         "tool3": MagicMock(SCHEMA={"function": {"name": "tool3", "description": "desc3"}}),
@@ -59,11 +70,10 @@ def test_tools_create(commands, mock_coder):
 
 
 def test_tools_load(commands, mock_coder):
-    with patch("os.path.exists", return_value=True), patch.object(
-        mock_coder.tool_manager, "load_tool_async", new_callable=AsyncMock
-    ) as mock_load:
-        asyncio.run(commands.cmd_tools_load("my-tool.py"))
-        mock_load.assert_called_once_with("my-tool.py")
+    mock_coder.tool_manager.find_tool.return_value = (True, "my-tool", "Found tool.")
+    mock_coder.unloaded_standard_tools = {"my-tool": MagicMock()}
+    asyncio.run(commands.cmd_tools_load("my-tool"))
+    assert "my-tool" in mock_coder.tool_registry
 
 
 
@@ -77,6 +87,7 @@ def test_tools_unload(commands, mock_coder):
 
 def test_tools_mv(commands, mock_coder):
     mock_coder.tool_manager.find_tool.return_value = (True, "my-tool", "Found tool.")
+    mock_coder.tool_manager.tools = {"my-tool": {"file_path": "/path/to/my-tool.py"}}
     with patch.object(mock_coder.tool_manager, "move_tool") as mock_move:
         asyncio.run(commands.cmd_tools_mv("my-tool local"))
         mock_move.assert_called_once_with("my-tool", "local")

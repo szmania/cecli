@@ -278,12 +278,13 @@ class Tool(BaseTool):
                                 f"You may need to install them manually from '{requirements_path}'."
                             )
                         else:
-                            install_command = (
-                                f'"{python_executable}" -m pip install -r "{requirements_path}"'
-                            )
-                            coder.io.tool_output(f"Running: {install_command}")
+                            exit_code = 1
+                        install_command = (
+                            f'"{python_executable}" -m pip install -r "{requirements_path}"'
+                        )
+                        coder.io.tool_output(f"Running: {install_command}")
 
-                            exit_code, output = await asyncio.to_thread(run_cmd, install_command)
+                        exit_code, output = await asyncio.to_thread(run_cmd, install_command)
 
                         if exit_code == 0:
                             coder.io.tool_output("Dependencies installed successfully.")

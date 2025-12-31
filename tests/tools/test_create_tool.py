@@ -132,7 +132,7 @@ async def test_create_tool_with_dependencies(mock_coder):
     mock_coder.tool_manager.local_tools_python = "/fake/python"
 
     with patch("aider.tools.create_tool.litellm.acompletion", new_callable=AsyncMock) as mock_acompletion, \
-         patch("os.path.exists", side_effect=[False, True]), \
+         patch("os.path.exists", side_effect=lambda path: "requirements.txt" in path), \
          patch("os.makedirs"), \
          patch("builtins.open", new_callable=MagicMock), \
          patch("asyncio.to_thread", new_callable=AsyncMock, return_value=(0, "installed")):
