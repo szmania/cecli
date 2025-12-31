@@ -1662,8 +1662,21 @@ class Commands:
             return self.cmd_chat_mode(edit_format)
 
         from aider.coders.base_coder import Coder
+        import shlex
+        import argparse
 
-        user_msg = args
+        # Create a mini-parser for coder-specific flags
+        coder_parser = argparse.ArgumentParser(add_help=False, allow_abbrev=False)
+        coder_parser.add_argument("--add-gitignore-files", action="store_true")
+
+        # Split args into flags and the rest of the message
+        try:
+            shlex_args = shlex.split(args)
+        except ValueError:
+            shlex_args = args.split()  # fallback for unclosed quotes
+
+        parsed_args, remaining_args = coder_parser.parse_known_args(shlex_args)
+        user_msg = " ".join(remaining_args)
 
         original_main_model = self.coder.main_model
         original_edit_format = self.coder.edit_format
@@ -1676,6 +1689,9 @@ class Commands:
             "aider_commit_hashes": self.coder.aider_commit_hashes,
             "args": self.coder.args,
         }
+
+        if parsed_args.add_gitignore_files:
+            kwargs["add_gitignore_files"] = True
 
         kwargs["mcp_servers"] = []  # Empty to skip initialization
 
