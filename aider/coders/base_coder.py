@@ -3897,6 +3897,9 @@ class Coder:
 
             if is_tool_file:
                 self.io.tool_output(f"Skipping commit for tool file: {file_path}")
+            elif self.repo and self.repo.git_ignored_file(file_path):
+                self.io.tool_output(f"Skipping commit for gitignored file: {file_path}")
+                continue
             else:
                 project_files.append(file_path)
 
