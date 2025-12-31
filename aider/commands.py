@@ -119,7 +119,17 @@ class Commands:
 
         if len(arg_split) > 1:
             # implement architect coder-like generation call for model
-            message = arg_split[1].strip()
+            import shlex
+            import argparse
+
+            coder_parser = argparse.ArgumentParser(add_help=False, allow_abbrev=False)
+            coder_parser.add_argument("--add-gitignore-files", action="store_true")
+            try:
+                shlex_args = shlex.split(arg_split[1])
+            except ValueError:
+                shlex_args = arg_split[1].split()
+            parsed_args, remaining_args = coder_parser.parse_known_args(shlex_args)
+            message = " ".join(remaining_args)
 
             # Store the original model configuration
             original_main_model = self.coder.main_model
@@ -135,6 +145,9 @@ class Commands:
             kwargs["total_cost"] = self.coder.total_cost
             kwargs["num_cache_warming_pings"] = 0
             kwargs["summarize_from_coder"] = False
+
+            if parsed_args.add_gitignore_files:
+                kwargs["add_gitignore_files"] = True
 
             new_kwargs = dict(io=self.io, from_coder=self.coder)
             new_kwargs.update(kwargs)
