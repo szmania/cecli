@@ -1401,11 +1401,9 @@ class Commands:
 
         # For non-TUI, just raise SystemExit.
         # This will be caught by the main_async function which handles cleanup.
-        raise SystemExit()
         if self.io.input_task:
             self.io.input_task.cancel()
-
-        # Don't raise SystemExit, let the loops terminate gracefully.
+        raise SystemExit()
 
     async def cmd_quit(self, args):
         "Exit the application"
