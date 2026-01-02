@@ -310,7 +310,15 @@ class ToolManager:
                             "execute": tool_class.execute,
                             "file_path": file_path,
                         }
-                        msg = f"Loaded class-based tool '{tool_name}' from {file_path}"
+                                                local_tools_dir = self._get_local_tools_dir()
+                        global_tools_dir = self._get_global_tools_dir()
+                        scope = "custom tool"
+                        if local_tools_dir and file_path.startswith(local_tools_dir):
+                            scope = "custom tool (local)"
+                        elif global_tools_dir and file_path.startswith(global_tools_dir):
+                            scope = "custom tool (global)"
+
+                        msg = f"Loaded {scope} '{tool_name}' from {file_path}"
                         self.coder.io.tool_output(msg)
                         return True, msg
                     else:
@@ -329,7 +337,15 @@ class ToolManager:
                             "execute": module._execute,
                             "file_path": file_path,
                         }
-                        msg = f"Loaded tool '{tool_name}' from {file_path}"
+                                                local_tools_dir = self._get_local_tools_dir()
+                        global_tools_dir = self._get_global_tools_dir()
+                        scope = "custom tool"
+                        if local_tools_dir and file_path.startswith(local_tools_dir):
+                            scope = "custom tool (local)"
+                        elif global_tools_dir and file_path.startswith(global_tools_dir):
+                            scope = "custom tool (global)"
+
+                        msg = f"Loaded {scope} '{tool_name}' from {file_path}"
                         self.coder.io.tool_output(msg)
                         return True, msg
                     else:
