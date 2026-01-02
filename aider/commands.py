@@ -1403,6 +1403,7 @@ class Commands:
         # This will be caught by the main_async function which handles cleanup.
         if self.io.input_task:
             self.io.input_task.cancel()
+            await asyncio.sleep(0)  # Allow the cancellation to propagate
         raise SystemExit()
 
     async def cmd_quit(self, args):

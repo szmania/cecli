@@ -1048,14 +1048,7 @@ class InputOutput:
             try:
                 input_task.cancel()
                 await input_task
-            except (
-                asyncio.CancelledError,
-                Exception,
-                EOFError,
-                IndexError,
-                RuntimeError,
-                SystemExit,
-            ):
+            except (asyncio.CancelledError, EOFError, RuntimeError):
                 pass
 
     async def stop_output_task(self):
