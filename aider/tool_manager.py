@@ -26,11 +26,11 @@ class ToolManager:
     def find_tool(self, tool_name_query, search_scope='all'):
         """
         Find a tool by fuzzy matching the tool name query.
-        
+
         Args:
             tool_name_query (str): The user's tool name query
             search_scope (str): Scope to search - 'all', 'custom', or 'standard'
-            
+
         Returns:
             tuple: (success: bool, tool_name: str, message: str)
                    - If success is True, tool_name contains the matched tool name
@@ -38,15 +38,15 @@ class ToolManager:
         """
         if not tool_name_query:
             return False, None, "No tool name provided."
-            
+
         # Get available tool names based on scope
         all_tool_names = set()
-        
+
         # Add custom tool names if in scope
         if search_scope in ['all', 'custom']:
             for tool_info in self.tools.values():
                 all_tool_names.add(tool_info["name"])
-            
+
         # Add standard tool names if in scope
         if search_scope in ['all', 'standard']:
             if hasattr(self.coder, 'tool_registry'):
@@ -55,7 +55,7 @@ class ToolManager:
                     name = schema.get("function", {}).get("name")
                     if name:
                         all_tool_names.add(name)
-                        
+
             # Add unloaded standard tools if available
             if hasattr(self.coder, 'unloaded_standard_tools'):
                 for tool_class in self.coder.unloaded_standard_tools.values():
@@ -63,7 +63,7 @@ class ToolManager:
                     name = schema.get("function", {}).get("name")
                     if name:
                         all_tool_names.add(name)
-        
+
         if not all_tool_names:
             scope_msg = ""
             if search_scope == 'custom':
@@ -71,21 +71,21 @@ class ToolManager:
             elif search_scope == 'standard':
                 scope_msg = " No standard tools available."
             return False, None, "No tools available." + scope_msg
-            
+
         # Normalize the query and tool names for comparison
         def normalize_name(name):
             # Split CamelCase and snake_case
             name = re.sub('([a-z0-9])([A-Z])', r'\1 \2', name)
             name = name.replace('_', ' ')
             return name.lower().split()
-            
+
         query_words = normalize_name(tool_name_query)
-        
+
         # Calculate similarity scores
         matches = []
         for tool_name in all_tool_names:
             tool_words = normalize_name(tool_name)
-            
+
             # Calculate word-level similarity
             score = 0
             for q_word in query_words:
@@ -96,32 +96,32 @@ class ToolManager:
                     if similarity > best_match:
                         best_match = similarity
                 score += best_match
-                
+
             # Normalize score by number of query words
             if query_words:
                 score /= len(query_words)
-                
+
             # Bonus for exact word matches
             query_set = set(query_words)
             tool_set = set(tool_words)
             common_words = query_set.intersection(tool_set)
             score += len(common_words) * 0.1
-            
+
             matches.append((tool_name, score))
-            
+
         # Sort by score (highest first)
         matches.sort(key=lambda x: x[1], reverse=True)
-        
+
         # Filter out low-scoring matches
         good_matches = [match for match in matches if match[1] > 0.3]
-        
+
         if not good_matches:
             return False, None, f"No tool found matching '{tool_name_query}'. Available tools: {', '.join(sorted(all_tool_names)[:10])}..."
-            
+
         # Check for a confident match
         best_match, best_score = good_matches[0]
         confidence_threshold = 0.7
-        
+
         if best_score >= confidence_threshold:
             # Check if there are other close matches that might cause ambiguity
             close_matches = [match for match in good_matches[:3] if match[1] >= best_score * 0.8]
@@ -173,7 +173,7 @@ class ToolManager:
             return None
 
         venv_path = os.path.join(tools_dir, "venv")
-        
+
         # Create virtual environment if it doesn't exist
         if not os.path.exists(venv_path):
             self.coder.io.tool_output(f"Creating isolated environment for {scope} tools...")
@@ -188,7 +188,7 @@ class ToolManager:
             python_executable = os.path.join(venv_path, "Scripts", "python.exe")
         else:
             python_executable = os.path.join(venv_path, "bin", "python")
-            
+
         # Add the site-packages directory to sys.path
         if sys.platform == "win32":
             site_packages = os.path.join(venv_path, "Lib", "site-packages")
@@ -196,10 +196,10 @@ class ToolManager:
             # For Unix-like systems, we need to account for Python version
             python_version = f"python{sys.version_info.major}.{sys.version_info.minor}"
             site_packages = os.path.join(venv_path, "lib", python_version, "site-packages")
-            
+
         if site_packages not in sys.path:
             sys.path.insert(0, site_packages)
-            
+
         return python_executable
 
     def _setup_virtual_environments(self):
@@ -310,7 +310,7 @@ class ToolManager:
                             "execute": tool_class.execute,
                             "file_path": file_path,
                         }
-                                                local_tools_dir = self._get_local_tools_dir()
+                        local_tools_dir = self._get_local_tools_dir()
                         global_tools_dir = self._get_global_tools_dir()
                         scope = "custom tool"
                         if local_tools_dir and file_path.startswith(local_tools_dir):
@@ -337,7 +337,7 @@ class ToolManager:
                             "execute": module._execute,
                             "file_path": file_path,
                         }
-                                                local_tools_dir = self._get_local_tools_dir()
+                        local_tools_dir = self._get_local_tools_dir()
                         global_tools_dir = self._get_global_tools_dir()
                         scope = "custom tool"
                         if local_tools_dir and file_path.startswith(local_tools_dir):
@@ -408,7 +408,7 @@ class ToolManager:
                             # Determine if the tool is local or global
                             local_tools_dir = self._get_local_tools_dir()
                             global_tools_dir = self._get_global_tools_dir()
-                            
+
                             if local_tools_dir and file_path.startswith(local_tools_dir):
                                 scope = "local"
                                 python_executable = self.local_tools_python
