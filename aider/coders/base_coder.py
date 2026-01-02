@@ -3945,7 +3945,17 @@ class Coder:
         if not self.repo:
             return
 
-        await self.repo.commit(fnames=self.need_commit_before_edits, coder=self)
+        files_to_commit = {
+            fname
+            for fname in self.need_commit_before_edits
+            if not self.repo.git_ignored_file(fname)
+        }
+
+        if not files_to_commit:
+            self.need_commit_before_edits = set()
+            return
+
+        await self.repo.commit(fnames=list(files_to_commit), coder=self)
 
         # files changed, move cur messages back behind the files messages
         # self.move_back_cur_messages(self.gpt_prompts.files_content_local_edits)
