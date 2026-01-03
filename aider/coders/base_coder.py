@@ -833,30 +833,21 @@ class Coder:
                         file_tokens = self.main_model.token_count(content)
 
                         if file_tokens > self.large_file_token_threshold:
-                            # Truncate the file content
-                            lines = content.splitlines()
+                            # Instead of truncating, show the file's definitions/structure
+                            file_stub = RepoMap.get_file_stub(fname, self.io)
 
-                            # Keep the first and last parts of the file with a marker in between
-                            keep_lines = (
-                                self.large_file_token_threshold // 40
-                            )  # Rough estimate of tokens per line
-                            first_chunk = lines[: keep_lines // 2]
-                            last_chunk = lines[-(keep_lines // 2) :]
-
-                            truncated_content = "\n".join(first_chunk)
-                            truncated_content += (
-                                f"\n\n... [File truncated due to size ({file_tokens} tokens). Use"
-                                " /context-management to toggle truncation off] ...\n\n"
-                            )
-                            truncated_content += "\n".join(last_chunk)
-
-                            # Add message about truncation
+                            # Add message about showing definitions instead of full content
                             self.io.tool_output(
                                 f"⚠️ '{relative_fname}' is very large ({file_tokens} tokens). "
                                 "Use /context-management to toggle truncation off if needed."
                             )
 
-                            file_prompt += truncated_content
+                            # Add a message in the content itself so the model knows it's truncated
+                            truncation_note = (
+                                f"\n... [File content truncated due to size ({file_tokens} tokens)."
+                                " Showing structure/definitions only.] ...\n\n"
+                            )
+                            file_prompt += truncation_note + file_stub
                         else:
                             file_prompt += content
                     else:
@@ -910,30 +901,21 @@ class Coder:
                     file_tokens = self.main_model.token_count(content)
 
                     if file_tokens > self.large_file_token_threshold:
-                        # Truncate the file content
-                        lines = content.splitlines()
+                        # Instead of truncating, show the file's definitions/structure
+                        file_stub = RepoMap.get_file_stub(fname, self.io)
 
-                        # Keep the first and last parts of the file with a marker in between
-                        keep_lines = (
-                            self.large_file_token_threshold // 40
-                        )  # Rough estimate of tokens per line
-                        first_chunk = lines[: keep_lines // 2]
-                        last_chunk = lines[-(keep_lines // 2) :]
-
-                        truncated_content = "\n".join(first_chunk)
-                        truncated_content += (
-                            f"\n\n... [File truncated due to size ({file_tokens} tokens). Use"
-                            " /context-management to toggle truncation off] ...\n\n"
-                        )
-                        truncated_content += "\n".join(last_chunk)
-
-                        # Add message about truncation
+                        # Add message about showing definitions instead of full content
                         self.io.tool_output(
                             f"⚠️ '{relative_fname}' is very large ({file_tokens} tokens). "
                             "Use /context-management to toggle truncation off if needed."
                         )
 
-                        prompt += truncated_content
+                        # Add a message in the content itself so the model knows it's truncated
+                        truncation_note = (
+                            f"\n... [File content truncated due to size ({file_tokens} tokens)."
+                            " Showing structure/definitions only.] ...\n\n"
+                        )
+                        prompt += truncation_note + file_stub
                     else:
                         prompt += content
                 else:
@@ -1263,8 +1245,9 @@ class Coder:
             self.commit_before_message.append(self.repo.get_head_commit_sha())
 
     async def run(self, with_message=None, preproc=True):
-        while self.io.confirmation_in_progress:
-            await asyncio.sleep(0.1)  # Yield control and wait briefly
+        # Wait for confirmation to finish if in progress
+        if not self.io.confirmation_in_progress_event.is_set():
+            await self.io.confirmation_in_progress_event.wait()
 
         if self.linear_output:
             return await self._run_linear(with_message, preproc)
@@ -1287,8 +1270,9 @@ class Coder:
 
             while True:
                 try:
-                    if self.commands.cmd_running:
-                        await asyncio.sleep(0.1)
+                    # Wait for commands to finish
+                    if not self.commands.cmd_running_event.is_set():
+                        await self.commands.cmd_running_event.wait()
                         continue
 
                     if not self.suppress_announcements_for_next_prompt:
@@ -1396,8 +1380,8 @@ class Coder:
         while self.input_running:
             try:
                 # Wait for commands to finish
-                if self.commands.cmd_running:
-                    await asyncio.sleep(0.1)
+                if not self.commands.cmd_running_event.is_set():
+                    await self.commands.cmd_running_event.wait()
                     continue
 
                 # Wait for input task completion
@@ -1406,7 +1390,7 @@ class Coder:
                         user_message = self.io.input_task.result()
 
                         # Defer to confirmation handler to fix Windows event loop race.
-                        if self.io.confirmation_in_progress:
+                        if not self.io.confirmation_in_progress_event.is_set():
                             pass
                         # Set user message for output task
                         elif not self.io.acknowledge_confirmation():
@@ -1423,7 +1407,7 @@ class Coder:
 
                 # Check if we should show announcements
                 if (
-                    not self.io.confirmation_in_progress
+                    self.io.confirmation_in_progress_event.is_set()
                     and not self.user_message
                     and not coroutines.is_active(self.io.input_task)
                     and (not coroutines.is_active(self.io.output_task) or not self.io.placeholder)
@@ -1455,8 +1439,8 @@ class Coder:
         while self.output_running:
             try:
                 # Wait for commands to finish
-                if self.commands.cmd_running:
-                    await asyncio.sleep(0.1)
+                if not self.commands.cmd_running_event.is_set():
+                    await self.commands.cmd_running_event.wait()
                     continue
 
                 # Check if we have a user message to process
@@ -1558,7 +1542,7 @@ class Coder:
                 inp = f"/run {inp[1:]}"
 
             if self.commands.is_run_command(inp):
-                self.commands.cmd_running = True
+                self.commands.cmd_running_event.clear()  # Command is running
 
             return await self.commands.run(inp)
 
@@ -3126,8 +3110,8 @@ class Coder:
                     print(chunk, file=f)
 
             # Check if confirmation is in progress and wait if needed
-            while self.io.confirmation_in_progress:
-                await asyncio.sleep(0.1)  # Yield control and wait briefly
+            if not self.io.confirmation_in_progress_event.is_set():
+                await self.io.confirmation_in_progress_event.wait()
 
             if isinstance(chunk, str):
                 self.io.tool_error(chunk)
@@ -4023,7 +4007,7 @@ class Coder:
         accumulated_output = ""
 
         try:
-            self.commands.cmd_running = True
+            self.commands.cmd_running_event.clear()  # Command is running
 
             for command in self.shell_commands:
                 if command in done:
@@ -4035,7 +4019,7 @@ class Coder:
 
             return accumulated_output
         finally:
-            self.commands.cmd_running = False
+            self.commands.cmd_running_event.set()  # Command finished
 
     async def handle_shell_commands(self, commands_str, group):
         commands = commands_str.strip().split(";")

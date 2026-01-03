@@ -89,6 +89,7 @@ async def test_commands_web_disable_playwright(monkeypatch):
             self.cur_messages = []
             self.main_model = type("M", (), {"edit_format": "code", "name": "dummy", "info": {}})
             self.args = type("Args", (), {"disable_playwright": True})()
+            self.tui = None
 
         def get_rel_fname(self, fname):
             return fname

@@ -1,6 +1,7 @@
 """Output widget for Aider TUI using Textual's RichLog widget."""
 
 import re
+import textwrap
 
 from rich.markdown import Markdown
 from rich.padding import Padding
@@ -41,6 +42,8 @@ class OutputContainer(RichLog):
         super().__init__(**kwargs)
         # Line buffer for streaming text to avoid word-per-line issue
         self._line_buffer = ""
+        # Track if we're on the first line of the current response
+        self._first_line_of_response = True
 
         # Enable markup for rich formatting
         self.highlight = True
@@ -51,6 +54,33 @@ class OutputContainer(RichLog):
         """Start a new LLM response section with streaming support."""
         # Clear the line buffer for new response
         self._line_buffer = ""
+        # Reset first line flag
+        self._first_line_of_response = True
+
+    def _wrap_text_with_prefix(self, text: str, prefix: str = "• ") -> str:
+        """Wrap text with prefix and proper indentation.
+
+        Args:
+            text: The text to wrap
+            prefix: The prefix to use for the first line
+
+        Returns:
+            Wrapped text with prefix and indentation
+        """
+        if not text.strip():
+            return ""
+
+        # Get available width for wrapping
+        # Subtract 2 to account for potential borders or scrollbars
+        width = self.content_size.width - 2 if self.content_size.width else 80
+        indent = " " * len(prefix)
+
+        # Wrap the text using textwrap
+        wrapped_text = textwrap.fill(
+            text, width=width, initial_indent=prefix, subsequent_indent=indent
+        )
+
+        return wrapped_text
 
     async def stream_chunk(self, text: str):
         """Stream a chunk of markdown text."""
@@ -66,10 +96,21 @@ class OutputContainer(RichLog):
         # Process complete lines from buffer
         while "\n" in self._line_buffer:
             line, self._line_buffer = self._line_buffer.split("\n", 1)
-            # self.write(Padding(line.strip(), (0, 0, 0, 1)))
             if line.rstrip():
                 self.set_last_write_type("assistant")
-                self.output(line.rstrip(), render_markdown=True)
+                # Format with prefix on first line, proper indentation on subsequent lines
+                if self._first_line_of_response:
+                    wrapped_line = self._wrap_text_with_prefix(line.rstrip(), prefix="• ")
+                    self._first_line_of_response = False
+                else:
+                    # For subsequent lines, we need to wrap with proper indentation
+                    # but without the bullet prefix
+                    wrapped_line = self._wrap_text_with_prefix(line.rstrip(), prefix="  ")
+
+                # Output each wrapped line
+                for wrapped in wrapped_line.split("\n"):
+                    if wrapped.strip():
+                        self.output(wrapped, render_markdown=True)
 
     async def end_response(self):
         """End the current LLM response."""
@@ -79,7 +120,16 @@ class OutputContainer(RichLog):
         """Stop the current markdown stream."""
         # Flush any remaining buffer content
         if self._line_buffer.rstrip():
-            self.output(self._line_buffer.rstrip(), render_markdown=True)
+            # Format remaining content based on whether it's first line or not
+            if self._first_line_of_response:
+                wrapped_line = self._wrap_text_with_prefix(self._line_buffer.rstrip(), prefix="• ")
+            else:
+                wrapped_line = self._wrap_text_with_prefix(self._line_buffer.rstrip(), prefix="  ")
+
+            # Output each wrapped line
+            for wrapped in wrapped_line.split("\n"):
+                if wrapped.strip():
+                    self.output(wrapped, render_markdown=True)
             self._line_buffer = ""
 
     def add_user_message(self, text: str):
@@ -87,7 +137,15 @@ class OutputContainer(RichLog):
         # User messages shown with > prefix in green color
         self.auto_scroll = True
         self.set_last_write_type("user")
-        self.output(f"[bold medium_spring_green]> {text}[/bold medium_spring_green]")
+
+        # Wrap the entire user message with "> " prefix
+        wrapped_text = self._wrap_text_with_prefix(text, prefix="> ")
+
+        # Output each wrapped line with green styling
+        for line in wrapped_text.split("\n"):
+            if line.strip():
+                self.output(f"[bold medium_spring_green]{line}[/bold medium_spring_green]")
+
         self.scroll_end(animate=False)
 
     def add_system_message(self, text: str, dim=True):
@@ -144,28 +202,30 @@ class OutputContainer(RichLog):
         if not lines:
             return
 
+        self.set_last_write_type("tool_call")
         for i, line in enumerate(lines):
             # Strip Rich markup
             clean_line = line.replace("[bright_cyan]", "").replace("[/bright_cyan]", "")
 
-            content = Text()
             if i == 0:
                 # First line: reformat "Tool Call: server • function" to "Tool Call · server · function"
                 clean_line = clean_line.replace("Tool Call:", "Tool Call •")
-                content.append(clean_line, style="dim bright_cyan")  # $accent
+                self.output(Padding(Text(clean_line, style="dim bright_cyan"), (0, 0, 0, 2)))
             else:
                 # Subsequent lines (arguments) - prefix with corner to show they belong to the call
                 arg_string_list = re.split(r"(^\S+:)", clean_line, maxsplit=1)[1:]
 
                 if len(arg_string_list) > 1:
-                    content.append(f"ᴸ{arg_string_list[0]}", style="dim bright_cyan")
+                    tool_property = arg_string_list[0].replace("_", " ").title()
+                    content = Text()
+                    content.append(f"ᴸ{tool_property}", style="dim bright_cyan")
                     content.append(arg_string_list[1], style="dim")
+                    self.output(Padding(content, (0, 0, 0, 2)))
                 else:
-                    content.append("ᴸ", style="dim bright_cyan")
-                    content.append(clean_line, style="dim")
+                    self.output(Padding(Text(clean_line, style="dim"), (0, 0, 0, 3)))
 
-            self.set_last_write_type("tool_call")
-            self.output(Padding(content, (0, 0, 0, 2)))
+            # self.set_last_write_type("tool_call")
+            # self.output(Padding(content, (0, 0, 0, 2)))
 
     def add_tool_result(self, text: str):
         """Add a tool result.

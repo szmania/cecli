@@ -13,7 +13,7 @@ class SettingsCommand(BaseCommand):
     async def execute(cls, io, coder, args, **kwargs):
         # Get parser and args from kwargs or use defaults
         parser = kwargs.get("parser")
-        cmd_args = kwargs.get("args")
+        cmd_args = kwargs.get("system_args")
 
         if not parser or not cmd_args:
             io.tool_error("Settings command requires parser and args context")

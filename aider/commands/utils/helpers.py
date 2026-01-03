@@ -104,10 +104,10 @@ def format_command_result(io, command_name: str, success_message: str, error: Ex
         Formatted result string
     """
     if error:
-        io.tool_error(f"Error in {command_name}: {str(error)}")
+        io.tool_error(f"\nError in {command_name}: {str(error)}")
         return f"Error: {str(error)}"
     else:
-        io.tool_output(f"✅ {success_message}")
+        io.tool_output(f"\n✅ {success_message}")
         return f"Successfully executed {command_name}."
 
 

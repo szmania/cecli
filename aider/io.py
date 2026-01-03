@@ -382,7 +382,8 @@ class InputOutput:
         self.completer_keys = None
 
         # State tracking for confirmation input
-        self.confirmation_in_progress = False
+        self.confirmation_in_progress_event = asyncio.Event()
+        self.confirmation_in_progress_event.set()  # Initially set, meaning no confirmation in progress
         self.confirmation_acknowledgement = False
         self.confirmation_input_active = False
         self.saved_input_text = ""
@@ -970,7 +971,7 @@ class InputOutput:
                 coder = self.get_coder()
 
                 if coder:
-                    await coder.commands.cmd_exit(None)
+                    await coder.commands.do_run("exit", "")
                 else:
                     raise SystemExit
 
@@ -1107,7 +1108,7 @@ class InputOutput:
 
         if (
             len(inp) <= 1
-            or self.confirmation_in_progress
+            or not self.confirmation_in_progress_event.is_set()
             or self.get_confirmation_acknowledgement()
         ):
             return
@@ -1179,7 +1180,7 @@ class InputOutput:
         *args,
         **kwargs,
     ):
-        self.confirmation_in_progress = True
+        self.confirmation_in_progress_event.clear()  # Confirmation is in progress
 
         try:
             return await asyncio.create_task(self._confirm_ask(*args, **kwargs))
@@ -1187,7 +1188,7 @@ class InputOutput:
             # Re-raise KeyboardInterrupt to allow it to propagate
             raise
         finally:
-            self.confirmation_in_progress = False
+            self.confirmation_in_progress_event.set()  # Confirmation finished
 
     async def _confirm_ask(
         self,
@@ -1692,7 +1693,10 @@ class InputOutput:
             )
 
     def append_chat_history(self, text, linebreak=False, blockquote=False, strip=True):
-        if self.confirmation_in_progress or self.get_confirmation_acknowledgement():
+        if (
+            not self.confirmation_in_progress_event.is_set()
+            or self.get_confirmation_acknowledgement()
+        ):
             return
 
         if blockquote:

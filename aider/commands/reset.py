@@ -21,8 +21,8 @@ class ResetCommand(BaseCommand):
             # Clear TUI output if available
             if coder.tui and coder.tui():
                 coder.tui().action_clear_output()
-
-            io.tool_output("All files dropped and chat history cleared.")
+            else:
+                io.tool_output("All files dropped and chat history cleared.")
 
             # Recalculate context block tokens after dropping all files
             if hasattr(coder, "use_enhanced_context") and coder.use_enhanced_context:

@@ -106,6 +106,10 @@ class CoderWorker:
 
                     new_coder = await Coder.create(**kwargs)
                     new_coder.args = self.coder.args
+
+                    if switch.kwargs.get("show_announcements") is False:
+                        new_coder.suppress_announcements_for_next_prompt = True
+
                     # Transfer MCP state to avoid re-initialization
                     new_coder.mcp_servers = self.coder.mcp_servers
                     new_coder.mcp_tools = self.coder.mcp_tools

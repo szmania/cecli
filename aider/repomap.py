@@ -15,7 +15,6 @@ from diskcache import Cache
 from grep_ast import TreeContext, filename_to_lang
 from pygments.lexers import guess_lexer_for_filename
 from pygments.token import Token
-from tqdm import tqdm
 
 from aider.dump import dump
 from aider.helpers.similarity import (
@@ -76,9 +75,9 @@ Tag = TagBase
 SQLITE_ERRORS = (sqlite3.OperationalError, sqlite3.DatabaseError, OSError)
 
 
-CACHE_VERSION = 6
+CACHE_VERSION = 7
 if USING_TSL_PACK:
-    CACHE_VERSION = 8
+    CACHE_VERSION = 9
 
 UPDATING_REPO_MAP_MESSAGE = "Updating repo map"
 
@@ -349,6 +348,46 @@ class RepoMap:
         except FileNotFoundError:
             self.io.tool_warning(f"File not found error: {fname}")
 
+    def _compute_file_summary(self, tags, rel_fname):
+        """Compute file-level summary from tags."""
+        defines = set()
+        references = defaultdict(int)
+        imports = set()
+
+        for tag in tags:
+            if tag.kind == "def":
+                defines.add(tag.name)
+            elif tag.kind == "ref":
+                references[tag.name] += 1
+            if tag.specific_kind == "import":
+                imports.add(tag.name)
+
+        return {"defines": defines, "references": dict(references), "imports": imports}
+
+    def _get_cached_summary(self, fname, file_mtime):
+        """Get cached summary for a file if available and up-to-date."""
+        cache_key = fname
+        try:
+            val = self.TAGS_CACHE.get(cache_key)  # Issue #1308
+        except SQLITE_ERRORS as e:
+            self.tags_cache_error(e)
+            val = self.TAGS_CACHE.get(cache_key)
+
+        if val is not None and val.get("mtime") == file_mtime:
+            # Handle backward compatibility: old cache entries won't have "summary"
+            summary = val.get("summary")
+            if summary is None:
+                # Compute summary from cached data
+                data = val.get("data")
+                if data is not None:
+                    rel_fname = self.get_rel_fname(fname)
+                    summary = self._compute_file_summary(data, rel_fname)
+                    # Update cache with summary for future use
+                    val["summary"] = summary
+                    self.TAGS_CACHE[cache_key] = val
+            return summary
+        return None
+
     def get_tags(self, fname, rel_fname):
         # Check if the file is in the cache and if the modification time has not changed
         file_mtime = self.get_mtime(fname)
@@ -385,13 +424,16 @@ class RepoMap:
         # miss!
         data = list(self.get_tags_raw(fname, rel_fname))
 
+        # Compute file summary
+        summary = self._compute_file_summary(data, rel_fname)
+
         # Update the cache
         try:
-            self.TAGS_CACHE[cache_key] = {"mtime": file_mtime, "data": data}
+            self.TAGS_CACHE[cache_key] = {"mtime": file_mtime, "data": data, "summary": summary}
             self.save_tags_cache()
         except SQLITE_ERRORS as e:
             self.tags_cache_error(e)
-            self.TAGS_CACHE[cache_key] = {"mtime": file_mtime, "data": data}
+            self.TAGS_CACHE[cache_key] = {"mtime": file_mtime, "data": data, "summary": summary}
 
         return data
 
@@ -631,19 +673,25 @@ class RepoMap:
             self.io.tool_output(
                 "Initial repo scan can be slow in larger repos, but only happens once."
             )
-            fnames = tqdm(fnames, desc="Scanning repo")
+            self.io.update_spinner("Scanning repo")
             showing_bar = True
         else:
             showing_bar = False
 
+        num_fnames = len(fnames)
+        fname_index = 0
         for fname in fnames:
             if self.verbose:
                 self.io.tool_output(f"Processing {fname}")
-            if progress and not showing_bar:
-                self.io.update_spinner(f"{UPDATING_REPO_MAP_MESSAGE}: {fname}")
+            if progress:
+                if showing_bar:
+                    fname_index += 1
+                    self.io.update_spinner(f"Scanning repo: {fname_index}/{num_fnames}")
+                else:
+                    self.io.update_spinner(f"{UPDATING_REPO_MAP_MESSAGE}: {fname}")
 
             try:
-                file_ok = Path(fname).is_file()
+                file_ok = os.path.isfile(fname)
             except OSError:
                 file_ok = False
 
@@ -685,23 +733,49 @@ class RepoMap:
             if current_pers > 0:
                 personalization[rel_fname] = current_pers  # Assign the final calculated value
 
-            tags = list(self.get_tags(fname, rel_fname))
+            # Get file mtime and check for cached summary
+            file_mtime = self.get_mtime(fname)
+            summary = None
+            if file_mtime is not None:
+                summary = self._get_cached_summary(fname, file_mtime)
 
-            if tags is None:
-                continue
+            if summary is not None:
+                # Use cached summary for defines and references
+                for ident in summary["defines"]:
+                    defines[ident].add(rel_fname)
+                for ident, count in summary["references"].items():
+                    references[ident][rel_fname] += count
+                    total_ref_count[ident] += count
+                for imp in summary["imports"]:
+                    file_imports[rel_fname].add(imp)
 
-            for tag in tags:
-                if tag.kind == "def":
-                    defines[tag.name].add(rel_fname)
-                    key = (rel_fname, tag.name)
-                    definitions[key].add(tag)
+                # Still need to parse tags for definitions (Tag objects)
+                # But only if this file has definitions
+                if summary["defines"]:
+                    tags = list(self.get_tags(fname, rel_fname))
+                    if tags is not None:
+                        for tag in tags:
+                            if tag.kind == "def":
+                                key = (rel_fname, tag.name)
+                                definitions[key].add(tag)
+            else:
+                # No cached summary, parse all tags
+                tags = list(self.get_tags(fname, rel_fname))
+                if tags is None:
+                    continue
 
-                elif tag.kind == "ref":
-                    references[tag.name][rel_fname] += 1
-                    total_ref_count[tag.name] += 1
+                for tag in tags:
+                    if tag.kind == "def":
+                        defines[tag.name].add(rel_fname)
+                        key = (rel_fname, tag.name)
+                        definitions[key].add(tag)
 
-                if tag.specific_kind == "import":
-                    file_imports[rel_fname].add(tag.name)
+                    elif tag.kind == "ref":
+                        references[tag.name][rel_fname] += 1
+                        total_ref_count[tag.name] += 1
+
+                    if tag.specific_kind == "import":
+                        file_imports[rel_fname].add(tag.name)
 
         self.io.profile("Process Files")
 
@@ -1267,7 +1341,7 @@ def get_supported_languages_md():
 
     for lang, ext in data:
         fn = get_scm_fname(lang)
-        repo_map = "✓" if Path(fn).exists() else ""
+        repo_map = "✓" if fn and os.path.exists(fn) else ""
         linter_support = "✓"
         res += f"| {lang:20} | {ext:20} | {repo_map:^8} | {linter_support:^6} |\n"
 
@@ -1282,7 +1356,7 @@ if __name__ == "__main__":
     chat_fnames = []
     other_fnames = []
     for fname in sys.argv[1:]:
-        if Path(fname).is_dir():
+        if os.path.isdir(fname):
             chat_fnames += find_src_files(fname)
         else:
             chat_fnames.append(fname)

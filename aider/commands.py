@@ -1,3 +1,4 @@
+import asyncio
 import re
 import sys
 from pathlib import Path
@@ -21,6 +22,8 @@ class Commands:
             self.io,
             None,
             voice_language=self.voice_language,
+            voice_input_device=self.voice_input_device,
+            voice_format=self.voice_format,
             verify_ssl=self.verify_ssl,
             args=self.args,
             parser=self.parser,
@@ -62,7 +65,8 @@ class Commands:
 
         # Store the original read-only filenames provided via args.read
         self.original_read_only_fnames = set(original_read_only_fnames or [])
-        self.cmd_running = False
+        self.cmd_running_event = asyncio.Event()
+        self.cmd_running_event.set()  # Initially set, meaning no command is running
 
     def is_command(self, inp):
         return inp[0] in "/!"
@@ -108,13 +112,27 @@ class Commands:
             self.io.tool_output(f"Error: Command {cmd_name} not found.")
             return
 
+        self.cmd_running_event.clear()  # Command is running
         try:
+            # Generate a spreadable kwargs dict with all relevant Commands attributes
+            kwargs = {
+                "original_read_only_fnames": self.original_read_only_fnames,
+                "voice_language": self.voice_language,
+                "voice_format": self.voice_format,
+                "voice_input_device": self.voice_input_device,
+                "verify_ssl": self.verify_ssl,
+                "parser": self.parser,
+                "verbose": self.verbose,
+                "editor": self.editor,
+                "system_args": self.args,
+            }
+
             return await CommandRegistry.execute(
                 cmd_name,
                 self.io,
                 self.coder,
                 args,
-                original_read_only_fnames=self.original_read_only_fnames,
+                **kwargs,
             )
         except ANY_GIT_ERROR as err:
             self.io.tool_error(f"Unable to complete {cmd_name}: {err}")
@@ -124,6 +142,10 @@ class Commands:
         except Exception as e:
             self.io.tool_error(f"Error executing command {cmd_name}: {str(e)}")
             return
+        finally:
+            self.cmd_running_event.set()  # Command finished
+            if self.coder.tui and self.coder.tui():
+                self.coder.tui().refresh()
 
     def matching_commands(self, inp):
         words = inp.strip().split()

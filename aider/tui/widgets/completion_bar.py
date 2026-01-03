@@ -44,6 +44,10 @@ class CompletionBar(Widget, can_focus=False):
         text-style: bold;
     }
 
+    CompletionBar .completion-item.preselected {
+        color: $secondary;
+    }
+
     CompletionBar .completion-more {
         width: auto;
         height: 1;
@@ -82,6 +86,7 @@ class CompletionBar(Widget, can_focus=False):
         self.suggestions = (suggestions or [])[: self.MAX_SUGGESTIONS]
         self.prefix = prefix
         self.selected_index = 0
+        self._has_cycled = False  # Track if user has actively cycled through suggestions
         self._item_widgets: list[Static] = []
         self._prefix_widget: Static | None = None
         self._left_more: Static | None = None
@@ -150,7 +155,8 @@ class CompletionBar(Widget, can_focus=False):
         self._item_widgets = []
         for i in range(self.WINDOW_SIZE):
             if i < len(self._display_names):
-                classes = "completion-item selected" if i == 0 else "completion-item"
+                selected_class = "selected" if self._has_cycled else "preselected"
+                classes = f"completion-item {selected_class}" if i == 0 else "completion-item"
                 item = Static(self._display_names[i], classes=classes)
             else:
                 item = Static("", classes="completion-item")
@@ -173,6 +179,7 @@ class CompletionBar(Widget, can_focus=False):
         self.suggestions = suggestions[: self.MAX_SUGGESTIONS]
         self.prefix = prefix
         self.selected_index = 0
+        self._has_cycled = False  # Reset cycling flag when suggestions change
 
         # Recompute display names
         self._compute_display_names()
@@ -267,12 +274,20 @@ class CompletionBar(Widget, can_focus=False):
         for i, item in enumerate(self._item_widgets):
             if not item.display:
                 item.remove_class("selected")
+                item.remove_class("preselected")
                 continue
             # First item is always the selected one
             if i == 0:
-                item.add_class("selected")
+                # Use "preselected" style if we haven't cycled yet and are at index 0
+                if not self._has_cycled and self.selected_index == 0:
+                    item.add_class("preselected")
+                    item.remove_class("selected")
+                else:
+                    item.add_class("selected")
+                    item.remove_class("preselected")
             else:
                 item.remove_class("selected")
+                item.remove_class("preselected")
 
     def _update_selection(self) -> None:
         """Update visual selection state."""
@@ -284,16 +299,24 @@ class CompletionBar(Widget, can_focus=False):
     def cycle_next(self) -> None:
         """Cycle to next suggestion."""
         if self.suggestions:
-            self.selected_index = (self.selected_index + 1) % len(self.suggestions)
+            if not self._has_cycled:
+                self._has_cycled = True  # User has actively cycled
+            else:
+                self.selected_index = (self.selected_index + 1) % len(self.suggestions)
+
             self._update_selection()
 
     def cycle_previous(self) -> None:
-        """Cycle to next suggestion."""
+        """Cycle to previous suggestion."""
         if self.suggestions:
-            if not self.selected_index:
-                self.selected_index = len(self.suggestions) - 1
+            if not self._has_cycled:
+                self._has_cycled = True  # User has actively cycled
             else:
-                self.selected_index = (self.selected_index - 1) % len(self.suggestions)
+                if not self.selected_index:
+                    self.selected_index = len(self.suggestions) - 1
+                else:
+                    self.selected_index = (self.selected_index - 1) % len(self.suggestions)
+
             self._update_selection()
 
     def select_current(self) -> None:
