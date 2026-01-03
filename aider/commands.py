@@ -2784,7 +2784,23 @@ class Commands:
     def cmd_save_session(self, args):
         """Save the current chat session to a named file in .aider/sessions/"""
         session_manager = sessions.SessionManager(self.coder, self.io)
-        session_manager.save_session(args.strip())
+        session_name = args.strip()
+        if not session_name:
+            sessions_list = self.completions_save_session()
+            fzf_input = sessions_list
+            selected = run_fzf(
+                fzf_input,
+                coder=self.coder,
+                print_query=True,
+                prompt="Save session as: ",
+            )
+            if selected:
+                session_name = selected[0]
+            else:
+                self.io.tool_output("Session save cancelled.")
+                return
+
+        session_manager.save_session(session_name)
 
     def completions_save_session(self):
         """Return available session names for completion"""
@@ -2811,7 +2827,24 @@ class Commands:
     def cmd_load_session(self, args):
         """Load a saved session by name or file path"""
         session_manager = sessions.SessionManager(self.coder, self.io)
-        session_manager.load_session(args.strip())
+        session_name = args.strip()
+        if not session_name:
+            sessions_list = self.completions_load_session()
+            if not sessions_list:
+                self.io.tool_output("No saved sessions found.")
+                return
+            selected = run_fzf(
+                sessions_list,
+                coder=self.coder,
+                prompt="Load session: ",
+            )
+            if selected:
+                session_name = selected[0]
+            else:
+                self.io.tool_output("Session load cancelled.")
+                return
+
+        session_manager.load_session(session_name)
 
     def completions_load_session(self):
         """Return available session names for completion"""

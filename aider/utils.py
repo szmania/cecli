@@ -15,7 +15,7 @@ from aider.waiting import Spinner
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".bmp", ".tiff", ".webp", ".pdf"}
 
 
-def _execute_fzf(input_data, multi=False):
+def _execute_fzf(input_data, multi=False, print_query=False, prompt=None):
     """
     Runs fzf as a subprocess, feeding it input_data.
     Returns the selected items.
@@ -26,6 +26,10 @@ def _execute_fzf(input_data, multi=False):
     fzf_command = ["fzf"]
     if multi:
         fzf_command.append("--multi")
+    if print_query:
+        fzf_command.append("--print-query")
+    if prompt:
+        fzf_command.extend(["--prompt", prompt])
 
     # Recommended flags for a good experience
     fzf_command.extend(["--height", "80%", "--reverse"])
@@ -42,12 +46,18 @@ def _execute_fzf(input_data, multi=False):
     if process.returncode == 0:
         # fzf returns selected items newline-separated
         return stdout.strip().splitlines()
+    elif process.returncode == 1 and print_query:
+        # User typed something but didn't select an item
+        lines = stdout.strip().splitlines()
+        if lines:
+            return [lines[-1]]  # The last line is the query
+        return []
     else:
         # User cancelled (e.g., pressed Esc)
         return []
 
 
-def run_fzf(input_data, multi=False, coder=None):
+def run_fzf(input_data, multi=False, coder=None, print_query=False, prompt=None):
     """
     Runs fzf as a subprocess, feeding it input_data.
     Returns the selected items.
@@ -62,10 +72,12 @@ def run_fzf(input_data, multi=False, coder=None):
     result = []
 
     if tui:
-        result = tui.run_obstructive(_execute_fzf, input_data, multi=multi)
+        result = tui.run_obstructive(
+            _execute_fzf, input_data, multi=multi, print_query=print_query, prompt=prompt
+        )
 
     else:
-        result = _execute_fzf(input_data, multi=multi)
+        result = _execute_fzf(input_data, multi=multi, print_query=print_query, prompt=prompt)
 
     return result
 
