@@ -23,25 +23,34 @@ cog.out(get_md_help())
 ]]]-->
 ```
 usage: aider [-h] [--model] [--openai-api-key] [--anthropic-api-key]
-             [--openai-api-base] [--openai-api-type]
-             [--openai-api-version] [--openai-api-deployment-id]
-             [--openai-organization-id] [--set-env] [--api-key]
+             [--openai-api-base] [--set-env] [--api-key]
              [--list-models] [--model-settings-file]
-             [--model-metadata-file] [--alias] [--reasoning-effort]
+             [--model-metadata-file] [--alias] [--model-overrides]
+             [--model-overrides-file] [--reasoning-effort]
              [--thinking-tokens] [--verify-ssl | --no-verify-ssl]
-             [--timeout] [--edit-format] [--architect]
+             [--request-timeout] [--retry-timeout]
+             [--retry-backoff-factor] [--retry-on-unavailable]
+             [--edit-format] [--ask] [--architect] [--agent]
              [--auto-accept-architect | --no-auto-accept-architect]
              [--weak-model] [--editor-model] [--editor-edit-format]
              [--show-model-warnings | --no-show-model-warnings]
              [--check-model-accepts-settings | --no-check-model-accepts-settings]
-             [--max-chat-history-tokens]
+             [--max-chat-history-tokens] [--tui | --no-tui]
+             [--tui-config] [--agent-config]
+             [--auto-save | --no-auto-save]
+             [--auto-save-session-name]
+             [--auto-load | --no-auto-load] [--mcp-servers]
+             [--mcp-servers-file] [--mcp-transport]
+             [--preserve-todo-list] [--use-enhanced-map]
              [--enable-context-compaction | --no-enable-context-compaction]
              [--context-compaction-max-tokens]
              [--context-compaction-summary-tokens]
              [--cache-prompts | --no-cache-prompts]
              [--cache-keepalive-pings] [--map-tokens]
              [--map-refresh] [--map-multiplier-no-files]
-             [--input-history-file] [--chat-history-file]
+             [--map-max-line-length] [--map-cache-dir]
+             [--map-memory-cache] [--input-history-file]
+             [--chat-history-file]
              [--restore-chat-history | --no-restore-chat-history]
              [--llm-history-file] [--dark-mode] [--light-mode]
              [--pretty | --no-pretty] [--stream | --no-stream]
@@ -68,31 +77,27 @@ usage: aider [-h] [--model] [--openai-api-key] [--anthropic-api-key]
              [--watch-files | --no-watch-files] [--lint]
              [--lint-cmd] [--auto-lint | --no-auto-lint]
              [--test-cmd] [--auto-test | --no-auto-test] [--test]
-             [--analytics | --no-analytics] [--analytics-log]
-             [--analytics-disable] [--analytics-posthog-host]
-             [--analytics-posthog-project-api-key]
              [--just-check-update]
              [--check-update | --no-check-update]
              [--show-release-notes | --no-show-release-notes]
              [--install-main-branch] [--upgrade] [--version]
              [--message] [--message-file]
-             [--gui | --no-gui | --browser | --no-browser]
              [--copy-paste | --no-copy-paste] [--apply]
              [--apply-clipboard-edits] [--exit] [--show-repo-map]
-             [--show-prompts] [--voice-format] [--voice-language]
-             [--voice-input-device] [--disable-playwright] [--file]
+             [--show-prompts] [--linear-output | --no-linear-output]
+             [--debug] [--voice-format] [--voice-language]
+             [--voice-input-device] [--tweak-responses]
+             [--yes-always] [--yes] [--disable-playwright] [--file]
              [--read] [--vim] [--chat-language] [--commit-language]
-             [--yes-always] [-v] [--load] [--encoding]
-             [--line-endings] [-c] [--env-file]
+             [-v] [--load] [--encoding] [--line-endings] [-c]
+             [--env-file]
              [--suggest-shell-commands | --no-suggest-shell-commands]
              [--fancy-input | --no-fancy-input]
              [--multiline | --no-multiline]
              [--notifications | --no-notifications]
-             [--notifications-command]
+             [--notifications-command] [--command-prefix]
              [--detect-urls | --no-detect-urls] [--editor]
-             [--shell-completions] [--opus] [--sonnet] [--haiku]
-             [--4] [--4o] [--mini] [--4-turbo] [--35turbo]
-             [--deepseek] [--o1-mini] [--o1-preview]
+             [--shell-completions]
 
 ```
 
@@ -123,22 +128,6 @@ Environment variable: `AIDER_ANTHROPIC_API_KEY`
 ### `--openai-api-base VALUE`
 Specify the api base url  
 Environment variable: `AIDER_OPENAI_API_BASE`  
-
-### `--openai-api-type VALUE`
-(deprecated, use --set-env OPENAI_API_TYPE=<value>)  
-Environment variable: `AIDER_OPENAI_API_TYPE`  
-
-### `--openai-api-version VALUE`
-(deprecated, use --set-env OPENAI_API_VERSION=<value>)  
-Environment variable: `AIDER_OPENAI_API_VERSION`  
-
-### `--openai-api-deployment-id VALUE`
-(deprecated, use --set-env OPENAI_API_DEPLOYMENT_ID=<value>)  
-Environment variable: `AIDER_OPENAI_API_DEPLOYMENT_ID`  
-
-### `--openai-organization-id VALUE`
-(deprecated, use --set-env OPENAI_ORGANIZATION=<value>)  
-Environment variable: `AIDER_OPENAI_ORGANIZATION_ID`  
 
 ### `--set-env ENV_VAR_NAME=value`
 Set an environment variable (to control API settings, can be used multiple times)  
@@ -173,6 +162,15 @@ Environment variable: `AIDER_MODEL_METADATA_FILE`
 Add a model alias (can be used multiple times)  
 Environment variable: `AIDER_ALIAS`  
 
+### `--model-overrides MODEL_OVERRIDES_JSON`
+Specify model tag overrides directly as JSON/YAML string (e.g., '{"gpt-4o": {"high": {"temperature": 0.8}}}')  
+Environment variable: `AIDER_MODEL_OVERRIDES`  
+
+### `--model-overrides-file MODEL_OVERRIDES_FILE`
+Specify a file with model tag overrides (e.g., gpt-4o:high -> reasoning_effort: high)  
+Default: .aider.model.overrides.yml  
+Environment variable: `AIDER_MODEL_OVERRIDES_FILE`  
+
 ### `--reasoning-effort VALUE`
 Set the reasoning_effort API parameter (default: not set)  
 Environment variable: `AIDER_REASONING_EFFORT`  
@@ -189,9 +187,25 @@ Aliases:
   - `--verify-ssl`
   - `--no-verify-ssl`
 
-### `--timeout VALUE`
-Timeout in seconds for API calls (default: None)  
-Environment variable: `AIDER_TIMEOUT`  
+### `--request-timeout VALUE`
+Timeout for LLM HTTP requests in seconds (default: 600)  
+Default: 600  
+Environment variable: `AIDER_REQUEST_TIMEOUT`  
+
+### `--retry-timeout VALUE`
+Timeout for retrying LLM calls in seconds (default: 60)  
+Default: 60  
+Environment variable: `AIDER_RETRY_TIMEOUT`  
+
+### `--retry-backoff-factor VALUE`
+backoff factor for retrying LLM calls (default: 2.0)  
+Default: 2.0  
+Environment variable: `AIDER_RETRY_BACKOFF_FACTOR`  
+
+### `--retry-on-unavailable`
+retry on service unavailable errors  
+Default: False  
+Environment variable: `AIDER_RETRY_ON_UNAVAILABLE`  
 
 ### `--edit-format EDIT_FORMAT`
 Specify what edit format the LLM should use (default depends on model)  
@@ -200,9 +214,17 @@ Aliases:
   - `--edit-format EDIT_FORMAT`
   - `--chat-mode EDIT_FORMAT`
 
+### `--ask`
+Use ask edit format for the main chat  
+Environment variable: `AIDER_ASK`  
+
 ### `--architect`
 Use architect edit format for the main chat  
 Environment variable: `AIDER_ARCHITECT`  
+
+### `--agent`
+Use agent edit format for the main chat (autonomous file management)  
+Environment variable: `AIDER_AGENT`  
 
 ### `--auto-accept-architect`
 Enable/disable automatic acceptance of architect changes (default: True)  
@@ -244,6 +266,69 @@ Aliases:
 Soft limit on tokens for chat history, after which summarization begins. If unspecified, defaults to the model's max_chat_history_tokens.  
 Environment variable: `AIDER_MAX_CHAT_HISTORY_TOKENS`  
 
+## TUI Settings:
+
+### `--tui`
+Launch Textual TUI interface (experimental)  
+Environment variable: `AIDER_TUI`  
+Aliases:
+  - `--tui`
+  - `--no-tui`
+
+### `--tui-config TUI_CONFIG_JSON`
+Specify TUI Mode configuration as a JSON string  
+Environment variable: `AIDER_TUI_CONFIG`  
+
+## Agent Settings:
+
+### `--agent-config AGENT_CONFIG_JSON`
+Specify Agent Mode configuration as a JSON string  
+Environment variable: `AIDER_AGENT_CONFIG`  
+
+### `--auto-save`
+Enable/disable automatic saving of sessions as --auto-save-session-name (default: False)  
+Default: False  
+Environment variable: `AIDER_AUTO_SAVE`  
+Aliases:
+  - `--auto-save`
+  - `--no-auto-save`
+
+### `--auto-save-session-name VALUE`
+Specify session name for auto-save and auto-load (default: auto-save)  
+Default: auto-save  
+Environment variable: `AIDER_AUTO_SAVE_SESSION_NAME`  
+
+### `--auto-load`
+Enable/disable automatic loading of --auto-save-session-name session on startup (default: False)  
+Default: False  
+Environment variable: `AIDER_AUTO_LOAD`  
+Aliases:
+  - `--auto-load`
+  - `--no-auto-load`
+
+### `--mcp-servers MCP_CONFIG_JSON`
+Specify MCP server configurations as a JSON string  
+Environment variable: `AIDER_MCP_SERVERS`  
+
+### `--mcp-servers-file MCP_CONFIG_FILE`
+Specify a file path with MCP server configurations  
+Environment variable: `AIDER_MCP_SERVERS_FILE`  
+
+### `--mcp-transport MCP_TRANSPORT`
+Specify the transport for MCP servers (default: stdio)  
+Default: stdio  
+Environment variable: `AIDER_MCP_TRANSPORT`  
+
+### `--preserve-todo-list`
+Deprecated: no longer needed because the todo list is saved and restored with sessions. This flag has no effect and will be removed.  
+Default: False  
+Environment variable: `AIDER_PRESERVE_TODO_LIST`  
+
+### `--use-enhanced-map`
+Use enhanced Repo Map that takes into account imports (default: False)  
+Default: False  
+Environment variable: `AIDER_USE_ENHANCED_MAP`  
+
 ## Context Compaction:
 
 ### `--enable-context-compaction`
@@ -255,7 +340,7 @@ Aliases:
   - `--no-enable-context-compaction`
 
 ### `--context-compaction-max-tokens VALUE`
-The maximum number of tokens in the conversation before context compaction is triggered. (default: 80% of model's context window)  
+The maximum number of tokens in the conversation before context compaction is triggered. (default: 80%% of model's context window)  
 Environment variable: `AIDER_CONTEXT_COMPACTION_MAX_TOKENS`  
 
 ### `--context-compaction-summary-tokens VALUE`
@@ -292,12 +377,22 @@ Environment variable: `AIDER_MAP_REFRESH`
 ### `--map-multiplier-no-files VALUE`
 Multiplier for map tokens when no files are specified (default: 2)  
 Default: 2  
-Environment variable: `AIDER_MAP_MULTIPLIER_NO_FILES`
+Environment variable: `AIDER_MAP_MULTIPLIER_NO_FILES`  
 
 ### `--map-max-line-length VALUE`
-Maximum line length for the repo map code. Prevents sending crazy long lines of minified JS files etc. (default: 100)
-Default: 100
-Environment variable: `AIDER_MAP_MAX_LINE_LENGTH`
+Maximum line length for the repo map code. Prevents sending crazy long lines of minified JS files etc. (default: 100)  
+Default: 100  
+Environment variable: `AIDER_MAP_MAX_LINE_LENGTH`  
+
+### `--map-cache-dir MAP_CACHE_DIR`
+Directory for the repository map cache .aider.tags.cache.v3 (default: current directory)  
+Default: .  
+Environment variable: `AIDER_MAP_CACHE_DIR`  
+
+### `--map-memory-cache`
+Store repo map in memory (default: False)  
+Default: False  
+Environment variable: `AIDER_MAP_MEMORY_CACHE`  
 
 ## History Files:
 
@@ -567,32 +662,6 @@ Run tests, fix problems found and then exit
 Default: False  
 Environment variable: `AIDER_TEST`  
 
-## Analytics:
-
-### `--analytics`
-Enable/disable analytics for current session (default: random)  
-Environment variable: `AIDER_ANALYTICS`  
-Aliases:
-  - `--analytics`
-  - `--no-analytics`
-
-### `--analytics-log ANALYTICS_LOG_FILE`
-Specify a file to log analytics events  
-Environment variable: `AIDER_ANALYTICS_LOG`  
-
-### `--analytics-disable`
-Permanently disable analytics  
-Default: False  
-Environment variable: `AIDER_ANALYTICS_DISABLE`  
-
-### `--analytics-posthog-host ANALYTICS_POSTHOG_HOST`
-Send analytics to custom PostHog instance  
-Environment variable: `AIDER_ANALYTICS_POSTHOG_HOST`  
-
-### `--analytics-posthog-project-api-key ANALYTICS_POSTHOG_PROJECT_API_KEY`
-Send analytics to custom PostHog project  
-Environment variable: `AIDER_ANALYTICS_POSTHOG_PROJECT_API_KEY`  
-
 ## Upgrading:
 
 ### `--just-check-update`
@@ -648,16 +717,6 @@ Aliases:
   - `--message-file MESSAGE_FILE`
   - `-f MESSAGE_FILE`
 
-### `--gui`
-Run aider in your browser (default: False)  
-Default: False  
-Environment variable: `AIDER_GUI`  
-Aliases:
-  - `--gui`
-  - `--no-gui`
-  - `--browser`
-  - `--no-browser`
-
 ### `--copy-paste`
 Enable automatic copy/paste of chat between aider and web UI (default: False)  
 Default: False  
@@ -690,6 +749,19 @@ Print the system prompts and exit (debug)
 Default: False  
 Environment variable: `AIDER_SHOW_PROMPTS`  
 
+### `--linear-output`
+Run input and output sequentially instead of us simultaneous streams (default: True)  
+Default: True  
+Environment variable: `AIDER_LINEAR_OUTPUT`  
+Aliases:
+  - `--linear-output`
+  - `--no-linear-output`
+
+### `--debug`
+Turn on verbose debugging (default: False)  
+Default: False  
+Environment variable: `AIDER_DEBUG`  
+
 ## Voice settings:
 
 ### `--voice-format VOICE_FORMAT`
@@ -708,17 +780,35 @@ Environment variable: `AIDER_VOICE_INPUT_DEVICE`
 
 ## Other settings:
 
+### `--tweak-responses`
+Allow manual edits to model responses (default: False)  
+Default: False  
+Environment variable: `AIDER_TWEAK_RESPONSES`  
+
+### `--yes-always`
+Always say yes to every confirmation (not including cli commands)  
+Environment variable: `AIDER_YES_ALWAYS`  
+
+### `--yes`
+Always say yes to every confirmation (including cli commands)  
+Default: False  
+Environment variable: `AIDER_YES`  
+Aliases:
+  - `--yes`
+  - `--yes-always-commands`
+  - `--yolo`
+
 ### `--disable-playwright`
 Never prompt for or attempt to install Playwright for web scraping (default: False).  
 Default: False  
 Environment variable: `AIDER_DISABLE_PLAYWRIGHT`  
 
 ### `--file FILE`
-specify a file to edit (can be used multiple times)  
+specify a file to edit (can be used multiple times, glob patterns supported)  
 Environment variable: `AIDER_FILE`  
 
 ### `--read FILE`
-specify a read-only file (can be used multiple times)  
+specify a read-only file (can be used multiple times, glob patterns supported)  
 Environment variable: `AIDER_READ`  
 
 ### `--vim`
@@ -733,10 +823,6 @@ Environment variable: `AIDER_CHAT_LANGUAGE`
 ### `--commit-language COMMIT_LANGUAGE`
 Specify the language to use in the commit message (default: None, user language)  
 Environment variable: `AIDER_COMMIT_LANGUAGE`  
-
-### `--yes-always`
-Always say yes to every confirmation  
-Environment variable: `AIDER_YES_ALWAYS`  
 
 ### `--verbose`
 Enable verbose output  
@@ -807,6 +893,10 @@ Aliases:
 Specify a command to run for notifications instead of the terminal bell. If not specified, a default command for your OS may be used.  
 Environment variable: `AIDER_NOTIFICATIONS_COMMAND`  
 
+### `--command-prefix VALUE`
+Specify a command prefix for all commands (useful for sandboxing)  
+Environment variable: `AIDER_COMMAND_PREFIX`  
+
 ### `--detect-urls`
 Enable/disable detection and offering to add URLs to chat (default: True)  
 Default: True  
@@ -822,69 +912,4 @@ Environment variable: `AIDER_EDITOR`
 ### `--shell-completions SHELL`
 Print shell completion script for the specified SHELL and exit. Supported shells: bash, tcsh, zsh. Example: aider --shell-completions bash  
 Environment variable: `AIDER_SHELL_COMPLETIONS`  
-
-## Deprecated model settings:
-
-### `--opus`
-Use claude-3-opus-20240229 model for the main chat (deprecated, use --model)  
-Default: False  
-Environment variable: `AIDER_OPUS`  
-
-### `--sonnet`
-Use anthropic/claude-3-7-sonnet-20250219 model for the main chat (deprecated, use --model)  
-Default: False  
-Environment variable: `AIDER_SONNET`  
-
-### `--haiku`
-Use claude-3-5-haiku-20241022 model for the main chat (deprecated, use --model)  
-Default: False  
-Environment variable: `AIDER_HAIKU`  
-
-### `--4`
-Use gpt-4-0613 model for the main chat (deprecated, use --model)  
-Default: False  
-Environment variable: `AIDER_4`  
-Aliases:
-  - `--4`
-  - `-4`
-
-### `--4o`
-Use gpt-4o model for the main chat (deprecated, use --model)  
-Default: False  
-Environment variable: `AIDER_4O`  
-
-### `--mini`
-Use gpt-4o-mini model for the main chat (deprecated, use --model)  
-Default: False  
-Environment variable: `AIDER_MINI`  
-
-### `--4-turbo`
-Use gpt-4-1106-preview model for the main chat (deprecated, use --model)  
-Default: False  
-Environment variable: `AIDER_4_TURBO`  
-
-### `--35turbo`
-Use gpt-3.5-turbo model for the main chat (deprecated, use --model)  
-Default: False  
-Environment variable: `AIDER_35TURBO`  
-Aliases:
-  - `--35turbo`
-  - `--35-turbo`
-  - `--3`
-  - `-3`
-
-### `--deepseek`
-Use deepseek/deepseek-chat model for the main chat (deprecated, use --model)  
-Default: False  
-Environment variable: `AIDER_DEEPSEEK`  
-
-### `--o1-mini`
-Use o1-mini model for the main chat (deprecated, use --model)  
-Default: False  
-Environment variable: `AIDER_O1_MINI`  
-
-### `--o1-preview`
-Use o1-preview model for the main chat (deprecated, use --model)  
-Default: False  
-Environment variable: `AIDER_O1_PREVIEW`  
 <!--[[[end]]]-->
