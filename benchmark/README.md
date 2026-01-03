@@ -1,94 +1,124 @@
-
 # Aider benchmark harness
 
-Aider uses benchmarks to quantitatively measure how well it works
-with various LLMs.
+Before `cecli` was born, the old `aider` used benchmarks to quantitatively
+measure how well it works with various LLMs.
+
 This directory holds the harness and tools needed to run the benchmarking suite.
+
+If you're familiar with the `aider` benchmarking, see the "What's new..."
+section below.
 
 ## Background
 
-The benchmark is based on the [Exercism](https://github.com/exercism/python) coding exercises.
-This
-benchmark evaluates how effectively aider and LLMs can translate a
-natural language coding request into executable code saved into
-files that pass unit tests.
-It provides an end-to-end evaluation of not just
-the LLM's coding ability, but also its capacity to *edit existing code*
-and *format those code edits* so that aider can save the
-edits to the local source files.
+The benchmark was based on the [Exercism](https://github.com/exercism/python)
+coding exercises. This benchmark evaluates how effectively aider and LLMs can
+translate a natural language coding request into executable code saved into
+files that pass unit tests. It provides an end-to-end evaluation of not just the
+LLM's coding ability, but also its capacity to _edit existing code_ and _format
+those code edits_ so that aider can save the edits to the local source files.
 
-See [this writeup for a longer discussion about the benchmark](https://aider.chat/2024/12/21/polyglot.html).
+See
+[this writeup for a longer discussion about the benchmark](https://aider.chat/2024/12/21/polyglot.html).
 
-The benchmark is intended to be run *inside a docker container*.
-This is because the benchmarking harness will be
-taking code written by an LLM
-and executing it without any human review or supervision!
-The LLM could generate dangerous python that harms your system, like this: `import os; os.system("sudo rm -rf /")`.
+The benchmark is intended to be run _inside a docker container_. This is because
+the benchmarking harness will be taking code written by an LLM and executing it
+without any human review or supervision! The LLM could generate dangerous python
+that harms your system, like this: `import os; os.system("sudo rm -rf /")`.
 Running inside a docker container helps limit the damage that could be done.
 
 ## Usage
 
-There are 3 main tasks involved in benchmarking aider:
+There are 3 main tasks involved in benchmarking:
 
-1. Install and setup for benchmarking.
+1. Install and setup.
 
-2. Run the benchmark to measure performance across all the exercises.
+2. Run the benchmark.
 
-3. Generate a summary report of how many of the exercises succeeded or failed.
+3. Analysis.
 
-### Setup for benchmarking
+### Setup
 
-First, prepare all the groundwork for running the benchmarks.
 These steps only need to be done once.
 
 ```
-# Clone the aider repo
-git clone https://github.com/Aider-AI/aider.git
+ORG=Aider-AI
+REPO=aider
+# Clone the main repo
+git clone https://github.com/$ORG/$REPO.git
 
-# Create the scratch dir to hold benchmarking results inside the main aider dir:
-cd aider
+# Create the scratch dir to hold benchmarking results inside the main repo:
+cd $REPO
 mkdir tmp.benchmarks
 
 # Clone the repo with the exercises
-git clone https://github.com/Aider-AI/polyglot-benchmark tmp.benchmarks/polyglot-benchmark
+git clone https://github.com/$ORG/polyglot-benchmark tmp.benchmarks/polyglot-benchmark
 
 # Build the docker container
 ./benchmark/docker_build.sh
 ```
 
-### Running the benchmark
+### Running the benchmarks
 
 Launch the docker container and run the benchmark inside it:
 
 ```
 # Launch the docker container
+# You probably want to tweak this script to import your service keys.
+# It's currently configured to import GEMINI_API_KEY only.
+# PR's welcome to more effectively grab the keys without causing anxiety.
 ./benchmark/docker.sh
 
 # Inside the container, install aider as a development build.
 # This way you're running the code that you cloned above, including any local changes.
+# TODO: this step should be included in the Dockerfile
 pip install -e .[dev]
 
 # Run the benchmark:
 ./benchmark/benchmark.py a-helpful-name-for-this-run --model gpt-3.5-turbo --edit-format whole --threads 10 --exercises-dir polyglot-benchmark
 ```
 
-The above will create a folder `tmp.benchmarks/YYYY-MM-DD-HH-MM-SS--a-helpful-name-for-this-run` with benchmarking results.
-Run like this, the script will run all the exercises in a random order.
+The above will create a folder
+`tmp.benchmarks/YYYY-MM-DD-HH-MM-SS--a-helpful-name-for-this-run` with
+benchmarking results. Run like this, the script will run all the exercises in a
+random order.
 
-You can run `./benchmark/benchmark.py --help` for a list of all the arguments, but here are the most useful to keep in mind:
+You can run `./benchmark/benchmark.py --help` for a list of all the arguments,
+but here are the most useful to keep in mind:
 
-- `--model` is the name of the model, same as you would pass directly to `aider`.
-- `--edit-format` is the name of the edit format, same as you would pass directly to `aider`. When working with an experimental LLM, I recommend starting with `whole`
-- `--threads` specifies how many exercises to benchmark in parallel. Start with a single thread if you are working out the kinks on your benchmarking setup or working with a new model, etc. Once you are getting reliable results, you can speed up the process by running with more threads. 10 works well against the OpenAI APIs.
-- `--num-tests` specifies how many of the tests to run before stopping. This is another way to start gently as you debug your benchmarking setup.
-- `--keywords` filters the tests to run to only the ones whose name match the supplied argument (similar to `pytest -k xxxx`).
-- `--read-model-settings=<filename.yml>` specify model settings, see here: https://aider.chat/docs/config/adv-model-settings.html#model-settings
-- `--map-tokens` sets a token budget for the repo map sent with each request. Set `0` to disable the repo map. This lets you enable repo map usage for any model (e.g., `--map-tokens 1024`).
+- `--model` is the name of the model, same as you would pass directly to
+  `aider`.
+- `--edit-format` is the name of the edit format, same as you would pass
+  directly to `aider`. When working with an experimental LLM, I recommend
+  starting with `whole`
+- `--sets` runs specific groups of tests using the `sets` in the `cat.yaml`.
+  (Hopefully, the sets will grow with time but currently it just bookmarks
+  the classic "polyglot" test battery.)
+- `--hash-re` allows for deterministic slicing of the exercise set based on the
+  exercise hash. This is useful for quickly grabbing a consistent subset or k-fold
+  cross-validation. For example:
+  - `^0`: 1/16 of the set.
+  - `^[01]`: 1/8 of the set.
+  - `^[0-3]`: 1/4 of the set.
+  - `^.{2}[4-7]`: 1/4 of the set, using the 3 character of the hash.
+- `--threads` specifies how many exercises to benchmark in parallel. Start with
+  a single thread if you are working out the kinks on your benchmarking setup or
+  working with a new model, etc. Once you are getting reliable results, you can
+  speed up the process by running with more threads. 10 works well against the
+  OpenAI APIs.
+- `--num-tests` specifies how many of the tests to run before stopping. This is
+  another way to start gently as you debug your benchmarking setup.
+- `--keywords` filters the tests to run to only the ones whose name match the
+  supplied argument (similar to `pytest -k xxxx`).
+- `--read-model-settings=<filename.yml>` specify model settings, see here:
+  https://aider.chat/docs/config/adv-model-settings.html#model-settings
+- `--map-tokens` sets a token budget for the repo map sent with each request.
+  Set `0` to disable the repo map. This lets you enable repo map usage for any
+  model (e.g., `--map-tokens 1024`).
 
 ### Benchmark report
 
-You can generate stats about any benchmark, including ones which are still running.
-You don't need to run this inside the docker container, as it is just
+You can generate stats about any benchmark, including ones which are still
+running. You don't need to run this inside the docker container, as it is just
 collecting stats not executing unsafe python.
 
 ```
@@ -96,52 +126,55 @@ collecting stats not executing unsafe python.
 ./benchmark/benchmark.py --stats tmp.benchmarks/YYYY-MM-DD-HH-MM-SS--a-helpful-name-for-this-run
 ```
 
-The benchmark report is a yaml record with statistics about the run:
+The benchmark report is a yaml record with statistics about the run.
 
-```yaml
-- dirname: 2024-07-04-14-32-08--claude-3.5-sonnet-diff-continue
-  test_cases: 225
-  model: claude-3.5-sonnet
-  edit_format: diff
-  commit_hash: 35f21b5
-  pass_rate_1: 57.1
-  pass_rate_2: 77.4
-  percent_cases_well_formed: 99.2
-  error_outputs: 23
-  num_malformed_responses: 4
-  num_with_malformed_responses: 1
-  user_asks: 2
-  lazy_comments: 0
-  syntax_errors: 1
-  indentation_errors: 0
-  exhausted_context_windows: 0
-  test_timeouts: 1
-  command: aider --sonnet
-  date: 2024-07-04
-  versions: 0.42.1-dev
-  seconds_per_case: 17.6
-  total_cost: 3.6346
-```
+The key statistics are the `pass_rate_#` entries, which report the percent of
+the tasks which had all tests passing. There will be multiple of these pass rate
+stats, depending on the value of the `--tries` parameter.
 
-The key statistics are the `pass_rate_#` entries, which report the
-percent of the tasks which had all tests passing.
-There will be multiple of these pass rate stats,
-depending on the value of the `--tries` parameter.
+The yaml also includes all the settings which were in effect for the benchmark
+run. It also reports the git hash of the repo at the time that the benchmark was
+run, with `(dirty)` if there were uncommitted changes. It's good practice to
+commit the repo before starting a benchmark run. This way the `model`,
+`edit_format` and `commit_hash` should be enough to reliably reproduce any
+benchmark run.
 
-The yaml also includes all the settings which were in effect for the benchmark run.
-It also reports the git hash of the repo at the time that the benchmark was
-run, with `(dirty)` if there were uncommitted changes.
-It's good practice to commit the repo before starting a benchmark run.
-This way the `model`, `edit_format` and `commit_hash`
-should be enough to reliably reproduce any benchmark run.
+## Contributing
 
-You can see examples of the benchmark report yaml in the
-[aider leaderboard data files](https://github.com/Aider-AI/aider/blob/main/aider/website/_data/).
+Contributions of benchmark results and tests are welcome! Submit results by opening a PR.
 
+Note the roadmap priorities:
 
-## Limitations, notes
+1. Complete 'set up records' to support smart caching.
+2. Atomic data collection. Most of the data is saved but need protocols for sharing.
+3. **Dimensional Parameter Walking** allowing for n-dimensional parameter tuning,
+   facilitating "gradient descent" approach to optimisation across multiple parameters.
+   The test runner should accept n lists of options, e.g., ["thinking: 100", "thinking: 200", "thinking: 400"], ["optional: B", "optionD: C"].
+4. Smart Caching so the runner can optionally skip any tests for which "similar" result data
+   is already available based on fuzzy metadata matching. This aids iterative Testing as
+   when adding a new option to a list of permutations, only the new permutations need to
+   be run. Also when new Cats join the collection it is easy to incrementally collect the data.
+5. Data aggregation and analysis. These will be separate specialised tools.
 
-- Contributions of benchmark results are welcome! Submit results by opening a PR with edits to the
-[aider leaderboard data files](https://github.com/Aider-AI/aider/blob/main/aider/website/_data/).
-- These scripts are not intended for use by typical aider end users.
-- Some of these tools are written as `bash` scripts, so it will be hard to use them on Windows.
+## Limitations
+
+- These scripts are not intended for use by typical `cecli` end users.
+- Some of the old (?deprecated) tools are written as `bash` scripts, so it will be hard to use
+  them on Windows.
+- Currently the JS and cpp tests appear broken.
+
+## What's new with Cecli Cats?
+
+The benchmark has evolved into a collection of **Cecli Atomic Tests (Cats)**.
+
+- **YAML Metadata**: Every Cat has its own `cat.yaml` file containing metadata,
+  including a unique UUID that may or may not be useful later.
+- **Evolving Collection**: The directory structure of the Cats is laid out to
+  facilitate the growth and evolution of the collection. As the benchmark
+  matures, Cats will come and go.
+- **Simplified Runner**: The test runner is being simplified to focus on its
+  core job: executing tests and recording results. Downstream aggregation and
+  analysis of results will be shifted to other tools and projects.
+- **Subset Filtering**: see `--sets`
+- **K-fold Evaluation Slicing**: The `--hash-re` option allows for deterministic
+  slicing of the exercise (now `cats`) based on the exercise hash.

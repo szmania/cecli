@@ -3,6 +3,6 @@
 set -e
 
 docker build \
-       --file benchmark/Dockerfile \
-       -t aider-benchmark \
-       .
+  --file benchmark/Dockerfile \
+  -t cecli-cat \
+  .

@@ -49,6 +49,11 @@ class TextualInputOutput(InputOutput):
             ("Removing", "file_op"),
         ]
 
+        # Tool call buffering for styled panel rendering
+        self._tool_call_buffer = []
+        self._in_tool_call = False
+        self._expect_tool_result = False
+
     def rule(self):
         pass
 
@@ -154,6 +159,25 @@ class TextualInputOutput(InputOutput):
             self._streaming_response = False
             self.output_queue.put({"type": "end_response"})
 
+    def assistant_output(self, message, pretty=None):
+        """Override assistant_output to send LLM response through streaming path.
+
+        This ensures non-streaming mode output gets the same markdown rendering
+        treatment as streaming mode.
+
+        Args:
+            message: The assistant's response message
+            pretty: Whether to use pretty formatting (unused in TUI, kept for compatibility)
+        """
+        if not message:
+            self.tool_warning("Empty response received from LLM. Check your provider account?")
+            return
+
+        # Use the streaming path so markdown rendering is applied
+        self.output_queue.put({"type": "start_response"})
+        self.output_queue.put({"type": "stream_chunk", "text": message})
+        self.output_queue.put({"type": "end_response"})
+
     def tool_output(self, *messages, **kwargs):
         """Override tool_output to detect task boundaries and queue output.
 
@@ -163,20 +187,69 @@ class TextualInputOutput(InputOutput):
         """
         if messages:
             text = " ".join(str(m) for m in messages)
-            type = kwargs.get("type", None)
+            msg_type = kwargs.get("type", None)
 
-            # Check if this should start a new task
-            should_start, title, task_type = self._detect_task_start(text)
+            if not self._reroute_output(text, msg_type, **kwargs):
+                # Check if this should start a new task
+                should_start, title, task_type = self._detect_task_start(text)
 
-            if type:
-                should_start = True
-                title = type
+                if msg_type:
+                    should_start = True
+                    title = msg_type
 
-            if should_start:
-                self.start_task(title, task_type)
+                if should_start:
+                    self.start_task(title, task_type)
+            else:
+                return
 
         # Call parent to handle logging and actual output
         super().tool_output(*messages, **kwargs)
+
+    def _reroute_output(self, text, msg_type, **kwargs):
+        # Handle tool call buffering for styled panel rendering
+        if msg_type == "Tool Call":
+            # Start buffering a new tool call
+            self._in_tool_call = True
+            self._tool_call_buffer = [text]
+            # Log to history
+            self.append_chat_history(text, linebreak=True, blockquote=True)
+            return True
+        elif msg_type == "tool-footer":
+            # End of tool call - flush buffer as styled panel
+            if self._in_tool_call and self._tool_call_buffer:
+                self.output_queue.put(
+                    {
+                        "type": "tool_call",
+                        "lines": self._tool_call_buffer,
+                    }
+                )
+                # Expect a tool result next
+                self._expect_tool_result = True
+            self._in_tool_call = False
+            self._tool_call_buffer = []
+            return True
+        elif self._in_tool_call:
+            # Add to tool call buffer
+            if text.strip():
+                self._tool_call_buffer.append(text)
+                # Log to history
+                self.append_chat_history(text, linebreak=True, blockquote=True)
+            return True
+
+        # Check if this is a tool result (comes right after tool call)
+        if self._expect_tool_result and text.strip():
+            self._expect_tool_result = False
+            self.output_queue.put(
+                {
+                    "type": "tool_result",
+                    "text": text,
+                }
+            )
+            # Log to history
+            self.append_chat_history(text, linebreak=True, blockquote=True)
+            return True
+
+        return False
 
     def start_spinner(self, text, update_last_text=True):
         """Override start_spinner to send spinner state to TUI.

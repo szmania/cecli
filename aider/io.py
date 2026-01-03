@@ -343,7 +343,6 @@ class InputOutput:
         encoding="utf-8",
         line_endings="platform",
         dry_run=False,
-        llm_history_file=None,
         editingmode=EditingMode.EMACS,
         fancy_input=True,
         file_watcher=None,
@@ -442,7 +441,7 @@ class InputOutput:
             except (PermissionError, OSError) as e:
                 self.tool_warning(f"Could not create directory for input history: {e}")
                 self.input_history_file = None
-        self.llm_history_file = llm_history_file
+
         if chat_history_file is not None:
             self.chat_history_file = Path(chat_history_file)
         else:
@@ -1093,19 +1092,6 @@ class InputOutput:
 
         fh = FileHistory(self.input_history_file)
         return fh.load_history_strings()
-
-    def log_llm_history(self, role, content):
-        if not self.llm_history_file:
-            return
-        timestamp = datetime.now().isoformat(timespec="seconds")
-        try:
-            Path(self.llm_history_file).parent.mkdir(parents=True, exist_ok=True)
-            with open(self.llm_history_file, "a", encoding="utf-8") as log_file:
-                log_file.write(f"{role.upper()} {timestamp}\n")
-                log_file.write(content + "\n")
-        except (PermissionError, OSError) as err:
-            self.tool_warning(f"Unable to write to llm history file {self.llm_history_file}: {err}")
-            self.llm_history_file = None
 
     def display_user_input(self, inp):
         if self.pretty and self.user_input_color:

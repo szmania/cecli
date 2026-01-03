@@ -70,7 +70,6 @@ debug: false
 enable-context-compaction: true
 context-compaction-max-tokens: 64000
 env-file: .aider.env
-multiline: true
 show-model-warnings: true
 use-enhanced-map: true
 watch-files: false

@@ -2,6 +2,7 @@
 
 import re
 
+from rich.markdown import Markdown
 from rich.padding import Padding
 from rich.style import Style as RichStyle
 from rich.text import Text
@@ -68,7 +69,7 @@ class OutputContainer(RichLog):
             # self.write(Padding(line.strip(), (0, 0, 0, 1)))
             if line.rstrip():
                 self.set_last_write_type("assistant")
-                self.output(line.rstrip())
+                self.output(line.rstrip(), render_markdown=True)
 
     async def end_response(self):
         """End the current LLM response."""
@@ -78,7 +79,7 @@ class OutputContainer(RichLog):
         """Stop the current markdown stream."""
         # Flush any remaining buffer content
         if self._line_buffer.rstrip():
-            self.output(self.rstrip())
+            self.output(self._line_buffer.rstrip(), render_markdown=True)
             self._line_buffer = ""
 
     def add_user_message(self, text: str):
@@ -134,6 +135,55 @@ class OutputContainer(RichLog):
 
         self.output(Padding(capture_text, (0, 0, 0, 2)))
 
+    def add_tool_call(self, lines: list):
+        """Add a tool call with themed styling.
+
+        Args:
+            lines: List of lines from the tool call (header, arguments, etc.)
+        """
+        if not lines:
+            return
+
+        for i, line in enumerate(lines):
+            # Strip Rich markup
+            clean_line = line.replace("[bright_cyan]", "").replace("[/bright_cyan]", "")
+
+            content = Text()
+            if i == 0:
+                # First line: reformat "Tool Call: server • function" to "Tool Call · server · function"
+                clean_line = clean_line.replace("Tool Call:", "Tool Call •")
+                content.append(clean_line, style="dim bright_cyan")  # $accent
+            else:
+                # Subsequent lines (arguments) - prefix with corner to show they belong to the call
+                arg_string_list = re.split(r"(^\S+:)", clean_line, maxsplit=1)[1:]
+
+                if len(arg_string_list) > 1:
+                    content.append(f"ᴸ{arg_string_list[0]}", style="dim bright_cyan")
+                    content.append(arg_string_list[1], style="dim")
+                else:
+                    content.append("ᴸ", style="dim bright_cyan")
+                    content.append(clean_line, style="dim")
+
+            self.set_last_write_type("tool_call")
+            self.output(Padding(content, (0, 0, 0, 2)))
+
+    def add_tool_result(self, text: str):
+        """Add a tool result.
+
+        Args:
+            text: The tool result text
+        """
+        if not text:
+            return
+
+        clean_text = text.strip()
+
+        result = Text()
+        result.append(clean_text, style="dim")
+
+        self.set_last_write_type("tool_result")
+        self.output(Padding(result, (0, 0, 0, 1)))
+
     def _check_cost(self, text: str):
         """Extract and emit cost updates."""
         match = re.search(r"\$(\d+\.?\d*)\s*session", text)
@@ -158,13 +208,20 @@ class OutputContainer(RichLog):
 
         self._last_write_type = type
 
-    def output(self, text, check_duplicates=True):
+    def output(self, text, check_duplicates=True, render_markdown=False):
         """Write output with duplicate newline checking.
 
         Args:
             text: The text to write
             check_duplicates: If True, check for duplicate newlines before writing
+            render_markdown: If True and app config allows, render as markdown
         """
+        # Check if we should render as markdown
+        if render_markdown and hasattr(self.app, "render_markdown") and self.app.render_markdown:
+            # Only render string content as markdown
+            if isinstance(text, str):
+                text = Markdown(text)
+
         with self.app.console.capture() as capture:
             self.app.console.print(text)
         check = Text(capture.get()).plain

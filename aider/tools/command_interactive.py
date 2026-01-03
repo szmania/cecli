@@ -51,32 +51,33 @@ class Tool(BaseTool):
                 coder.io.tool_output(f"Skipped execution of shell command: {command_string}")
                 return "Shell command execution skipped by user."
 
-            should_print = True
-            # tui = None
-            if coder.tui and coder.tui():
-                # tui = coder.tui()
-                should_print = False
-
             coder.io.tool_output(f"⚙️ Starting interactive shell command: {command_string}")
-            coder.io.tool_output(">>> You may need to interact with the command below <<<")
-            coder.io.tool_output(" \n")
 
-            await coder.io.stop_input_task()
-            await asyncio.sleep(1)
+            tui = coder.tui() if coder.tui else None
 
-            # Use run_cmd which handles PTY logic
-            exit_status, combined_output = run_cmd(
-                command_string,
-                verbose=coder.verbose,  # Pass verbose flag
-                error_print=coder.io.tool_error,  # Use io for error printing
-                cwd=coder.root,  # Execute in the project root
-                should_print=should_print,
-            )
+            def _run_interactive():
+                return run_cmd(
+                    command_string,
+                    verbose=coder.verbose,
+                    error_print=coder.io.tool_error,
+                    cwd=coder.root,
+                    should_print=True,
+                )
 
-            await asyncio.sleep(1)
+            if tui:
+                # Notify user and suspend TUI for interactive command
+                coder.io.tool_output(">>> Suspending TUI for interactive command <<<")
+                exit_status, combined_output = tui.run_obstructive(_run_interactive)
+            else:
+                coder.io.tool_output(">>> You may need to interact with the command below <<<")
+                coder.io.tool_output(" \n")
+                await coder.io.stop_input_task()
+                await asyncio.sleep(1)
+                exit_status, combined_output = _run_interactive()
+                await asyncio.sleep(1)
+                coder.io.tool_output(" \n")
+                coder.io.tool_output(" \n")
 
-            coder.io.tool_output(" \n")
-            coder.io.tool_output(" \n")
             coder.io.tool_output(">>> Interactive command finished <<<")
 
             # Format the output for the result message, include more content

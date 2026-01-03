@@ -88,6 +88,7 @@ async def test_commands_web_disable_playwright(monkeypatch):
         def __init__(self):
             self.cur_messages = []
             self.main_model = type("M", (), {"edit_format": "code", "name": "dummy", "info": {}})
+            self.args = type("Args", (), {"disable_playwright": True})()
 
         def get_rel_fname(self, fname):
             return fname
@@ -120,14 +121,14 @@ async def test_commands_web_disable_playwright(monkeypatch):
         async def scrape(self, url):
             return "dummy content"
 
-    monkeypatch.setattr("aider.commands.Scraper", DummyScraper)
+    monkeypatch.setattr("aider.scrape.Scraper", DummyScraper)
 
     io = DummyIO()
     coder = DummyCoder()
     args = type("Args", (), {"disable_playwright": True})()
     commands = Commands(io, coder, args=args)
 
-    await commands.cmd_web("http://example.com")
+    await commands.run("/web http://example.com")
     # Should not emit a warning about playwright
     assert not io.warnings
     # Should not contain message "For the best web scraping, install Playwright:"

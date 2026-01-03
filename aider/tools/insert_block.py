@@ -176,6 +176,10 @@ class Tool(BaseTool):
             new_lines = lines[:insertion_line_idx] + content_lines + lines[insertion_line_idx:]
             new_content = "\n".join(new_lines)
 
+            # Restore trailing newline if original file had one
+            if original_content.endswith("\n"):
+                new_content += "\n"
+
             if original_content == new_content:
                 coder.io.tool_warning("No changes made: insertion would not change file")
                 return "Warning: No changes made (insertion would not change file)"

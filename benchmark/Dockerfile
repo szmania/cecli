@@ -57,8 +57,8 @@ RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
     core-js@3.37.1 \
     eslint@8.49.0
 
-COPY . /aider
 RUN pip3 install --no-cache-dir --upgrade pip uv
-RUN uv pip install --system --no-cache-dir -e /aider[dev]
-RUN git config --global --add safe.directory /aider
-WORKDIR /aider
+COPY . /cecli
+RUN uv pip install --system --no-cache-dir -e /cecli[dev]
+RUN git config --global --add safe.directory /cecli
+WORKDIR /cecli

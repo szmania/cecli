@@ -115,3 +115,35 @@ def test_mutually_exclusive_parameters_raise(coder_with_file):
     assert result.startswith("Error: Must specify exactly one of")
     assert file_path.read_text().startswith("first line")
     coder.io.tool_error.assert_called()
+
+
+def test_trailing_newline_preservation(coder_with_file):
+    coder, file_path = coder_with_file
+    insert_block.Tool.execute(
+        coder,
+        file_path="example.txt",
+        content="inserted line",
+        position="top",
+    )
+
+    content = file_path.read_text()
+    assert content.endswith("\n"), "File should preserve trailing newline"
+    coder.io.tool_error.assert_not_called()
+
+
+def test_no_trailing_newline_preservation(coder_with_file):
+    coder, file_path = coder_with_file
+
+    content_without_trailing_newline = "first line\nsecond line"
+    file_path.write_text(content_without_trailing_newline)
+
+    insert_block.Tool.execute(
+        coder,
+        file_path="example.txt",
+        content="inserted line",
+        position="top",
+    )
+
+    content = file_path.read_text()
+    assert not content.endswith("\n"), "File should preserve lack of trailing newline"
+    coder.io.tool_error.assert_not_called()

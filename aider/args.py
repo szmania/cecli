@@ -14,7 +14,7 @@ from aider.args_formatter import (
     MarkdownHelpFormatter,
     YamlHelpFormatter,
 )
-from aider.deprecated import add_deprecated_model_args
+from aider.deprecated_args import add_deprecated_model_args
 
 from .dump import dump  # noqa: F401
 
@@ -453,13 +453,6 @@ def get_parser(default_config_files, git_root):
         default=False,
         help="Restore the previous chat history messages (default: False)",
     )
-    group.add_argument(
-        "--llm-history-file",
-        metavar="LLM_HISTORY_FILE",
-        default=None,
-        help="Log the conversation with the LLM to this file (for example, .aider.llm.history)",
-    ).complete = shtab.FILE
-
     ##########
     group = parser.add_argument_group("Output settings")
     group.add_argument(

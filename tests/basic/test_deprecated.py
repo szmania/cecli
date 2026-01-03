@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch
 from prompt_toolkit.input import DummyInput
 from prompt_toolkit.output import DummyOutput
 
-from aider.deprecated import handle_deprecated_model_args
+from aider.deprecated_args import handle_deprecated_model_args
 from aider.dump import dump  # noqa
 from aider.main import main
 
