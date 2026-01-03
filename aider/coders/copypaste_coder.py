@@ -3,6 +3,7 @@ import json
 import math
 import time
 import uuid
+import sys
 
 from aider.exceptions import LiteLLMExceptions
 from aider.llm import litellm
