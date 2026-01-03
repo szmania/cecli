@@ -159,11 +159,12 @@ grep-ast==0.9.0
     # via -r requirements/requirements.in
 griffe==1.15.0
     # via banks
-grpcio==1.76.0
+grpcio==1.67.1
     # via
     #   google-api-core
     #   grpcio-status
-grpcio-status==1.71.2
+    #   litellm
+grpcio-status==1.67.1
     # via google-api-core
 h11==0.16.0
     # via
@@ -233,7 +234,7 @@ kiwisolver==1.4.9
     # via matplotlib
 linkify-it-py==2.0.3
     # via markdown-it-py
-litellm==1.80.5
+litellm==1.80.11
     # via -r requirements/requirements.in
 llama-index-core==0.14.8
     # via llama-index-embeddings-huggingface
@@ -608,7 +609,6 @@ typing-extensions==4.15.0
     #   anyio
     #   beautifulsoup4
     #   google-generativeai
-    #   grpcio
     #   huggingface-hub
     #   llama-index-core
     #   llama-index-workflows

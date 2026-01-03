@@ -37,14 +37,29 @@ class HelpCommand(BaseCommand):
 
         help_instance = commands_instance.help
 
-        help_coder = await Coder.create(
-            io=io,
-            from_coder=coder,
-            edit_format="help",
-            summarize_from_coder=False,
-            map_tokens=512,
-            map_mul_no_files=1,
-        )
+        # Use the editor_model from the main_model if it exists, otherwise use the main_model itself
+        editor_model = coder.main_model.editor_model or coder.main_model
+
+        kwargs = dict()
+        kwargs["io"] = io
+        kwargs["from_coder"] = coder
+        kwargs["edit_format"] = "help"
+        kwargs["summarize_from_coder"] = False
+        kwargs["map_tokens"] = 512
+        kwargs["map_mul_no_files"] = 1
+        kwargs["main_model"] = editor_model
+        kwargs["args"] = coder.args
+        kwargs["suggest_shell_commands"] = False
+        kwargs["cache_prompts"] = False
+        kwargs["num_cache_warming_pings"] = 0
+        kwargs["mcp_servers"] = []  # Empty to skip initialization
+
+        help_coder = await Coder.create(**kwargs)
+        # Transfer MCP state to avoid re-initialization
+        help_coder.mcp_servers = coder.mcp_servers
+        help_coder.mcp_tools = coder.mcp_tools
+        # Transfer TUI app weak reference
+        help_coder.tui = coder.tui
         user_msg = help_instance.ask(args)
         user_msg += """
 # Announcement lines from when this session of aider was launched:

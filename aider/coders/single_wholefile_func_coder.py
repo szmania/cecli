@@ -2,11 +2,11 @@ from aider import diffs
 
 from ..dump import dump  # noqa: F401
 from .base_coder import Coder
-from .single_wholefile_func_prompts import SingleWholeFileFunctionPrompts
 
 
 class SingleWholeFileFunctionCoder(Coder):
     edit_format = "func"
+    prompt_format = "single_wholefile_func"
 
     functions = [
         dict(
@@ -35,7 +35,6 @@ class SingleWholeFileFunctionCoder(Coder):
     ]
 
     def __init__(self, *args, **kwargs):
-        self.gpt_prompts = SingleWholeFileFunctionPrompts()
         super().__init__(*args, **kwargs)
 
     def add_assistant_reply_to_cur_messages(self, edited):

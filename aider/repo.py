@@ -18,7 +18,8 @@ except ImportError:
 
 import pathspec
 
-from aider import prompts, utils
+import aider.prompts.utils.system as prompts
+from aider import utils
 
 from .dump import dump  # noqa: F401
 

@@ -1,7 +1,7 @@
 import asyncio
 from typing import List
 
-import aider.prompts as prompts
+import aider.prompts.utils.system as prompts
 from aider.commands.utils.base_command import BaseCommand
 from aider.commands.utils.helpers import format_command_result
 from aider.run_cmd import run_cmd

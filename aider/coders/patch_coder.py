@@ -4,7 +4,6 @@ from enum import Enum
 from typing import Dict, List, Optional, Tuple
 
 from .base_coder import Coder
-from .patch_prompts import PatchPrompts
 
 
 # --------------------------------------------------------------------------- #
@@ -215,7 +214,7 @@ class PatchCoder(Coder):
     """
 
     edit_format = "patch"
-    gpt_prompts = PatchPrompts()
+    prompt_format = "patch"
 
     def get_edits(self) -> List[EditResult]:
         """

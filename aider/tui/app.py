@@ -269,14 +269,23 @@ class TUI(App):
             id="footer",
         )
 
+    BANNER_COLORS = [
+        "spring_green2",
+        "spring_green1",
+        "medium_spring_green",
+        "cyan2",
+        "cyan1",
+        "bright_white",
+    ]
+
     # ASCII banner for startup
-    BANNER = """
-[bold spring_green2]   ██████╗███████╗ ██████╗██╗     ██╗[/bold spring_green2]
-[bold spring_green1]  ██╔════╝██╔════╝██╔════╝██║     ██║[/bold spring_green1]
-[bold medium_spring_green]  ██║     █████╗  ██║     ██║     ██║[/bold medium_spring_green]
-[bold cyan2]  ██║     ██╔══╝  ██║     ██║     ██║[/bold cyan2]
-[bold cyan1]  ╚██████╗███████╗╚██████╗███████╗██║[/bold cyan1]
-[bold bright_white]   ╚═════╝╚══════╝ ╚═════╝╚══════╝╚═╝[/bold bright_white]
+    BANNER = f"""
+[bold {BANNER_COLORS[0]}]   ██████╗███████╗ ██████╗██╗     ██╗[/bold {BANNER_COLORS[0]}]
+[bold {BANNER_COLORS[1]}]  ██╔════╝██╔════╝██╔════╝██║     ██║[/bold {BANNER_COLORS[1]}]
+[bold {BANNER_COLORS[2]}]  ██║     █████╗  ██║     ██║     ██║[/bold {BANNER_COLORS[2]}]
+[bold {BANNER_COLORS[3]}]  ██║     ██╔══╝  ██║     ██║     ██║[/bold {BANNER_COLORS[3]}]
+[bold {BANNER_COLORS[4]}]  ╚██████╗███████╗╚██████╗███████╗██║[/bold {BANNER_COLORS[4]}]
+[bold {BANNER_COLORS[5]}]   ╚═════╝╚══════╝ ╚═════╝╚══════╝╚═╝[/bold {BANNER_COLORS[5]}]
 
 """
 

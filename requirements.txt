@@ -152,12 +152,13 @@ grep-ast==0.9.0
     # via
     #   -c requirements/common-constraints.txt
     #   -r requirements/requirements.in
-grpcio==1.76.0
+grpcio==1.67.1
     # via
     #   -c requirements/common-constraints.txt
     #   google-api-core
     #   grpcio-status
-grpcio-status==1.71.2
+    #   litellm
+grpcio-status==1.67.1
     # via
     #   -c requirements/common-constraints.txt
     #   google-api-core
@@ -235,7 +236,7 @@ linkify-it-py==2.0.3
     # via
     #   -c requirements/common-constraints.txt
     #   markdown-it-py
-litellm==1.80.5
+litellm==1.80.11
     # via
     #   -c requirements/common-constraints.txt
     #   -r requirements/requirements.in
@@ -541,7 +542,6 @@ typing-extensions==4.15.0
     #   anyio
     #   beautifulsoup4
     #   google-generativeai
-    #   grpcio
     #   huggingface-hub
     #   mcp
     #   openai

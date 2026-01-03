@@ -20,12 +20,35 @@ class CopyPasteCoder(Coder):
     ``edit_format``.
     """
 
+    # CopyPasteCoder doesn't have its own prompt format - it dynamically determines
+    # prompts based on the selected edit_format
+    prompt_format = None
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
         # Ensure CopyPasteCoder always has a prompt pack.
         # We mirror prompts from the coder that matches the active edit format.
         self._init_prompts_from_selected_edit_format()
+
+    @property
+    def gpt_prompts(self):
+        """Override gpt_prompts property for CopyPasteCoder.
+
+        CopyPasteCoder dynamically determines prompts based on the selected edit format.
+        This property returns the prompts that were set by _init_prompts_from_selected_edit_format().
+        """
+        if not hasattr(self, "_gpt_prompts"):
+            raise AttributeError(
+                "CopyPasteCoder must call _init_prompts_from_selected_edit_format() "
+                "before accessing gpt_prompts"
+            )
+        return self._gpt_prompts
+
+    @gpt_prompts.setter
+    def gpt_prompts(self, value):
+        """Setter for gpt_prompts property."""
+        self._gpt_prompts = value
 
     def _init_prompts_from_selected_edit_format(self):
         """Initialize ``self.gpt_prompts`` based on the currently selected edit format.
@@ -65,15 +88,35 @@ class CopyPasteCoder(Coder):
                     break
 
         # Mirror prompt pack + edit_format where available.
-        if target_coder_class is not None and hasattr(target_coder_class, "gpt_prompts"):
-            self.gpt_prompts = target_coder_class.gpt_prompts
+        if target_coder_class is not None:
+            # All coder classes must have prompt_format attribute
+            if (
+                not hasattr(target_coder_class, "prompt_format")
+                or target_coder_class.prompt_format is None
+            ):
+                raise AttributeError(
+                    f"Target coder class {target_coder_class.__name__} must have a 'prompt_format'"
+                    " attribute."
+                )
+
+            prompt_name = target_coder_class.prompt_format
+
+            # Get prompts from cache or load them
+            if prompt_name in Coder._prompt_cache:
+                self.gpt_prompts = Coder._prompt_cache[prompt_name]
+            else:
+                # Create a dummy instance to trigger prompt loading
+                dummy_instance = target_coder_class.__new__(target_coder_class)
+                dummy_instance.__class__ = target_coder_class
+                self.gpt_prompts = dummy_instance.gpt_prompts
+
             # Keep announcements/formatting consistent with the selected coder.
             self.edit_format = getattr(target_coder_class, "edit_format", self.edit_format)
             return
 
         # Last-resort fallback: avoid crashing if we can't determine the prompts.
         # Prefer keeping any existing gpt_prompts (if one was set elsewhere).
-        if not hasattr(self, "gpt_prompts"):
+        if not hasattr(self, "_gpt_prompts"):
             self.gpt_prompts = None
 
     async def send(self, messages, model=None, functions=None, tools=None):

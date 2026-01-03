@@ -869,8 +869,8 @@ def run_test_real(
 ):
     # Lazy imports: only needed in the actual benchmark execution path
     import git
-    import prompts
 
+    import aider.prompts.utils.system as prompts
     from aider import models
     from aider.coders import Coder
     from aider.io import InputOutput

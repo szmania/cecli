@@ -9,14 +9,13 @@ from aider import utils
 
 from ..dump import dump  # noqa: F401
 from .base_coder import Coder
-from .editblock_prompts import EditBlockPrompts
 
 
 class EditBlockCoder(Coder):
     """A coder that uses search/replace blocks for code modifications."""
 
     edit_format = "diff"
-    gpt_prompts = EditBlockPrompts()
+    prompt_format = "editblock"
 
     def get_edits(self):
         content = self.partial_response_content

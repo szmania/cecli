@@ -75,6 +75,11 @@ Input > .input--placeholder, TextArea > .text-area--placeholder  {
     background: $surface;
 }
 
+TextArea > .text-area--selection {
+    color: $background;
+    background: $foreground;
+}
+
 /* File List below input */
 #file-list {
     padding: 0 0 0 0;

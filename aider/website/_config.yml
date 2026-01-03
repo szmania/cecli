@@ -30,19 +30,19 @@ exclude:
 
 aux_links:
   "GitHub":
-    - "https://github.com/Aider-AI/aider"
+    - "https://github.com/dwash96/aider-ce"
   "Discord":
-    - "https://discord.gg/McwdCRuqkJ"
+    - "https://discord.gg/AX9ZEA7nJn"
   "Blog":
     - "/blog/"
 
 nav_external_links:
   - title: "GitHub"
-    url: "https://github.com/Aider-AI/aider"
+    url: "https://github.com/dwash96/aider-ce"
   - title: "Discord"
-    url: "https://discord.gg/McwdCRuqkJ"
+    url: "https://discord.gg/AX9ZEA7nJn"
 
-repository: Aider-AI/aider
+repository: dwash96/aider-ce
 
 callouts:
   tip:

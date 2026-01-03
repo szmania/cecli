@@ -1,6 +1,7 @@
 import argparse
 
-from aider import models, prompts
+import aider.prompts.utils.system as prompts
+from aider import models
 from aider.dump import dump  # noqa: F401
 
 

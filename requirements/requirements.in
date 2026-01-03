@@ -15,7 +15,7 @@ beautifulsoup4>=4.13.4
 PyYAML>=6.0.2
 diff-match-patch>=20241021
 pypandoc>=1.15
-litellm>=1.80.0
+litellm>=1.80.11
 flake8>=7.3.0
 importlib_resources
 pyperclip>=1.9.0

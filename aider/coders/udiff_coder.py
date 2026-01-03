@@ -11,7 +11,6 @@ from .search_replace import (
     flexible_search_and_replace,
     search_and_replace,
 )
-from .udiff_prompts import UnifiedDiffPrompts
 
 no_match_error = """UnifiedDiffNoMatch: hunk failed to apply!
 
@@ -47,7 +46,7 @@ class UnifiedDiffCoder(Coder):
     """A coder that uses unified diff format for code modifications."""
 
     edit_format = "udiff"
-    gpt_prompts = UnifiedDiffPrompts()
+    prompt_format = "udiff"
 
     def get_edits(self):
         content = self.partial_response_content

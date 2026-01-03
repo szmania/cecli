@@ -1,13 +1,13 @@
 import asyncio
 
 from ..commands import SwitchCoder
-from .architect_prompts import ArchitectPrompts
+from .ask_coder import AskCoder
 from .base_coder import Coder
 
 
 class ArchitectCoder(Coder):
     edit_format = "architect"
-    gpt_prompts = ArchitectPrompts()
+    prompt_format = "architect"
     auto_accept_architect = False
 
     async def process_tool_calls(self, tool_call_response):

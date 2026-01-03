@@ -2,10 +2,10 @@ from aider import diffs
 
 from ..dump import dump  # noqa: F401
 from .base_coder import Coder
-from .wholefile_func_prompts import WholeFileFunctionPrompts
 
 
 class WholeFileFunctionCoder(Coder):
+    prompt_format = "wholefile_func"
     functions = [
         dict(
             name="write_file",
@@ -46,7 +46,6 @@ class WholeFileFunctionCoder(Coder):
     def __init__(self, *args, **kwargs):
         raise RuntimeError("Deprecated, needs to be refactored to support get_edits/apply_edits")
 
-        self.gpt_prompts = WholeFileFunctionPrompts()
         super().__init__(*args, **kwargs)
 
     def add_assistant_reply_to_cur_messages(self, edited):

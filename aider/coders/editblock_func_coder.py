@@ -3,10 +3,10 @@ import json
 from ..dump import dump  # noqa: F401
 from .base_coder import Coder
 from .editblock_coder import do_replace
-from .editblock_func_prompts import EditBlockFunctionPrompts
 
 
 class EditBlockFunctionCoder(Coder):
+    prompt_format = "editblock_func"
     functions = [
         dict(
             name="replace_lines",
@@ -81,7 +81,6 @@ class EditBlockFunctionCoder(Coder):
                 "updated_lines"
             ] = updated_lines
 
-        self.gpt_prompts = EditBlockFunctionPrompts()
         super().__init__(*args, **kwargs)
 
     def render_incremental_response(self, final=False):

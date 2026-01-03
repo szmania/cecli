@@ -4,14 +4,13 @@ from aider import diffs
 
 from ..dump import dump  # noqa: F401
 from .base_coder import Coder
-from .wholefile_prompts import WholeFilePrompts
 
 
 class WholeFileCoder(Coder):
     """A coder that operates on entire files for code modifications."""
 
     edit_format = "whole"
-    gpt_prompts = WholeFilePrompts()
+    prompt_format = "wholefile"
 
     def render_incremental_response(self, final):
         try:
