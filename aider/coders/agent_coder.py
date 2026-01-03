@@ -556,10 +556,20 @@ class AgentCoder(Coder):
                 return "".join(content_parts)
 
             except Exception as e:
+                log_file_path = f".aider/logs/mcp-errors-{server.name}.log"
+                error_details = ""
+                if os.path.exists(log_file_path):
+                    with open(log_file_path, "r") as f:
+                        error_details = f.read()
+
+                full_error = f"{e}\n{error_details}".strip()
+                if not full_error:
+                    full_error = "Unknown error"
+
                 self.io.tool_warning(
-                    f"Executing {tool_name} on {server.name} failed: \n  Error: {e}\n"
+                    f"Executing {tool_name} on {server.name} failed: \n  Error: {full_error}\n"
                 )
-                return f"Error executing tool call {tool_name}: {e}"
+                return f"Error executing tool call {tool_name}: {full_error}"
 
         return await _exec_async()
 

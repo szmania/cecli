@@ -2667,10 +2667,22 @@ class Coder:
                         )
 
                     except Exception as e:
-                        tool_error = f"Error executing tool call {tool_call.function.name}: \n{e}"
+                        log_file_path = f".aider/logs/mcp-errors-{server.name}.log"
+                        error_details = ""
+                        if os.path.exists(log_file_path):
+                            with open(log_file_path, "r") as f:
+                                error_details = f.read()
+
+                        full_error = f"{e}\n{error_details}".strip()
+                        if not full_error:
+                            full_error = "Unknown error"
+
+                        tool_error = (
+                            f"Error executing tool call {tool_call.function.name}: \n{full_error}"
+                        )
                         self.io.tool_warning(
                             f"Executing {tool_call.function.name} on {server.name} failed: \n "
-                            f" Error: {e}\n"
+                            f" Error: {full_error}\n"
                         )
                         tool_responses.append(
                             {"role": "tool", "tool_call_id": tool_call.id, "content": tool_error}
