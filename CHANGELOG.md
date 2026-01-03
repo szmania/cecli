@@ -1,4 +1,17 @@
 ### Merged PRs
+### In-progress PRs
+
+* [Agent Tools: #9999](https://github.com/dwash96/aider-ce/pull/9999)
+    * Added `/tools` command to list available tools.
+    * Added `/tools-create` command to create new custom tools.
+    * Added `/tools-load` command to load tools.
+    * Added `/tools-unload` command to unload tools.
+    * Added `/tools-mv` command to move tools between scopes.
+    * Added `/tools-edit` command to edit tool source files.
+    * Added `/tools-rm` command to delete custom tools.
+    * Added `/tools-reload` command to reload all custom tools.
+    * Added `create_tool` and `context_manager` to `aider/tools/`.
+
 
 * [MCP: #3937](https://github.com/Aider-AI/aider/pull/3937)
     * [MCP Multi Tool Response](https://github.com/quinlanjager/aider/pull/1)
