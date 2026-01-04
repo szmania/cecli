@@ -1730,6 +1730,9 @@ class Coder:
             self.summarize_start()
             return
 
+        if self.context_compaction_max_tokens is None:
+            return
+
         # Check if combined messages exceed the token limit,
         # Exclude first cur_message since that's the user's initial input
         done_tokens = self.summarizer.count_tokens(self.done_messages)
