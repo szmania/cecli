@@ -1,8 +1,7 @@
 from typing import List
 
 from aider.commands.utils.base_command import BaseCommand
-from aider.commands.utils.helpers import format_command_result
-from aider.utils import expand_glob_patterns
+from aider.commands.utils.helpers import expand_glob_patterns, format_command_result
 
 
 class LintCommand(BaseCommand):
