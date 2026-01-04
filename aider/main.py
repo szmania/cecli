@@ -10,7 +10,6 @@ except Exception as e:
     pass
 
 import asyncio
-import glob
 import json
 import os
 import re
@@ -519,25 +518,6 @@ async def sanity_check_repo(repo, io):
     return False
 
 
-def expand_glob_patterns(patterns, root="."):
-    """Expand glob patterns in a list of file paths."""
-    expanded_files = []
-    for pattern in patterns:
-        # Check if the pattern contains glob characters
-        if any(c in pattern for c in "*?[]"):
-            # Use glob to expand the pattern
-            matches = glob.glob(pattern, recursive=True)
-            if matches:
-                expanded_files.extend(matches)
-            else:
-                # If no matches, keep the original pattern
-                expanded_files.append(pattern)
-        else:
-            # Not a glob pattern, keep as is
-            expanded_files.append(pattern)
-    return expanded_files
-
-
 PROJECT_ROOT = os.path.abspath(os.path.dirname(__file__))
 log_file = None
 file_excludelist = {
@@ -850,12 +830,12 @@ async def main_async(argv=None, input=None, output=None, force_git_root=None, re
 
     # Expand glob patterns in files and file arguments
     all_files = args.files + (args.file or [])
-    all_files = expand_glob_patterns(all_files)
+    all_files = utils.expand_glob_patterns(all_files)
     fnames = [str(Path(fn).resolve()) for fn in all_files]
 
     # Expand glob patterns in read arguments
     read_patterns = args.read or []
-    read_expanded = expand_glob_patterns(read_patterns)
+    read_expanded = utils.expand_glob_patterns(read_patterns)
     read_only_fnames = []
     for fn in read_expanded:
         path = Path(fn).expanduser().resolve()
@@ -1198,6 +1178,7 @@ async def main_async(argv=None, input=None, output=None, force_git_root=None, re
         if args.stream:
             io.tool_warning(
                 f"Warning: Streaming is not supported by {main_model.name}. Disabling streaming."
+                " Set stream: false in config file or use --no-stream to skip this warning."
             )
         args.stream = False
 
@@ -1336,7 +1317,7 @@ async def main_async(argv=None, input=None, output=None, force_git_root=None, re
         return await graceful_exit(coder)
 
     if args.lint:
-        await coder.commands.cmd_lint(fnames=fnames)
+        await coder.commands.do_run("lint", "")
 
     if args.test:
         if not args.test_cmd:

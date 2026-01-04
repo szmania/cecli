@@ -2,6 +2,7 @@ from typing import List
 
 from aider.commands.utils.base_command import BaseCommand
 from aider.commands.utils.helpers import format_command_result
+from aider.utils import expand_glob_patterns
 
 
 class LintCommand(BaseCommand):
@@ -11,7 +12,16 @@ class LintCommand(BaseCommand):
     @classmethod
     async def execute(cls, io, coder, args, **kwargs):
         """Execute the lint command with given parameters."""
-        fnames = kwargs.get("fnames", None)
+        fnames = None
+
+        # Get files from CLI arguments if available
+        system_args = kwargs.get("system_args")
+        if system_args:
+            cli_files = getattr(system_args, "files", []) or []
+            cli_file_arg = getattr(system_args, "file", []) or []
+            all_cli_files = cli_files + cli_file_arg
+            if all_cli_files:
+                fnames = expand_glob_patterns(all_cli_files)
 
         if not coder.repo:
             io.tool_error("No git repository found.")
@@ -21,7 +31,7 @@ class LintCommand(BaseCommand):
             fnames = coder.get_inchat_relative_files()
 
         # If still no files, get all dirty files in the repo
-        if not fnames and coder.repo:
+        if not fnames:
             fnames = coder.repo.get_dirty_files()
 
         if not fnames:

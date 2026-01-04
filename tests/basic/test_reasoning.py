@@ -1,5 +1,9 @@
+import json
+import textwrap
 import unittest
 from unittest.mock import MagicMock, patch
+
+import litellm
 
 from aider.coders.base_coder import Coder
 from aider.dump import dump  # noqa
@@ -13,6 +17,43 @@ from aider.reasoning_tags import (
 
 
 class TestReasoning(unittest.TestCase):
+    SYNTHETIC_COMPLETION = textwrap.dedent("""\
+        {
+          "id": "test-completion",
+          "created": 0,
+          "model": "synthetic/hf:MiniMaxAI/MiniMax-M2",
+          "object": "chat.completion",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "Final synthetic summary of the repository.",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null,
+                "reasoning_content": "Internal reasoning about how to describe the repo."
+              },
+              "token_ids": null
+            }
+          ],
+          "usage": {
+            "completion_tokens": 10,
+            "prompt_tokens": 5,
+            "total_tokens": 15,
+            "completion_tokens_details": null,
+            "prompt_tokens_details": {
+              "audio_tokens": null,
+              "cached_tokens": null,
+              "text_tokens": null,
+              "image_tokens": null
+            }
+          },
+          "prompt_token_ids": null
+        }
+        """)
+
     async def test_send_with_reasoning_content(self):
         """Test that reasoning content is properly formatted and output."""
         # Setup IO with no pretty
@@ -73,6 +114,31 @@ class TestReasoning(unittest.TestCase):
             self.assertLess(
                 reasoning_pos, main_pos, "Reasoning content should appear before main content"
             )
+
+    async def test_reasoning_keeps_answer_block(self):
+        """Ensure providers returning reasoning+answer still show both sections."""
+        io = InputOutput(pretty=False)
+        io.assistant_output = MagicMock()
+        model = Model("gpt-4o")
+        coder = await Coder.create(model, None, io=io, stream=False)
+
+        completion = litellm.ModelResponse(**json.loads(self.SYNTHETIC_COMPLETION))
+        mock_hash = MagicMock()
+        mock_hash.hexdigest.return_value = "hash"
+
+        with patch.object(model, "send_completion", return_value=(mock_hash, completion)):
+            list(await coder.send([{"role": "user", "content": "describe"}]))
+
+        output = io.assistant_output.call_args[0][0]
+        self.assertIn(REASONING_START, output)
+        self.assertIn("Internal reasoning about how to describe the repo.", output)
+        self.assertIn("Final synthetic summary of the repository.", output)
+        self.assertIn(REASONING_END, output)
+
+        coder.remove_reasoning_content()
+        self.assertEqual(
+            coder.partial_response_content.strip(), "Final synthetic summary of the repository."
+        )
 
     async def test_send_with_reasoning_content_stream(self):
         """Test that streaming reasoning content is properly formatted and output."""

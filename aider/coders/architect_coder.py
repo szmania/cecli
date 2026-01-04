@@ -44,13 +44,11 @@ class ArchitectCoder(Coder):
         kwargs["cache_prompts"] = False
         kwargs["num_cache_warming_pings"] = 0
         kwargs["summarize_from_coder"] = False
-        # Remove the empty mcp_servers assignment to preserve context
-        # kwargs["mcp_servers"] = []  # This line was causing loss of MCP context
-        kwargs["add_gitignore_files"] = self.add_gitignore_files
-        
-        editor_coder = await Coder.create(**kwargs)
-        # Transfer TUI app weak reference
-        editor_coder.tui = self.tui
+
+        new_kwargs = dict(io=self.io, from_coder=self)
+        new_kwargs.update(kwargs)
+
+        editor_coder = await Coder.create(**new_kwargs)
         editor_coder.cur_messages = []
         editor_coder.done_messages = []
 

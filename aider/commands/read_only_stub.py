@@ -206,10 +206,44 @@ class ReadOnlyStubCommand(BaseCommand):
 
     @classmethod
     def get_completions(cls, io, coder, args) -> List[str]:
-        """Get completion options for read-only-stub command."""
-        # For read-only-stub command, we could return file paths for completion
-        # For now, return empty list - the completion system will handle path completion
-        return []
+        """Get completion options for read-only command."""
+        from pathlib import Path
+
+        root = Path(coder.root) if hasattr(coder, "root") else Path.cwd()
+
+        # Handle the prefix - could be partial path like "src/ma" or just "ma"
+        if "/" in args:
+            # Has directory component
+            dir_part, file_part = args.rsplit("/", 1)
+            search_dir = root / dir_part
+            search_prefix = file_part.lower()
+            path_prefix = dir_part + "/"
+        else:
+            search_dir = root
+            search_prefix = args.lower()
+            path_prefix = ""
+
+        completions = []
+        try:
+            if search_dir.exists() and search_dir.is_dir():
+                for entry in search_dir.iterdir():
+                    name = entry.name
+                    if search_prefix and search_prefix not in name.lower():
+                        continue
+                    # Add trailing slash for directories
+                    if entry.is_dir():
+                        completions.append(path_prefix + name + "/")
+                    else:
+                        completions.append(path_prefix + name)
+        except (PermissionError, OSError):
+            pass
+
+        add_completions = coder.commands.get_completions("/add")
+        for c in add_completions:
+            if args.lower() in str(c).lower() and str(c) not in completions:
+                completions.append(str(c))
+
+        return sorted(completions)
 
     @classmethod
     def get_help(cls) -> str:

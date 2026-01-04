@@ -116,14 +116,7 @@ class BaseCommand(ABC):
             "args": coder.args,
         }
 
-        kwargs["mcp_servers"] = []  # Empty to skip initialization
-
         new_coder = await Coder.create(**kwargs)
-        # Transfer MCP state to avoid re-initialization
-        new_coder.mcp_servers = coder.mcp_servers
-        new_coder.mcp_tools = coder.mcp_tools
-        # Transfer TUI app weak reference
-        new_coder.tui = coder.tui
 
         await new_coder.generate(user_message=user_msg, preproc=False)
         coder.aider_commit_hashes = new_coder.aider_commit_hashes

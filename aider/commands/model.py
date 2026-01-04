@@ -94,10 +94,7 @@ class ModelCommand(BaseCommand):
     @classmethod
     def get_completions(cls, io, coder, args) -> List[str]:
         """Get completion options for model command."""
-        from aider.llm import litellm
-
-        model_names = litellm.model_cost.keys()
-        return list(model_names)
+        return models.get_chat_model_names()
 
     @classmethod
     def get_help(cls) -> str:

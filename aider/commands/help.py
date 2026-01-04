@@ -52,14 +52,8 @@ class HelpCommand(BaseCommand):
         kwargs["suggest_shell_commands"] = False
         kwargs["cache_prompts"] = False
         kwargs["num_cache_warming_pings"] = 0
-        kwargs["mcp_servers"] = []  # Empty to skip initialization
 
         help_coder = await Coder.create(**kwargs)
-        # Transfer MCP state to avoid re-initialization
-        help_coder.mcp_servers = coder.mcp_servers
-        help_coder.mcp_tools = coder.mcp_tools
-        # Transfer TUI app weak reference
-        help_coder.tui = coder.tui
         user_msg = help_instance.ask(args)
         user_msg += """
 # Announcement lines from when this session of aider was launched:

@@ -6,6 +6,7 @@ import warnings
 from collections.abc import Coroutine
 
 from aider.dump import dump  # noqa: F401
+from aider.helpers.model_providers import ensure_litellm_providers_registered
 
 warnings.filterwarnings("ignore", category=UserWarning, module="pydantic")
 
@@ -52,6 +53,9 @@ class LazyLiteLLM:
         self._lazy_module.set_verbose = False
         self._lazy_module.drop_params = True
         self._lazy_module._logging._disable_debugging()
+
+        # Make sure JSON-based OpenAI-compatible providers are registered
+        ensure_litellm_providers_registered()
 
         # Patch GLOBAL_LOGGING_WORKER to avoid event loop binding issues
         # See: https://github.com/BerriAI/litellm/issues/16518

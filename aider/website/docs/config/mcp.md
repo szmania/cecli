@@ -188,3 +188,23 @@ mcp-servers:
         "http://127.0.0.1:9222"
       ]
 ```
+
+### GitHub
+
+GitHub MCP provides access to GitHub repositories, issues, pull requests, and other GitHub resources. It enables AI models to interact with GitHub data, read repository contents, and perform various GitHub operations. The server runs in a Docker container and requires a GitHub Personal Access Token for authentication.
+
+```yaml
+mcp-servers:
+  mcpServers:
+    github:
+      transport: stdio
+      command: "docker"
+      args: [
+        "run",
+        "-i",
+        "--rm",
+        "-e",
+        "GITHUB_PERSONAL_ACCESS_TOKEN=<access_token>",     
+        "ghcr.io/github/github-mcp-server"
+      ]
+```

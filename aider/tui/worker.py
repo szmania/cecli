@@ -102,19 +102,12 @@ class CoderWorker:
                     kwargs["args"] = self.coder.args
                     # Skip summarization to avoid blocking LLM calls during mode switch
                     kwargs["summarize_from_coder"] = False
-                    kwargs["mcp_servers"] = []  # Empty to skip initialization
 
                     new_coder = await Coder.create(**kwargs)
                     new_coder.args = self.coder.args
 
                     if switch.kwargs.get("show_announcements") is False:
                         new_coder.suppress_announcements_for_next_prompt = True
-
-                    # Transfer MCP state to avoid re-initialization
-                    new_coder.mcp_servers = self.coder.mcp_servers
-                    new_coder.mcp_tools = self.coder.mcp_tools
-                    # Transfer TUI app weak reference
-                    new_coder.tui = self.coder.tui
 
                     # Notify TUI of mode change
                     self.coder = new_coder

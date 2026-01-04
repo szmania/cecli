@@ -18,9 +18,9 @@ from PIL import Image
 
 from aider import __version__
 from aider.dump import dump  # noqa: F401
+from aider.helpers.model_providers import ModelProviderManager
 from aider.helpers.requests import model_request_parser
 from aider.llm import litellm
-from aider.openrouter import OpenRouterModelManager
 from aider.sendchat import sanity_check_messages
 from aider.utils import check_pip_install_extra
 
@@ -157,13 +157,13 @@ class ModelInfoManager:
         self.verify_ssl = True
         self._cache_loaded = False
 
-        # Manager for the cached OpenRouter model database
-        self.openrouter_manager = OpenRouterModelManager()
+        # Manager for provider-specific cached model databases
+        self.provider_manager = ModelProviderManager()
+        self.openai_provider_manager = self.provider_manager  # Backwards compatibility alias
 
     def set_verify_ssl(self, verify_ssl):
         self.verify_ssl = verify_ssl
-        if hasattr(self, "openrouter_manager"):
-            self.openrouter_manager.set_verify_ssl(verify_ssl)
+        self.provider_manager.set_verify_ssl(verify_ssl)
 
     def _load_cache(self):
         if self._cache_loaded:
@@ -241,21 +241,45 @@ class ModelInfoManager:
                 if "model_prices_and_context_window.json" not in str(ex):
                     print(str(ex))
 
+        provider_info = self._resolve_via_provider(model, cached_info)
+        if provider_info:
+            return provider_info
+
         if litellm_info:
             return litellm_info
 
-        if not cached_info and model.startswith("openrouter/"):
-            # First try using the locally cached OpenRouter model database
-            openrouter_info = self.openrouter_manager.get_model_info(model)
-            if openrouter_info:
-                return openrouter_info
+        return cached_info
 
-            # Fallback to legacy web-scraping if the API cache does not contain the model
+    def _resolve_via_provider(self, model, cached_info):
+        if cached_info:
+            return None
+
+        provider = model.split("/", 1)[0] if "/" in model else None
+        if not self.provider_manager.supports_provider(provider):
+            return None
+
+        provider_info = self.provider_manager.get_model_info(model)
+        if provider_info:
+            self._record_dynamic_model(model, provider_info)
+            return provider_info
+
+        if provider == "openrouter":
             openrouter_info = self.fetch_openrouter_model_info(model)
             if openrouter_info:
+                openrouter_info.setdefault("litellm_provider", "openrouter")
+                self._record_dynamic_model(model, openrouter_info)
                 return openrouter_info
 
-        return cached_info
+        return None
+
+    def _record_dynamic_model(self, model, info):
+        self.local_model_metadata[model] = info
+        self._ensure_model_settings_entry(model)
+
+    def _ensure_model_settings_entry(self, model):
+        if any(ms.name == model for ms in MODEL_SETTINGS):
+            return
+        MODEL_SETTINGS.append(ModelSettings(name=model))
 
     def fetch_openrouter_model_info(self, model):
         """
@@ -300,6 +324,7 @@ class ModelInfoManager:
                 "max_output_tokens": context_size,
                 "input_cost_per_token": input_cost,
                 "output_cost_per_token": output_cost,
+                "litellm_provider": "openrouter",
             }
             return params
         except Exception as e:
@@ -365,6 +390,7 @@ class Model(ModelSettings):
         )
 
         self.info = self.get_model_info(model)
+        self.litellm_provider = (self.info.get("litellm_provider") or "").lower()
 
         # Are all needed keys/params available?
         res = self.validate_environment()
@@ -377,14 +403,8 @@ class Model(ModelSettings):
         self.max_chat_history_tokens = min(max(max_input_tokens / 16, 1024), 8192)
 
         self.configure_model_settings(model)
-
-        if self.extra_params is None:
-            self.extra_params = {}
-
-        if weak_model is False:
-            self.weak_model_name = None
-        else:
-            self.get_weak_model(weak_model)
+        self._apply_provider_defaults()
+        self.get_weak_model(weak_model)
 
         if editor_model is False:
             self.editor_model_name = None
@@ -707,6 +727,49 @@ class Model(ModelSettings):
 
         return self.editor_model
 
+    def _ensure_extra_params_dict(self):
+        if self.extra_params is None:
+            self.extra_params = {}
+        elif not isinstance(self.extra_params, dict):
+            self.extra_params = dict(self.extra_params)
+
+    def _apply_provider_defaults(self):
+        provider = (self.info.get("litellm_provider") or "").lower()
+        self.litellm_provider = provider or None
+
+        if not provider:
+            return
+
+        provider_config = model_info_manager.provider_manager.get_provider_config(provider)
+        if not provider_config:
+            return
+
+        self._ensure_extra_params_dict()
+        self.extra_params.setdefault("custom_llm_provider", provider)
+
+        if provider_config.get("supports_stream") is False:
+            # Some OpenAI-compatible providers (e.g., Synthetic) only expose the
+            # non-streaming /chat/completions endpoint, so forcing streaming would
+            # loop through LiteLLM's fallback and explode mid-response. Disable the
+            # streaming flag up front so the caller transparently falls back to
+            # standard completions for those providers.
+            self.streaming = False
+
+        base_url = model_info_manager.provider_manager.get_provider_base_url(provider)
+        if base_url:
+            self.extra_params.setdefault("base_url", base_url)
+
+        default_headers = provider_config.get("default_headers") or {}
+        if default_headers:
+            headers = self.extra_params.setdefault("extra_headers", {})
+            for key, value in default_headers.items():
+                headers.setdefault(key, value)
+
+        provider_extra = provider_config.get("extra_params") or {}
+        for key, value in provider_extra.items():
+            if key not in self.extra_params:
+                self.extra_params[key] = value
+
     def tokenizer(self, text):
         return litellm.encode(model=self.name, text=text)
 
@@ -805,6 +868,12 @@ class Model(ModelSettings):
         if var and os.environ.get(var):
             return dict(keys_in_environment=[var], missing_keys=[])
 
+        if not var and provider and model_info_manager.provider_manager.supports_provider(provider):
+            provider_keys = model_info_manager.provider_manager.get_required_api_keys(provider)
+            for env_var in provider_keys:
+                if os.environ.get(env_var):
+                    return dict(keys_in_environment=[env_var], missing_keys=[])
+
     def validate_environment(self):
         res = self.fast_validate_environment()
         if res:
@@ -835,6 +904,14 @@ class Model(ModelSettings):
             return res
 
         provider = self.info.get("litellm_provider", "").lower()
+        provider_config = model_info_manager.provider_manager.get_provider_config(provider)
+        if provider_config:
+            envs = provider_config.get("api_key_env", [])
+            available = [env for env in envs if os.environ.get(env)]
+            if available:
+                return dict(keys_in_environment=available, missing_keys=[])
+            if envs:
+                return dict(keys_in_environment=False, missing_keys=envs)
         if provider == "cohere_chat":
             return validate_variables(["COHERE_API_KEY"])
         if provider == "gemini":
@@ -1354,31 +1431,35 @@ async def check_for_dependencies(io, model_name):
         )
 
 
-def fuzzy_match_models(name):
-    name = name.lower()
-
+def get_chat_model_names():
     chat_models = set()
     model_metadata = list(litellm.model_cost.items())
     model_metadata += list(model_info_manager.local_model_metadata.items())
 
+    openai_provider_models = model_info_manager.provider_manager.get_models_for_listing()
+    model_metadata += list(openai_provider_models.items())
+
     for orig_model, attrs in model_metadata:
-        model = orig_model.lower()
         if attrs.get("mode") != "chat":
             continue
-        provider = attrs.get("litellm_provider", "").lower()
-        if not provider:
-            continue
-        provider += "/"
+        provider = (attrs.get("litellm_provider") or "").lower()
+        if provider:
+            prefix = provider + "/"
+            if orig_model.lower().startswith(prefix):
+                fq_model = orig_model
+            else:
+                fq_model = f"{provider}/{orig_model}"
+            chat_models.add(fq_model)
 
-        if model.startswith(provider):
-            fq_model = orig_model
-        else:
-            fq_model = provider + orig_model
-
-        chat_models.add(fq_model)
         chat_models.add(orig_model)
 
-    chat_models = sorted(chat_models)
+    return sorted(chat_models)
+
+
+def fuzzy_match_models(name):
+    name = name.lower()
+
+    chat_models = get_chat_model_names()
     # exactly matching model
     # matching_models = [
     #    (fq,m) for fq,m in chat_models
@@ -1388,7 +1469,7 @@ def fuzzy_match_models(name):
     #    return matching_models
 
     # Check for model names containing the name
-    matching_models = [m for m in chat_models if name in m]
+    matching_models = [m for m in chat_models if name in m.lower()]
     if matching_models:
         return sorted(set(matching_models))
 

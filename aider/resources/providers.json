@@ -1,0 +1,90 @@
+{
+  "openrouter": {
+    "api_base": "https://openrouter.ai/api/v1",
+    "models_url": "https://openrouter.ai/api/v1/models",
+    "api_key_env": [
+      "OPENROUTER_API_KEY"
+    ],
+    "requires_api_key": false,
+    "default_headers": {
+      "HTTP-Referer": "https://aider.chat",
+      "X-Title": "aider"
+    }
+  },
+  "openai": {
+    "api_base": "https://api.openai.com/v1",
+    "models_url": "https://api.openai.com/v1/models",
+    "api_key_env": [
+      "OPENAI_API_KEY"
+    ],
+    "base_url_env": [
+      "OPENAI_API_BASE"
+    ],
+    "display_name": "openai"
+  },
+  "apertis": {
+    "api_base": "https://api.stima.tech/v1",
+    "api_key_env": [
+      "STIMA_API_KEY"
+    ],
+    "display_name": "apertis"
+  },
+  "chutes": {
+    "api_base": "https://llm.chutes.ai/v1/",
+    "api_key_env": [
+      "CHUTES_API_KEY"
+    ],
+    "display_name": "chutes"
+  },
+  "helicone": {
+    "api_base": "https://ai-gateway.helicone.ai/",
+    "api_key_env": [
+      "HELICONE_API_KEY"
+    ],
+    "display_name": "helicone"
+  },
+  "nano-gpt": {
+    "api_base": "https://nano-gpt.com/api/v1",
+    "api_key_env": [
+      "NANOGPT_API_KEY"
+    ],
+    "display_name": "nano-gpt"
+  },
+  "poe": {
+    "api_base": "https://api.poe.com/v1",
+    "api_key_env": [
+      "POE_API_KEY"
+    ],
+    "display_name": "poe"
+  },
+  "publicai": {
+    "api_base": "https://api.publicai.co/v1",
+    "api_key_env": [
+      "PUBLICAI_API_KEY"
+    ],
+    "display_name": "publicai"
+  },
+  "synthetic": {
+    "api_base": "https://api.synthetic.new/openai/v1",
+    "api_key_env": [
+      "SYNTHETIC_API_KEY"
+    ],
+    "display_name": "synthetic",
+    "hf_namespace": true,
+    "supports_stream": false
+  },
+  "veniceai": {
+    "api_base": "https://api.venice.ai/api/v1",
+    "api_key_env": [
+      "VENICE_AI_API_KEY"
+    ],
+    "display_name": "veniceai"
+  },
+  "xiaomi_mimo": {
+    "api_base": "https://api.xiaomimimo.com/v1",
+    "api_key_env": [
+      "XIAOMI_MIMO_API_KEY"
+    ],
+    "display_name": "xiaomi_mimo"
+  }
+}

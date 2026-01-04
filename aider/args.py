@@ -856,6 +856,7 @@ def get_parser(default_config_files, git_root):
     )
     group.add_argument(
         "--yes-always",
+        "--yes",
         action="store_true",
         help="Always say yes to every confirmation (not including cli commands)",
         default=None,

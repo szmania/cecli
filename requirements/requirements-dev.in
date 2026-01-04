@@ -1,6 +1,7 @@
 pytest
 pytest-asyncio
 pytest-env
+pytest-mock
 pip-tools
 lox
 matplotlib

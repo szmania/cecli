@@ -247,21 +247,31 @@ class Coder:
             kwargs = use_kwargs
             from_coder.ok_to_warm_cache = False
 
+        res = None
         if (
             getattr(main_model, "copy_paste_mode", False)
             and getattr(main_model, "copy_paste_transport", "api") == "clipboard"
         ):
             res = coders.CopyPasteCoder(main_model, io, args=args, **kwargs)
+
+        if not res:
+            for coder in coders.__all__:
+                if hasattr(coder, "edit_format") and coder.edit_format == edit_format:
+                    res = coder(main_model, io, args=args, **kwargs)
+
+        if res is not None:
+            if from_coder:
+                if from_coder.mcp_servers and kwargs.get("mcp_servers", False):
+                    res.mcp_servers = from_coder.mcp_servers
+                    res.mcp_tools = from_coder.mcp_tools
+
+                # Transfer TUI app weak reference
+                res.tui = from_coder.tui
+
             await res.initialize_mcp_tools()
+
             res.original_kwargs = dict(kwargs)
             return res
-
-        for coder in coders.__all__:
-            if hasattr(coder, "edit_format") and coder.edit_format == edit_format:
-                res = coder(main_model, io, args=args, **kwargs)
-                await res.initialize_mcp_tools()
-                res.original_kwargs = dict(kwargs)
-                return res
 
         valid_formats = [
             str(c.edit_format)
@@ -2768,6 +2778,12 @@ class Coder:
         tools = []
 
         async def get_server_tools(server):
+            # Check if we already have tools for this server in mcp_tools
+            if self.mcp_tools:
+                for server_name, server_tools in self.mcp_tools:
+                    if server_name == server.name:
+                        return (server.name, server_tools)
+
             try:
                 session = await server.connect()
                 server_tools = await experimental_mcp_client.load_mcp_tools(
@@ -3383,8 +3399,20 @@ class Coder:
         self.partial_response_reasoning_content = reasoning_content or ""
 
         try:
-            if not self.partial_response_reasoning_content:
-                self.partial_response_content = response.choices[0].message.content or ""
+            content = response.choices[0].message.content
+            if isinstance(content, list):
+                # OpenAI-compatible APIs sometimes return content as a list
+                # of blocks; join the textual pieces for display.
+                content = "".join(
+                    block.get("text", "")
+                    for block in content
+                    if isinstance(block, dict) and block.get("type") == "output_text"
+                ) or "".join(
+                    block.get("text", "")
+                    for block in content
+                    if isinstance(block, dict) and block.get("type") == "text"
+                )
+            self.partial_response_content = content or ""
         except AttributeError as e:
             content_err = e
 
