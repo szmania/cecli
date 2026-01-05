@@ -1060,7 +1060,7 @@ class InputOutput:
                     output_task.cancel()
                     try:
                         await output_task
-                    except (asyncio.CancelledError, Exception):
+                    except (asyncio.CancelledError, Exception, SystemExit, KeyboardInterrupt):
                         pass
             except Exception:
                 pass
@@ -1731,23 +1731,30 @@ class InputOutput:
                 self.chat_history_file = None  # Disable further attempts to write
 
     def format_files_for_input(self, rel_fnames, rel_read_only_fnames, rel_read_only_stubs_fnames):
+        rel_fnames = [f for f in (rel_fnames or []) if f is not None]
+        rel_read_only_fnames = [f for f in (rel_read_only_fnames or []) if f is not None]
+        rel_read_only_stubs_fnames = [f for f in (rel_read_only_stubs_fnames or []) if f is not None]
+
         # Normalize all paths to absolute paths for consistent comparison
         def normalize_path(path):
             """Convert path to absolute and resolve symlinks"""
-            if os.path.isabs(path):
-                return os.path.abspath(path)
-            return os.path.abspath(os.path.join(self.root, path))
+            try:
+                if os.path.isabs(path):
+                    return os.path.abspath(path)
+                return os.path.abspath(os.path.join(self.root, path))
+            except (TypeError, ValueError):
+                return path
         
         # Create sets of normalized absolute paths for efficient lookup
-        read_only_abs_paths = {normalize_path(f) for f in (rel_read_only_fnames or [])}
-        read_only_stubs_abs_paths = {normalize_path(f) for f in (rel_read_only_stubs_fnames or [])}
+        read_only_abs_paths = {normalize_path(f) for f in rel_read_only_fnames}
+        read_only_stubs_abs_paths = {normalize_path(f) for f in rel_read_only_stubs_fnames}
         all_read_only_abs_paths = read_only_abs_paths | read_only_stubs_abs_paths
         
         # Create a mapping from normalized absolute paths back to original display names
         path_mapping = {}
-        for f in (rel_read_only_fnames or []):
+        for f in rel_read_only_fnames:
             path_mapping[normalize_path(f)] = f
-        for f in (rel_read_only_stubs_fnames or []):
+        for f in rel_read_only_stubs_fnames:
             path_mapping[normalize_path(f)] = f"{f} (stub)"
         
         # Identify editable files by excluding read-only files using normalized paths
@@ -1796,14 +1803,15 @@ class InputOutput:
         console = Console(file=output, force_terminal=False, markup=False)
 
         # Handle read-only files
+        read_only_lines = []
         if rel_read_only_fnames or rel_read_only_stubs_fnames:
             ro_paths = []
             # Regular read-only files
-            for rel_path in sorted(rel_read_only_fnames or []):
+            for rel_path in sorted(rel_read_only_fnames):
                 abs_path = os.path.abspath(os.path.join(self.root, rel_path))
                 ro_paths.append(abs_path if len(abs_path) < len(rel_path) else rel_path)
             # Stub files with (stub) marker
-            for rel_path in sorted(rel_read_only_stubs_fnames or []):
+            for rel_path in sorted(rel_read_only_stubs_fnames):
                 abs_path = os.path.abspath(os.path.join(self.root, rel_path))
                 path = abs_path if len(abs_path) < len(rel_path) else rel_path
                 ro_paths.append(f"{path} (stub)")
