@@ -1218,6 +1218,9 @@ async def main_async(argv=None, input=None, output=None, force_git_root=None, re
 
         if max_input_tokens:
             args.context_compaction_max_tokens = int(max_input_tokens * ratio)
+        else:
+            # Fallback if model info is missing
+            args.context_compaction_max_tokens = 32768
 
     try:
         # Load MCP servers from config string or file

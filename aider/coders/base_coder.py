@@ -1705,7 +1705,10 @@ class Coder:
         cur_tokens = self.summarizer.count_tokens(self.cur_messages[1:])
         combined_tokens = done_tokens + cur_tokens
 
-        if combined_tokens < self.context_compaction_max_tokens:
+        if (
+            self.context_compaction_max_tokens is None
+            or combined_tokens < self.context_compaction_max_tokens
+        ):
             return
 
         self.io.tool_output("Compacting chat history to make room for new messages...")
