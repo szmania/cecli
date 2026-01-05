@@ -37,3 +37,5 @@ aider/_version.py
 *.pyc
 env/
 .aider.plans.md
+venv_laptop/*
+venv/*
