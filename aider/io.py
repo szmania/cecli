@@ -1056,10 +1056,13 @@ class InputOutput:
             output_task = self.output_task
             self.output_task = None
             try:
-                output_task.cancel()
-                await output_task
+                if not output_task.done():
+                    output_task.cancel()
+                    try:
+                        await output_task
+                    except asyncio.CancelledError:
+                        pass
             except (
-                asyncio.CancelledError,
                 Exception,
                 EOFError,
                 IndexError,
@@ -1071,10 +1074,12 @@ class InputOutput:
     async def stop_task_streams(self):
         try:
             await self.stop_input_task()
+        except Exception:
+            pass
+        try:
             await self.stop_output_task()
-        except RuntimeError as e:
-            if "no running event loop" not in str(e):
-                raise
+        except Exception:
+            pass
 
     def add_to_input_history(self, inp):
         if not self.input_history_file:
