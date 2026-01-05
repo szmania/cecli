@@ -1060,15 +1060,9 @@ class InputOutput:
                     output_task.cancel()
                     try:
                         await output_task
-                    except asyncio.CancelledError:
+                    except (asyncio.CancelledError, Exception):
                         pass
-            except (
-                Exception,
-                EOFError,
-                IndexError,
-                RuntimeError,
-                SystemExit,
-            ):
+            except Exception:
                 pass
 
     async def stop_task_streams(self):
