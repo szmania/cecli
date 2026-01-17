@@ -1385,6 +1385,10 @@ class InputOutput:
         return res
 
     def _tool_message(self, message="", strip=True, color=None):
+        # Ensure message is a string or Text object
+        if not isinstance(message, (str, Text)):
+            message = str(message)
+
         if message.strip():
             if "\n" in message:
                 for line in message.splitlines():
