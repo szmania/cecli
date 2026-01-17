@@ -18,6 +18,9 @@ def mock_coder():
     coder.abs_read_only_fnames = set()
     coder.abs_read_only_stubs_fnames = set()
     coder.mcp_tools = []
+    coder.tool_manager = MagicMock()
+    coder.tool_registry = {}
+    coder.unloaded_standard_tools = {}
     return coder
 
 

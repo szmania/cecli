@@ -71,21 +71,23 @@ class TestHelp(unittest.TestCase):
         delay = 1
         max_time = 60
 
-        while time.time() - start_time < max_time:
-            try:
+        with unittest.mock.patch("aider.commands.install_help_extra", return_value=True), \
+             unittest.mock.patch("aider.commands.Help"):
+            while time.time() - start_time < max_time:
                 try:
-                    await commands.cmd_help("hi")
-                except aider.commands.SwitchCoder:
+                    try:
+                        await commands.cmd_help("hi")
+                    except aider.commands.SwitchCoder:
+                        break
+                    else:
+                        # If no exception was raised, fail the test
+                        assert False, "SwitchCoder exception was not raised"
                     break
-                else:
-                    # If no exception was raised, fail the test
-                    assert False, "SwitchCoder exception was not raised"
-                break
-            except (ReadTimeout, ConnectionError):
-                await asyncio.sleep(delay)
-                delay = min(delay * 2, 15)
-        else:
-            raise Exception("Retry timeout exceeded")
+                except (ReadTimeout, ConnectionError):
+                    await asyncio.sleep(delay)
+                    delay = min(delay * 2, 15)
+            else:
+                raise Exception("Retry timeout exceeded")
 
         help_mock.run.assert_called_once()
 
