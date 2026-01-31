@@ -78,6 +78,7 @@ class Tool(BaseTool):
         sort=None,
         format=None,
         show_current=False,
+        **kwargs,
     ):
         """
         List branches in the repository with various filtering and formatting options.

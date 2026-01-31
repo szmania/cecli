@@ -47,6 +47,7 @@ class Tool(BaseTool):
         occurrence=1,
         change_id=None,
         dry_run=False,
+        **kwargs,
     ):
         """
         Delete a block of text between start_pattern and end_pattern (inclusive).

@@ -18,7 +18,7 @@ class Tool(BaseTool):
     }
 
     @classmethod
-    def execute(cls, coder):
+    def execute(cls, coder, **kwargs):
         """
         List remote repositories.
         """

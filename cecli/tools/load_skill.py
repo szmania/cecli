@@ -25,7 +25,7 @@ class Tool(BaseTool):
     }
 
     @classmethod
-    def execute(cls, coder, skill_name):
+    def execute(cls, coder, skill_name, **kwargs):
         """
         Load a skill by name (agent mode only).
         """

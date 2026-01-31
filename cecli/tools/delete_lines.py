@@ -30,7 +30,9 @@ class Tool(BaseTool):
     }
 
     @classmethod
-    def execute(cls, coder, file_path, start_line, end_line, change_id=None, dry_run=False):
+    def execute(
+        cls, coder, file_path, start_line, end_line, change_id=None, dry_run=False, **kwargs
+    ):
         """
         Delete a range of lines (1-based, inclusive).
 

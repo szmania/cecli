@@ -29,7 +29,7 @@ class Tool(BaseTool):
     }
 
     @classmethod
-    def execute(cls, coder, content):
+    def execute(cls, coder, content, **kwargs):
         """
         A place to allow the model to record freeform text as it
         iterates over tools to ideally help it guide itself to a proper solution

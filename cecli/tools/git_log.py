@@ -23,7 +23,7 @@ class Tool(BaseTool):
     }
 
     @classmethod
-    def execute(cls, coder, limit=10):
+    def execute(cls, coder, limit=10, **kwargs):
         """
         Show the git log.
         """

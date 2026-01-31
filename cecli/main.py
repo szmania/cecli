@@ -181,7 +181,9 @@ async def setup_git(git_root, io):
         )
         return
     elif cwd and await io.confirm_ask(
-        "No git repo found, create one to track cecli's changes (recommended)?", acknowledge=True
+        "No git repo found, create one to track cecli's changes (recommended)?",
+        acknowledge=True,
+        explicit_yes_required=True,
     ):
         git_root = str(cwd.resolve())
         repo = await make_new_repo(git_root, io)

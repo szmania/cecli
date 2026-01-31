@@ -46,6 +46,7 @@ class Tool(BaseTool):
         near_context=None,
         occurrence=1,
         dry_run=False,
+        **kwargs,
     ):
         """
         Extract a range of lines from a source file and move them to a target file.

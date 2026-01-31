@@ -957,6 +957,7 @@ def get_parser(default_config_files, git_root):
         "-c",
         "--config",
         is_config_file=True,
+        env_var="CECLI_CONFIG_FILE",
         metavar="CONFIG_FILE",
         help=(
             "Specify the config file (default: search for .cecli.conf.yml in git root, cwd"

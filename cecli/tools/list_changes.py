@@ -22,7 +22,7 @@ class Tool(BaseTool):
     }
 
     @classmethod
-    def execute(cls, coder, file_path=None, limit=10):
+    def execute(cls, coder, file_path=None, limit=10, **kwargs):
         """
         List recent changes made to files.
 

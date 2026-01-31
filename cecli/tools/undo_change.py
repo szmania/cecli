@@ -21,7 +21,7 @@ class Tool(BaseTool):
     }
 
     @classmethod
-    def execute(cls, coder, change_id=None, file_path=None):
+    def execute(cls, coder, change_id=None, file_path=None, **kwargs):
         """
         Undo a specific change by ID, or the last change to a file.
 

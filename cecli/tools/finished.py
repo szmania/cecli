@@ -19,7 +19,7 @@ class Tool(BaseTool):
     }
 
     @classmethod
-    def execute(cls, coder):
+    def execute(cls, coder, **kwargs):
         """
         Mark that the current generation task needs no further effort.
 

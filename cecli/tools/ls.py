@@ -24,7 +24,7 @@ class Tool(BaseTool):
     }
 
     @classmethod
-    def execute(cls, coder, dir_path=None, directory=None):
+    def execute(cls, coder, dir_path=None, directory=None, **kwargs):
         # Handle both positional and keyword arguments for backward compatibility
         if dir_path is None and directory is not None:
             dir_path = directory

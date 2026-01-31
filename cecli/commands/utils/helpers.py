@@ -46,22 +46,114 @@ def glob_filtered_to_repo(pattern: str, root: str, repo) -> List[Path]:
         else:
             try:
                 raw_matched_files = list(Path(root).glob(pattern))
-            except (IndexError, AttributeError):
+            except (IndexError, AttributeError, ValueError):
                 # Handle patterns like "**/*.py" that might fail on empty dirs
                 raw_matched_files = []
 
-        # Filter out directories and ignored files
+        # Expand directories and filter
         matched_files = []
         for f in raw_matched_files:
-            if not f.is_file():
-                continue
-            if repo and repo.ignored_file(f):
-                continue
-            matched_files.append(f)
+            matched_files.extend(expand_subdir(f))
+
+        # Filter to repository files
+        matched_files = [fn.relative_to(root) for fn in matched_files if fn.is_relative_to(root)]
+
+        # if repo, filter against it
+        if repo:
+            git_files = repo.get_tracked_files()
+            matched_files = [fn for fn in matched_files if str(fn) in git_files]
 
         return matched_files
     except Exception as e:
         raise CommandError(f"Error processing pattern '{pattern}': {e}")
+
+
+def get_file_completions(
+    coder,
+    args: str = "",
+    completion_type: str = "all",
+    include_directories: bool = False,
+    filter_in_chat: bool = False,
+) -> List[str]:
+    """
+    Get file completions for command line arguments.
+
+    This function provides unified file completion logic that can be used by
+    multiple commands (add, read-only, read-only-stub, etc.).
+
+    Args:
+        coder: Coder instance
+        args: Command arguments to complete
+        completion_type: Type of completion to perform:
+            - "all": Return all available files (default)
+            - "glob": Treat args as glob pattern and expand
+            - "directory": Perform directory-based prefix matching
+        include_directories: Whether to include directories in results
+        filter_in_chat: Whether to filter out files already in chat
+
+    Returns:
+        List of completion strings (quoted if needed)
+    """
+    from pathlib import Path
+
+    root = Path(coder.root) if hasattr(coder, "root") else Path.cwd()
+
+    if completion_type == "glob":
+        # Handle glob pattern completion
+        if not args.strip():
+            return []
+
+        try:
+            matched_files = glob_filtered_to_repo(args, str(root), coder.repo)
+            completions = [str(fn) for fn in matched_files]
+        except CommandError:
+            completions = []
+
+    elif completion_type == "directory":
+        # Handle directory-based prefix matching (like read-only commands)
+        if "/" in args:
+            # Has directory component
+            dir_part, file_part = args.rsplit("/", 1)
+            if dir_part == "":
+                search_dir = Path("/")
+                path_prefix = "/"
+            else:
+                search_dir = (root / dir_part).resolve()
+                path_prefix = dir_part + "/"
+            search_prefix = file_part.lower()
+        else:
+            search_dir = root
+            search_prefix = args.lower()
+            path_prefix = ""
+
+        completions = []
+        try:
+            if search_dir.exists() and search_dir.is_dir():
+                for entry in search_dir.iterdir():
+                    name = entry.name
+                    if search_prefix and not name.lower().startswith(search_prefix):
+                        continue
+
+                    # Add trailing slash for directories if requested
+                    if entry.is_dir() and include_directories:
+                        completions.append(path_prefix + name + "/")
+                    elif entry.is_file():
+                        completions.append(path_prefix + name)
+        except (PermissionError, OSError):
+            pass
+
+    else:  # "all" completion type
+        # Get all available files
+        if filter_in_chat:
+            files = set(coder.get_all_relative_files())
+            files = files - set(coder.get_inchat_relative_files())
+            completions = list(files)
+        else:
+            completions = coder.get_all_relative_files()
+
+    # Quote filenames with spaces
+    completions = [quote_filename(fn) for fn in completions]
+    return sorted(completions)
 
 
 def validate_file_access(io, coder, file_path: str, require_in_chat: bool = False) -> bool:
@@ -130,13 +222,16 @@ def get_available_files(coder, in_chat: bool = False) -> List[str]:
         return coder.get_all_relative_files()
 
 
-def expand_subdir(file_path):
+def expand_subdir(file_path: Path) -> List[Path]:
     """Expand a directory path to all files within it."""
     if file_path.is_file():
-        yield file_path
-        return
+        return [file_path]
 
     if file_path.is_dir():
+        files = []
         for file in file_path.rglob("*"):
             if file.is_file():
-                yield file
+                files.append(file)
+        return files
+
+    return []

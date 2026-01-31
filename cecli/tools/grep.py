@@ -76,6 +76,7 @@ class Tool(BaseTool):
         case_insensitive=False,
         context_before=5,
         context_after=5,
+        **kwargs,
     ):
         """
         Search for lines matching a pattern in files within the project repository.

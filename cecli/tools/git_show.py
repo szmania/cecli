@@ -23,7 +23,7 @@ class Tool(BaseTool):
     }
 
     @classmethod
-    def execute(cls, coder, object="HEAD"):
+    def execute(cls, coder, object="HEAD", **kwargs):
         """
         Show various types of objects (blobs, trees, tags, and commits).
         """

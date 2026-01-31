@@ -51,7 +51,7 @@ class Tool(BaseTool):
     }
 
     @classmethod
-    def execute(cls, coder, remove=None, editable=None, view=None, create=None):
+    def execute(cls, coder, remove=None, editable=None, view=None, create=None, **kwargs):
         """Perform batch operations on the coder's context.
 
         Parameters

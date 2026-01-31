@@ -42,7 +42,7 @@ class Tool(BaseTool):
     }
 
     @classmethod
-    def execute(cls, coder, content, append=False, change_id=None, dry_run=False):
+    def execute(cls, coder, content, append=False, change_id=None, dry_run=False, **kwargs):
         """
         Update the todo list file (.cecli/todo.txt) with new content.
         Can either replace the entire content or append to it.

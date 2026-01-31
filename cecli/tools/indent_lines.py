@@ -49,6 +49,7 @@ class Tool(BaseTool):
         occurrence=1,
         change_id=None,
         dry_run=False,
+        **kwargs,
     ):
         """
         Indent or unindent a block of lines in a file using utility functions.

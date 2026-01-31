@@ -58,6 +58,7 @@ class Tool(BaseTool):
         position=None,
         auto_indent=True,
         use_regex=False,
+        **kwargs,
     ):
         """
         Insert a block of text after or before a specified pattern using utility functions.

@@ -6,6 +6,7 @@ from typing import List
 from cecli.commands.utils.base_command import BaseCommand
 from cecli.commands.utils.helpers import (
     format_command_result,
+    get_file_completions,
     parse_quoted_filenames,
     quote_filename,
 )
@@ -81,10 +82,6 @@ class AddCommand(BaseCommand):
 
         for matched_file in sorted(all_matched_files):
             abs_file_path = coder.abs_root_path(matched_file)
-
-            if not abs_file_path.startswith(coder.root) and not is_image_file(matched_file):
-                io.tool_error(f"Can not add {abs_file_path}, which is not within {coder.root}")
-                continue
 
             if (
                 coder.repo
@@ -205,10 +202,22 @@ class AddCommand(BaseCommand):
     @classmethod
     def get_completions(cls, io, coder, args) -> List[str]:
         """Get completion options for add command."""
-        files = set(coder.get_all_relative_files())
-        files = files - set(coder.get_inchat_relative_files())
-        files = [quote_filename(fn) for fn in files]
-        return files
+        # Get both directory-based completions and filtered "all" completions
+        directory_completions = get_file_completions(
+            coder,
+            args=args,
+            completion_type="directory",
+            include_directories=True,
+            filter_in_chat=False,
+        )
+
+        all_completions = get_file_completions(
+            coder, args=args, completion_type="all", include_directories=False, filter_in_chat=True
+        )
+
+        # Return the joint set (union) of both completion types
+        joint_set = set(directory_completions) | set(all_completions)
+        return sorted(joint_set)
 
     @classmethod
     def get_help(cls) -> str:

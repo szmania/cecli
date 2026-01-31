@@ -107,7 +107,9 @@ class MainFooter(Static):
 
         if self.project_name:
             right.append(f"{self.project_name}")
-            right.append(" • ")
+
+            if self.git_branch:
+                right.append(" • ")
 
         if self.git_branch:
             right.append(self.git_branch)

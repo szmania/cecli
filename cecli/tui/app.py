@@ -3,6 +3,7 @@
 import concurrent.futures
 import json
 import queue
+from pathlib import Path
 
 from textual import events
 from textual.app import App, ComposeResult
@@ -248,15 +249,18 @@ class TUI(App):
         coder_mode = getattr(coder, "edit_format", "code") or "code"
 
         # Get project name (just the folder name, not full path)
-        project_name = ""
+        project_name = str(Path.cwd())
+
+        if len(project_name) >= 64:
+            project_name = project_name.split("/")[-1]
+
         if coder.repo:
-            project_name = (
-                coder.repo.root.name
-                if hasattr(coder.repo.root, "name")
-                else str(coder.repo.root).split("/")[-1]
-            )
-        else:
-            project_name = "No Repo"
+            root_path = str(coder.repo.root)
+
+            if len(root_path) <= 64:
+                project_name = root_path
+            else:
+                project_name = root_path.split("/")[-1]
 
         # Get history file path from coder's io
         history_file = getattr(coder.io, "input_history_file", None)
@@ -274,7 +278,7 @@ class TUI(App):
         yield KeyHints(id="key-hints")
         yield MainFooter(
             model_name=model_name,
-            project_name=str(coder.repo.root) if len(str(coder.repo.root)) <= 64 else project_name,
+            project_name=project_name,
             git_branch="",  # Loaded async in on_mount
             coder_mode=coder_mode,
             id="footer",
@@ -773,7 +777,7 @@ class TUI(App):
         self.input_queue.put({"confirmed": message.result})
 
     # Commands that use path-based completion
-    PATH_COMPLETION_COMMANDS = {"/read-only", "/read-only-stub", "/load", "/save"}
+    PATH_COMPLETION_COMMANDS = {"/add", "/read-only", "/read-only-stub", "/load", "/save"}
 
     def _extract_symbols(self) -> set[str]:
         """Extract code symbols from files in chat using Pygments."""
@@ -845,8 +849,6 @@ class TUI(App):
 
     def _get_path_completions(self, prefix: str) -> list[str]:
         """Get filesystem path completions relative to coder root."""
-        from pathlib import Path
-
         coder = self.worker.coder
         root = Path(coder.root) if hasattr(coder, "root") else Path.cwd()
 
@@ -928,9 +930,9 @@ class TUI(App):
                 if cmd_name in self.PATH_COMPLETION_COMMANDS:
                     suggestions = self._get_path_completions(arg_prefix)
                     # For /read-only and /read-only-stub, also include add completions
-                    if cmd_name in {"/read-only", "/read-only-stub"}:
+                    if cmd_name in {"/add", "/read-only", "/read-only-stub"}:
                         try:
-                            add_completions = commands.get_completions("/add") or []
+                            add_completions = commands.get_completions(cmd_name) or []
                             for c in add_completions:
                                 if arg_prefix_lower in str(c).lower() and str(c) not in suggestions:
                                     suggestions.append(str(c))

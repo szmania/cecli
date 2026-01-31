@@ -49,10 +49,14 @@ def test_pattern_with_zero_line_number_is_allowed(coder_with_file):
 
     result = show_numbered_context.Tool.execute(
         coder,
-        file_path="example.txt",
-        pattern="beta",
-        line_number=0,
-        context_lines=0,
+        show=[
+            {
+                "file_path": "example.txt",
+                "pattern": "beta",
+                "line_number": 0,
+                "context_lines": 0,
+            }
+        ],
     )
 
     assert "beta" in result
@@ -65,10 +69,14 @@ def test_empty_pattern_uses_line_number(coder_with_file):
 
     result = show_numbered_context.Tool.execute(
         coder,
-        file_path="example.txt",
-        pattern="",
-        line_number=2,
-        context_lines=0,
+        show=[
+            {
+                "file_path": "example.txt",
+                "pattern": "",
+                "line_number": 2,
+                "context_lines": 0,
+            }
+        ],
     )
 
     assert "2 | beta" in result
@@ -80,13 +88,17 @@ def test_conflicting_pattern_and_line_number_raise(coder_with_file):
 
     result = show_numbered_context.Tool.execute(
         coder,
-        file_path="example.txt",
-        pattern="beta",
-        line_number=2,
-        context_lines=0,
+        show=[
+            {
+                "file_path": "example.txt",
+                "pattern": "beta",
+                "line_number": 2,
+                "context_lines": 0,
+            }
+        ],
     )
 
-    assert result.startswith("Error: Provide exactly one of")
+    assert result.startswith("Error: Show operation 1: Provide exactly one of")
     coder.io.tool_error.assert_called()
 
 

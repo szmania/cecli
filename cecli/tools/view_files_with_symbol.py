@@ -22,7 +22,7 @@ class Tool(BaseTool):
     }
 
     @classmethod
-    def execute(cls, coder, symbol):
+    def execute(cls, coder, symbol, **kwargs):
         """
         Find files containing a symbol using RepoMap and return them as text.
         Checks files already in context first.

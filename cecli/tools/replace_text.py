@@ -18,30 +18,36 @@ class Tool(BaseTool):
         "type": "function",
         "function": {
             "name": "ReplaceText",
-            "description": "Replace text in a file. Can handle an array of up to 10 edits.",
+            "description": (
+                "Replace text in one or more files. Can handle an array of up to 10 edits across"
+                " multiple files. Each edit must include its own file_path."
+            ),
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "file_path": {"type": "string"},
                     "edits": {
                         "type": "array",
                         "items": {
                             "type": "object",
                             "properties": {
+                                "file_path": {
+                                    "type": "string",
+                                    "description": "Required file path for this specific edit.",
+                                },
                                 "find_text": {"type": "string"},
                                 "replace_text": {"type": "string"},
                                 "line_number": {"type": "integer"},
                                 "occurrence": {"type": "integer", "default": 1},
                                 "replace_all": {"type": "boolean", "default": False},
                             },
-                            "required": ["find_text", "replace_text"],
+                            "required": ["file_path", "find_text", "replace_text"],
                         },
                         "description": "Array of edits to apply.",
                     },
                     "change_id": {"type": "string"},
                     "dry_run": {"type": "boolean", "default": False},
                 },
-                "required": ["file_path", "edits"],
+                "required": ["edits"],
             },
         },
     }
@@ -50,94 +56,175 @@ class Tool(BaseTool):
     def execute(
         cls,
         coder,
-        file_path,
-        edits,
+        edits=None,
         change_id=None,
         dry_run=False,
+        **kwargs,
     ):
         """
-        Replace text in a file. Can handle single edit or array of edits.
+        Replace text in one or more files. Can handle single edit or array of edits across multiple files.
+        Each edit object must include its own file_path.
         """
         tool_name = "ReplaceText"
         try:
-            # 1. Validate file and get content
-            abs_path, rel_path, original_content = validate_file_for_edit(coder, file_path)
-
-            # 2. Validate edits parameter
+            # 1. Validate edits parameter
             if not isinstance(edits, list):
                 raise ToolError("edits parameter must be an array")
 
             if len(edits) == 0:
                 raise ToolError("edits array cannot be empty")
 
-            # 3. Process all edits
-            current_content = original_content
-            all_metadata = []
-            successful_edits = 0
-            failed_edits = []
-
+            # 2. Group edits by file_path
+            edits_by_file = {}
             for i, edit in enumerate(edits):
+                edit_file_path = edit.get("file_path")
+                if edit_file_path is None:
+                    raise ToolError(f"Edit {i + 1} missing required file_path parameter")
+
+                if edit_file_path not in edits_by_file:
+                    edits_by_file[edit_file_path] = []
+                edits_by_file[edit_file_path].append((i, edit))
+
+            # 3. Process each file
+            all_results = []
+            all_failed_edits = []
+            total_successful_edits = 0
+            files_processed = 0
+
+            for file_path_key, file_edits in edits_by_file.items():
                 try:
-                    edit_find_text = edit.get("find_text")
-                    edit_replace_text = edit.get("replace_text")
-                    edit_line_number = edit.get("line_number")
-                    edit_occurrence = edit.get("occurrence", 1)
-                    edit_replace_all = edit.get("replace_all", False)
-
-                    if edit_find_text is None or edit_replace_text is None:
-                        raise ToolError(f"Edit {i + 1} missing find_text or replace_text")
-
-                    # Process this edit
-                    new_content, metadata = cls._process_single_edit(
-                        coder,
-                        file_path,
-                        edit_find_text,
-                        edit_replace_text,
-                        edit_line_number,
-                        edit_occurrence,
-                        current_content,
-                        rel_path,
-                        abs_path,
-                        edit_replace_all,
+                    # Validate file and get content
+                    abs_path, rel_path, original_content = validate_file_for_edit(
+                        coder, file_path_key
                     )
 
-                    if metadata is not None:  # Edit made a change
-                        current_content = new_content
-                        all_metadata.append(metadata)
-                        successful_edits += 1
-                    else:
-                        # Edit didn't change anything (identical replacement)
-                        failed_edits.append(
-                            f"Edit {i + 1}: No change (replacement identical to original)"
+                    # Process all edits for this file
+                    current_content = original_content
+                    file_metadata = []
+                    file_successful_edits = 0
+                    file_failed_edits = []
+
+                    for edit_index, edit in file_edits:
+                        try:
+                            edit_find_text = edit.get("find_text")
+                            edit_replace_text = edit.get("replace_text")
+                            edit_line_number = edit.get("line_number")
+                            edit_occurrence = edit.get("occurrence", 1)
+                            edit_replace_all = edit.get("replace_all", False)
+
+                            if edit_find_text is None or edit_replace_text is None:
+                                raise ToolError(
+                                    f"Edit {edit_index + 1} missing find_text or replace_text"
+                                )
+
+                            # Process this edit
+                            new_content, metadata = cls._process_single_edit(
+                                coder,
+                                file_path_key,
+                                edit_find_text,
+                                edit_replace_text,
+                                edit_line_number,
+                                edit_occurrence,
+                                current_content,
+                                rel_path,
+                                abs_path,
+                                edit_replace_all,
+                            )
+
+                            if metadata is not None:  # Edit made a change
+                                current_content = new_content
+                                file_metadata.append(metadata)
+                                file_successful_edits += 1
+                            else:
+                                # Edit didn't change anything (identical replacement)
+                                file_failed_edits.append(
+                                    f"Edit {edit_index + 1}: No change (replacement identical to"
+                                    " original)"
+                                )
+
+                        except ToolError as e:
+                            # Record failed edit but continue with others
+                            file_failed_edits.append(f"Edit {edit_index + 1}: {str(e)}")
+                            continue
+
+                    # Check if any edits succeeded for this file
+                    if file_successful_edits == 0:
+                        all_failed_edits.extend(file_failed_edits)
+                        continue
+
+                    new_content = current_content
+
+                    # Check if any changes were made for this file
+                    if original_content == new_content:
+                        all_failed_edits.extend(file_failed_edits)
+                        continue
+
+                    # Handle dry run
+                    if dry_run:
+                        all_results.append(
+                            {
+                                "file_path": file_path_key,
+                                "successful_edits": file_successful_edits,
+                                "failed_edits": file_failed_edits,
+                                "dry_run": True,
+                            }
                         )
+                        total_successful_edits += file_successful_edits
+                        all_failed_edits.extend(file_failed_edits)
+                        files_processed += 1
+                        continue
+
+                    # Apply Change (Not dry run)
+                    metadata = {
+                        "edits": file_metadata,
+                        "total_edits": file_successful_edits,
+                        "failed_edits": file_failed_edits if file_failed_edits else None,
+                    }
+
+                    final_change_id = apply_change(
+                        coder,
+                        abs_path,
+                        rel_path,
+                        original_content,
+                        new_content,
+                        "replacetext",
+                        metadata,
+                        change_id,
+                    )
+
+                    coder.files_edited_by_tools.add(rel_path)
+
+                    all_results.append(
+                        {
+                            "file_path": file_path_key,
+                            "successful_edits": file_successful_edits,
+                            "failed_edits": file_failed_edits,
+                            "change_id": final_change_id,
+                        }
+                    )
+                    total_successful_edits += file_successful_edits
+                    all_failed_edits.extend(file_failed_edits)
+                    files_processed += 1
 
                 except ToolError as e:
-                    # Record failed edit but continue with others
-                    failed_edits.append(f"Edit {i + 1}: {str(e)}")
+                    # Record all edits for this file as failed
+                    for edit_index, _ in file_edits:
+                        all_failed_edits.append(f"Edit {edit_index + 1}: {str(e)}")
                     continue
 
-            # 4. Check if any edits succeeded
-            if successful_edits == 0:
-                error_msg = "No edits were successfully applied:\n" + "\n".join(failed_edits)
+            # 4. Check if any edits succeeded overall
+            if total_successful_edits == 0:
+                error_msg = "No edits were successfully applied:\n" + "\n".join(all_failed_edits)
                 raise ToolError(error_msg)
 
-            new_content = current_content
-
-            # 5. Check if any changes were made overall
-            if original_content == new_content:
-                coder.io.tool_warning(
-                    "No changes made: all replacements were identical to original"
-                )
-                return "Warning: No changes made (all replacements identical to original)"
-
-            # 6. Handle dry run
+            # 5. Handle dry run overall
             if dry_run:
                 dry_run_message = (
-                    f"Dry run: Would apply {len(edits)} edits in {file_path} "
-                    f"({successful_edits} would succeed, {len(failed_edits)} would fail)."
+                    f"Dry run: Would apply {len(edits)} edits across {len(edits_by_file)} files "
+                    f"({total_successful_edits} would succeed, {len(all_failed_edits)} would fail)."
                 )
-                if failed_edits:
-                    dry_run_message += "\nFailed edits:\n" + "\n".join(failed_edits)
+                if all_failed_edits:
+                    dry_run_message += "\nFailed edits:\n" + "\n".join(all_failed_edits)
 
                 return format_tool_result(
                     coder,
@@ -147,36 +234,30 @@ class Tool(BaseTool):
                     dry_run_message=dry_run_message,
                 )
 
-            # 7. Apply Change (Not dry run)
-            metadata = {
-                "edits": all_metadata,
-                "total_edits": successful_edits,
-                "failed_edits": failed_edits if failed_edits else None,
-            }
-
-            final_change_id = apply_change(
-                coder,
-                abs_path,
-                rel_path,
-                original_content,
-                new_content,
-                "replacetext",
-                metadata,
-                change_id,
-            )
-
-            coder.files_edited_by_tools.add(rel_path)
-
-            # 8. Format and return result
-            success_message = f"Applied {successful_edits} edits in {file_path}"
-            if failed_edits:
-                success_message += f" ({len(failed_edits)} failed)"
+            # 6. Format and return result
+            if files_processed == 1:
+                # Single file case for backward compatibility
+                result = all_results[0]
+                success_message = (
+                    f"Applied {result['successful_edits']} edits in {result['file_path']}"
+                )
+                if result["failed_edits"]:
+                    success_message += f" ({len(result['failed_edits'])} failed)"
+                change_id_to_return = result.get("change_id")
+            else:
+                # Multiple files case
+                success_message = (
+                    f"Applied {total_successful_edits} edits across {files_processed} files"
+                )
+                if all_failed_edits:
+                    success_message += f" ({len(all_failed_edits)} failed)"
+                change_id_to_return = None  # Multiple change IDs, can't return single one
 
             return format_tool_result(
                 coder,
                 tool_name,
                 success_message,
-                change_id=final_change_id,
+                change_id=change_id_to_return,
             )
 
         except ToolError as e:
@@ -193,30 +274,40 @@ class Tool(BaseTool):
 
         tool_header(coder=coder, mcp_server=mcp_server, tool_response=tool_response)
 
-        coder.io.tool_output("")
-        coder.io.tool_output(f"{color_start}file_path:{color_end}")
-        coder.io.tool_output(params["file_path"])
-        coder.io.tool_output("")
-
-        num_edits = len(params["edits"])
+        # Group edits by file_path for display
+        edits_by_file = {}
 
         for i, edit in enumerate(params["edits"]):
-            # Show diff for this edit
-            diff = difflib.unified_diff(
-                edit.get("find_text", "").splitlines(),
-                edit.get("replace_text", "").splitlines(),
-                lineterm="",
-                n=float("inf"),
-            )
-            diff_lines = list(diff)[2:]  # Skip header lines
-            if diff_lines:
-                if num_edits > 1:
-                    coder.io.tool_output(f"{color_start}diff_{i + 1}:{color_end}")
-                else:
-                    coder.io.tool_output(f"{color_start}diff:{color_end}")
+            edit_file_path = edit.get("file_path")
+            if edit_file_path not in edits_by_file:
+                edits_by_file[edit_file_path] = []
+            edits_by_file[edit_file_path].append((i, edit))
 
-                coder.io.tool_output("\n".join([line for line in diff_lines]))
+        # Display edits grouped by file
+        for file_path_key, file_edits in edits_by_file.items():
+            if file_path_key:
                 coder.io.tool_output("")
+                coder.io.tool_output(f"{color_start}file_path:{color_end}")
+                coder.io.tool_output(file_path_key)
+                coder.io.tool_output("")
+
+            for edit_index, edit in file_edits:
+                # Show diff for this edit
+                diff = difflib.unified_diff(
+                    edit.get("find_text", "").splitlines(),
+                    edit.get("replace_text", "").splitlines(),
+                    lineterm="",
+                    n=float("inf"),
+                )
+                diff_lines = list(diff)[2:]  # Skip header lines
+                if diff_lines:
+                    if len(params["edits"]) > 1:
+                        coder.io.tool_output(f"{color_start}diff_{edit_index + 1}:{color_end}")
+                    else:
+                        coder.io.tool_output(f"{color_start}diff:{color_end}")
+
+                    coder.io.tool_output("\n".join([line for line in diff_lines]))
+                    coder.io.tool_output("")
 
         tool_footer(coder=coder, tool_response=tool_response)
 

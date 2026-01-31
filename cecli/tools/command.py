@@ -34,7 +34,7 @@ class Tool(BaseTool):
     }
 
     @classmethod
-    async def execute(cls, coder, command_string, background=False, stop_background=None):
+    async def execute(cls, coder, command_string, background=False, stop_background=None, **kwargs):
         """
         Execute a shell command, optionally in background.
         """
