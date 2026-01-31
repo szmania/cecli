@@ -777,7 +777,7 @@ class TUI(App):
         self.input_queue.put({"confirmed": message.result})
 
     # Commands that use path-based completion
-    PATH_COMPLETION_COMMANDS = {"/read-only", "/read-only-stub", "/load", "/save"}
+    PATH_COMPLETION_COMMANDS = {"/add", "/read-only", "/read-only-stub", "/load", "/save"}
 
     def _extract_symbols(self) -> set[str]:
         """Extract code symbols from files in chat using Pygments."""
@@ -930,9 +930,9 @@ class TUI(App):
                 if cmd_name in self.PATH_COMPLETION_COMMANDS:
                     suggestions = self._get_path_completions(arg_prefix)
                     # For /read-only and /read-only-stub, also include add completions
-                    if cmd_name in {"/read-only", "/read-only-stub"}:
+                    if cmd_name in {"/add", "/read-only", "/read-only-stub"}:
                         try:
-                            add_completions = commands.get_completions("/add") or []
+                            add_completions = commands.get_completions(cmd_name) or []
                             for c in add_completions:
                                 if arg_prefix_lower in str(c).lower() and str(c) not in suggestions:
                                     suggestions.append(str(c))
