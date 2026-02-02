@@ -423,7 +423,6 @@ class ConversationChunks:
                         message_dict=assistant_msg,
                         tag=MessageTag.READONLY_FILES,
                         hash_key=("image_assistant", fname),
-                        force=True,
                     )
 
         return messages
@@ -478,7 +477,7 @@ class ConversationChunks:
             # Create assistant message
             assistant_msg = {
                 "role": "assistant",
-                "content": "Ok, I will view and/or modify this file as is necessary.",
+                "content": "Ok, I will modify this file as is necessary.",
             }
 
             # Determine tag based on editability
@@ -526,7 +525,6 @@ class ConversationChunks:
                         message_dict=assistant_msg,
                         tag=MessageTag.CHAT_FILES,
                         hash_key=("image_assistant", fname),
-                        force=True,
                     )
 
         return result
