@@ -36,6 +36,9 @@ def _process_thought_signature(container):
     if "provider_specific_fields" not in container:
         container["provider_specific_fields"] = {}
 
+    if not container["provider_specific_fields"]:
+        container["provider_specific_fields"] = {}
+
     psf = container["provider_specific_fields"]
 
     if "thought_signature" not in psf:

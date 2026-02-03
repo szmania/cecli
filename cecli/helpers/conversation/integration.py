@@ -161,7 +161,7 @@ class ConversationChunks:
                 },
                 tag=MessageTag.REMINDER,
                 priority=275,  # Between post_message blocks and final reminders
-                hash_key=("file_list_reminder",),  # Unique hash_key to avoid conflicts
+                hash_key=("reminder", "file_list"),  # Unique hash_key to avoid conflicts
                 mark_for_delete=0,  # Lasts for exactly one turn
             )
 
