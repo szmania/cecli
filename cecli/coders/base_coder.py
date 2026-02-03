@@ -2404,6 +2404,7 @@ class Coder:
                     ConversationManager.add_message(
                         message_dict=tool_response,
                         tag=MessageTag.CUR,
+                        hash_key=(tool_response["tool_call_id"], str(time.monotonic_ns())),
                     )
 
                 return True
