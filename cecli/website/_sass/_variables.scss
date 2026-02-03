@@ -8,14 +8,14 @@
 
 // CSS Custom Properties (CSS Variables)
 :root {
-    // Color palette
+    // Color palette - Dark Mode
     --primary: #4C6EF5;
     --primary-dark: #3b5bdb;
     --secondary: #12B886;
-    --dark: #212529;
-    --light: #F8F9FA;
+    --dark: #F8F9FA;  // Light text on dark background
+    --light: #121212; // Dark background
     --gray: #ADB5BD;
-    --code-bg: #282a36;
+    --code-bg: #1e1e1e;
     --terminal-green: #14b014;
     
     // Typography variables

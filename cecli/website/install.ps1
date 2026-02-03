@@ -424,8 +424,8 @@ function Invoke-Installer($artifacts, $platforms) {
   }
 
   Write-Information ""
-  Write-Information "Installing aider-chat..."
-  & "$dest_dir\uv.exe" tool install --force --python python3.12 --with pip aider-chat@latest
+  Write-Information "Installing cecli-dev..."
+  & "$dest_dir\uv.exe" tool install --force --python python3.12 --with pip cecli-dev@latest
 
   if (-not $NoModifyPath) {
     Add-Ci-Path $dest_dir

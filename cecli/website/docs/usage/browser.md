@@ -48,7 +48,7 @@ It also supports [connecting to almost any LLM](https://cecli.dev/docs/llms.html
 Use the `--browser` switch to launch the browser version of cecli:
 
 ```
-python -m pip install -U cecli-chat
+python -m pip install -U cecli-dev
 
 export OPENAI_API_KEY=<key> # Mac/Linux
 setx   OPENAI_API_KEY <key> # Windows, restart shell after setx

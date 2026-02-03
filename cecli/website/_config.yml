@@ -27,12 +27,16 @@ aux_links:
     - "https://github.com/dwash96/cecli"
   "Discord":
     - "https://discord.gg/AX9ZEA7nJn"
+  "Support":
+    - "https://ko-fi.com/cecli"
 
 nav_external_links:
   - title: "GitHub"
     url: "https://github.com/dwash96/cecli"
   - title: "Discord"
     url: "https://discord.gg/AX9ZEA7nJn"
+  - title: "Support"
+    url: "https://ko-fi.com/cecli"
 
 repository: dwash96/cecli
 

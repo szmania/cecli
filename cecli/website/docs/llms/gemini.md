@@ -39,10 +39,10 @@ You may need to install the `google-generativeai` package.
 
 ```bash
 # If you installed with cecli-install or `uv tool`
-uv tool run --from cecli-chat pip install google-generativeai
+uv tool run --from cecli-dev pip install google-generativeai
 
 # Or with pipx...
-pipx inject cecli-chat google-generativeai
+pipx inject cecli-dev google-generativeai
 
 # Or with pip
 pip install -U google-generativeai

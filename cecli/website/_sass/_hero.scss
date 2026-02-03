@@ -2,7 +2,7 @@
 
 .hero {
     padding: 80px 0;
-    background: linear-gradient(135deg, rgba(20, 176, 20, 0.15) 0%, rgba(20, 176, 20, 0.1) 25%, rgba(201, 214, 255, 0.7) 50%, rgba(179, 198, 255, 0.8) 75%, rgba(163, 189, 255, 0.9) 100%);
+    background: linear-gradient(135deg, rgba(20, 176, 20, 0.1) 0%, rgba(20, 176, 20, 0.05) 25%, rgba(76, 110, 245, 0.2) 50%, rgba(76, 110, 245, 0.3) 75%, rgba(76, 110, 245, 0.4) 100%);
     position: relative;
     overflow: hidden;
 }
@@ -61,7 +61,7 @@
 .hero h1 {
     font-size: 2.5rem;
     margin-bottom: var(--heading-spacing);
-    color: var(--dark);
+    color: var(--dark); // Light text on dark background
     text-align: left;
     line-height: var(--heading-line-height);
     font-weight: 800;
@@ -72,7 +72,7 @@
     font-size: 1.25rem;
     max-width: 90%;
     margin: 0 0 var(--paragraph-spacing);
-    color: #495057;
+    color: #adb5bd; // Lighter gray for better contrast on dark background
     line-height: var(--body-line-height);
     font-weight: 400;
 }
@@ -101,7 +101,7 @@
     height: 0;
     // Calculate exact padding-bottom based on aspect ratio: (2160/2656) × 100%
     padding-bottom: calc(2160 / 2656 * 100%);
-    background-color: rgba(180, 200, 255, 0.3); // Semi-transparent blue that matches the gradient
+    background-color: rgba(30, 30, 30, 0.8); // Dark semi-transparent background for dark mode
 }
 
 .video-container video {

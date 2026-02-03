@@ -115,10 +115,10 @@ You may need to install the `boto3` package.
 
 ```bash
 # If you installed with cecli-install or `uv tool`
-uv tool run --from cecli-chat pip install boto3
+uv tool run --from cecli-dev pip install boto3
 
 # Or with pipx...
-pipx inject cecli-chat boto3
+pipx inject cecli-dev boto3
 
 # Or with pip
 pip install -U boto3

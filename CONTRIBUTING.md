@@ -73,7 +73,7 @@ In order for your PR to be accepted it must:
 
 ### Python Compatibility
 
-Aider supports Python versions 3.9, 3.10, 3.11, and 3.12. When contributing code, ensure compatibility with these supported Python versions.
+cecli supports Python versions 3.10, 3.11, 3.12, 3.13, and 3.14. When contributing code, ensure compatibility with these supported Python versions.
 
 ### Code Style
 

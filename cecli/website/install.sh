@@ -1175,10 +1175,10 @@ install() {
     say "uv is installed!"
 
     say ""
-    say "Installing aider..."
+    say "Installing cecli-dev..."
     say ""
-    # Install aider-chat using the newly installed uv
-    ensure "${_install_dir}/uv" tool install --force --python python3.12 --with pip aider-chat@latest
+    # Install cecli-dev using the newly installed uv
+    ensure "${_install_dir}/uv" tool install --force --python python3.12 --with pip cecli-dev@latest
     
     # Avoid modifying the users PATH if they are managing their PATH manually
     case :$PATH:

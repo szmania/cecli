@@ -82,7 +82,7 @@ def write_to_cache(package_name, downloads):
         return False
 
 
-def get_downloads_from_bigquery(credentials_path=None, package_name="cecli-chat"):
+def get_downloads_from_bigquery(credentials_path=None, package_name="cecli-dev"):
     """
     Fetch download statistics for a package from Google BigQuery PyPI dataset
     Uses a 24-hour cache to avoid unnecessary API calls
@@ -278,7 +278,7 @@ def generate_badges_md(downloads, stars, cecli_percentage):
 
     markdown = f"""  <a href="https://github.com/Aider-AI/cecli/stargazers"><img alt="GitHub Stars" title="{GITHUB_STARS_TOOLTIP}"
 src="https://img.shields.io/github/stars/Aider-AI/cecli?style=flat-square&logo=github&color=f1c40f&labelColor=555555"/></a>
-  <a href="https://pypi.org/project/cecli-chat/"><img alt="PyPI Downloads" title="{PYPI_DOWNLOADS_TOOLTIP}"
+  <a href="https://pypi.org/project/cecli-dev/"><img alt="PyPI Downloads" title="{PYPI_DOWNLOADS_TOOLTIP}"
 src="https://img.shields.io/badge/📦%20Installs-{downloads_formatted}-2ecc71?style=flat-square&labelColor=555555"/></a>
   <a href="https://openrouter.ai/#options-menu">"""  # noqa
 
@@ -375,7 +375,7 @@ def get_badges_html():
     <span class="badge-label">⭐ GitHub Stars</span>
     <span class="badge-value">{stars_formatted}</span>
 </a>
-<a href="https://pypi.org/project/cecli-chat/" class="github-badge badge-installs" title="{PYPI_DOWNLOADS_TOOLTIP}">
+<a href="https://pypi.org/project/cecli-dev/" class="github-badge badge-installs" title="{PYPI_DOWNLOADS_TOOLTIP}">
     <span class="badge-label">📦 Installs</span>
     <span class="badge-value">{downloads_formatted}</span>
 </a>"""  # noqa

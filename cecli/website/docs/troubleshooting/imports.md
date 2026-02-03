@@ -22,7 +22,7 @@ requires.
 If this happens, you may see errors like these when running pip installs:
 
 ```
-cecli-chat 0.23.0 requires somepackage==X.Y.Z, but you have somepackage U.W.V which is incompatible.
+cecli-dev 0.23.0 requires somepackage==X.Y.Z, but you have somepackage U.W.V which is incompatible. 
 ```
 
 ## Install with cecli-install, uv or pipx

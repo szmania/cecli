@@ -1,0 +1,242 @@
+// Global overrides for cecli website
+// This file loads on every page and provides responsive grid layout
+// for larger screens while maintaining default layout on smaller screens
+
+// ============================================
+// RESPONSIVE GRID LAYOUT SYSTEM
+// ============================================
+
+// Default: Mobile/tablet layout (default just-the-docs behavior)
+// No grid layout applied - uses default just-the-docs responsive layout
+
+// Large screens: Desktop layout with grid system
+@media (min-width: 1200px) {
+    // Apply grid layout only to documentation pages
+    // Check if we're on a documentation page by looking for specific elements
+    body:has(.side-bar):has(.main) {
+        // Grid layout for documentation pages on large screens
+        display: grid !important;
+        grid-template-columns: 300px 1fr; // Sidebar on left, main content on right
+        grid-template-rows: auto 1fr; // Top nav bar, then main content
+        grid-template-areas:
+            "sidebar topnav"
+            "sidebar main";
+        min-height: 100vh;
+        margin: 0;
+        padding: 0;
+        
+        // Grid area assignments
+        .side-bar {
+            grid-area: sidebar !important;
+            position: static !important; // Remove fixed positioning for grid
+            height: 100vh !important; // Full height
+            overflow-y: auto !important; // Scroll if content is too tall
+            width: 300px !important;
+            background: #121212 !important;
+        }
+        
+        .site-header {
+            grid-area: topnav !important;
+            background-color: #1a1a1a !important;
+            border-bottom: 1px solid #333 !important;
+        }
+        
+        .main-content {
+            grid-area: main !important;
+            background-color: #121212 !important;
+        }
+        
+        // Adjust main content wrapper for grid layout
+        .main-content-wrap {
+            padding-left: 48px !important;
+            padding-right: 48px !important;
+            max-width: 100% !important;            
+        }
+        
+
+        .main-content {
+            ul>li::before {
+                position: sticky !important;
+            }
+        }
+        
+        // Remove conflicting margins and positioning
+        .main {
+            max-width: 100% !important;
+            width: 100% !important;
+            margin-left: 0 !important;
+            margin-right: 0 !important;
+        }
+    }
+}
+
+// Very large screens: Optimized grid layout
+@media (min-width: 1920px) {
+    body:has(.side-bar):has(.main) {
+        grid-template-columns: 320px 1fr;
+        
+        .side-bar {
+            width: 320px !important;
+        }
+        
+        .main-content-wrap {
+            padding-left: 64px !important;
+            padding-right: 64px !important;
+            max-width: 1600px !important;
+            margin-left: auto !important;
+            margin-right: auto !important;
+        }
+    }
+}
+
+// ============================================
+// GLOBAL DARK MODE OVERRIDES
+// ============================================
+
+// These styles apply to all pages
+body:has(.side-bar):has(.main) {
+    background-color: #121212;
+    color: #f8f9fa;  
+    overflow: hidden;
+
+    .main#top {
+        margin-left: 0px !important;
+        max-width: 100vw;
+        overflow: hidden;
+
+        .main-content-wrap {
+            height: calc(100dvh - 60px);
+            min-height: calc(100dvh - 60px);
+            max-height: 100vh;
+            overflow: auto;          
+        }
+
+        .search-input-wrap {
+            max-width: 100vw !important;
+        }
+
+        .aux-nav {
+            padding-right: 0px !important;
+        }
+    }    
+
+    .side-bar {
+        .site-nav, .site-header, .site-footer {
+            width: 100% !important;
+        }        
+    }
+}
+
+// Dark mode scrollbar styling
+::-webkit-scrollbar {
+    width: 12px;
+    height: 12px;
+}
+
+::-webkit-scrollbar-track {
+    background: #1a1a1a;
+    border-radius: 6px;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #333;
+    border-radius: 6px;
+    border: 2px solid #1a1a1a;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #444;
+}
+
+::-webkit-scrollbar-corner {
+    background: #1a1a1a;
+}
+
+// Firefox scrollbar styling
+* {
+    scrollbar-width: thin;
+    scrollbar-color: #333 #1a1a1a;
+}
+
+// Documentation-specific dark mode overrides
+.main-content a {
+    color: #ffffff !important;
+    text-decoration: underline !important;
+}
+
+.main-content a:hover {
+    color: #f8f9fa !important;
+    text-decoration: none !important;
+}
+
+// Hide blog link in documentation
+.aux-nav-list-item a[href="/blog/"] {
+    display: none !important;
+}
+
+// ============================================
+// RESPONSIVE UTILITIES
+// ============================================
+
+// Medium screens: Maintain side-by-side layout without grid
+@media (min-width: 800px) and (max-width: 1199px) {
+    body:has(.side-bar):has(.main) {
+        // Don't use grid, but don't force block either
+        // Let just-the-docs default flexbox/positioning handle it
+        display: flex !important;
+        flex-direction: row !important;
+    }
+    
+    .side-bar {
+        // Keep sidebar on the left with fixed positioning
+        position: fixed !important;
+        left: 0 !important;
+        top: 0 !important;
+        width: 264px !important;
+        height: 100vh !important;
+        overflow-y: auto !important;
+        z-index: 100 !important;
+    }
+    
+    .main {
+        // Add left margin to account for fixed sidebar
+        margin-left: 264px !important;
+        width: calc(100% - 264px) !important;
+    }
+    
+    .main-content-wrap {
+        max-width: 100% !important;
+        padding-left: 32px !important;
+        padding-right: 32px !important;
+    }
+}
+
+// Small screens: Stack layout (mobile)
+@media (max-width: 799px) {
+    body {
+        display: block !important;
+    }
+    
+    .side-bar {
+        position: relative !important;
+        width: 100% !important;
+        height: auto !important;
+    }
+    
+    .main {
+        margin-left: 0 !important;
+        width: 100% !important;
+    }
+}
+
+// Print styles
+@media print {
+    // Ensure print layout works correctly
+    body {
+        display: block !important;
+    }
+    
+    .side-bar {
+        display: none !important;
+    }
+}

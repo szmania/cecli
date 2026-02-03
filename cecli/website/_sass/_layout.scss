@@ -10,8 +10,8 @@
 
 // Header
 header {
-    background-color: white;
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    background-color: #1a1a1a; // Dark header background
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
     position: sticky;
     top: 0;
     z-index: 100;
@@ -40,7 +40,7 @@ nav {
 }
 
 .nav-links a {
-    color: var(--dark);
+    color: var(--dark); // Light text on dark background
     text-decoration: none;
     font-weight: 500;
     transition: color 0.3s;
@@ -74,13 +74,13 @@ nav {
 }
 
 .btn-secondary {
-    background-color: white;
+    background-color: #2a2a2a; // Dark button background
     color: var(--primary);
     border: 1px solid var(--primary);
 }
 
 .btn-secondary:hover {
-    background-color: #f8f9fa;
+    background-color: #3a3a3a; // Darker hover state
     transform: translateY(-2px);
 }
 

@@ -8,7 +8,7 @@
     text-align: center;
     margin-bottom: var(--heading-spacing);
     font-size: 2.5rem;
-    color: var(--dark);
+    color: var(--dark); // Light text on dark background
     font-weight: 700;
     line-height: var(--heading-line-height);
     letter-spacing: -0.5px;
@@ -21,10 +21,10 @@
 }
 
 .feature-card {
-    background-color: white;
+    background-color: #1a1a1a; // Dark card background
     border-radius: 8px;
     padding: 30px;
-    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
     transition: transform 0.3s, box-shadow 0.3s, background-color 0.3s;
     border-left: 3px solid var(--primary);
     display: block;
@@ -35,14 +35,14 @@
 
 .feature-card:hover {
     transform: translateY(-5px);
-    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
-    background-color: rgba(76, 110, 245, 0.03);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+    background-color: #2a2a2a; // Darker hover state
 }
 
 .feature-card p {
     font-size: var(--text-base);
     line-height: 1.6;
-    color: rgba(33, 37, 41, 0.9);
+    color: #adb5bd; // Lighter gray for better contrast on dark background
 }
 
 .feature-card-header {
@@ -82,7 +82,7 @@
 
 .feature-title {
     font-size: var(--text-lg);
-    color: var(--dark);
+    color: var(--dark); // Light text on dark background
     margin: 0;
     position: relative;
     padding-bottom: var(--space-3);
