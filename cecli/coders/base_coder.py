@@ -2419,12 +2419,17 @@ class Coder:
 
         for server, tool_calls in server_tool_calls.items():
             for tool_call in tool_calls:
-                if ToolRegistry.get_tool(tool_call.function.name.lower()):
-                    ToolRegistry.get_tool(tool_call.function.name.lower()).format_output(
-                        coder=self, mcp_server=server, tool_response=tool_call
-                    )
-                else:
-                    print_tool_response(coder=self, mcp_server=server, tool_response=tool_call)
+                try:
+                    if ToolRegistry.get_tool(tool_call.function.name.lower()):
+                        ToolRegistry.get_tool(tool_call.function.name.lower()).format_output(
+                            coder=self, mcp_server=server, tool_response=tool_call
+                        )
+                    else:
+                        print_tool_response(coder=self, mcp_server=server, tool_response=tool_call)
+                except Exception:
+                    self.io.tool_output(f"Tool Output Error: {tool_call.function.name.lower()}")
+                    self.io.tool_error(traceback.format_exc())
+                    pass
 
     def _gather_server_tool_calls(self, tool_calls):
         """Collect all tool calls grouped by server.
