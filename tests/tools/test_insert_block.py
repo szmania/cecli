@@ -4,7 +4,7 @@ from unittest.mock import Mock
 
 import pytest
 
-from cecli.tools import insert_block
+from cecli.tools import insert_text
 
 
 class DummyIO:
@@ -73,30 +73,14 @@ def coder_with_file(tmp_path):
 def test_position_top_succeeds_with_no_patterns(coder_with_file):
     coder, file_path = coder_with_file
 
-    result = insert_block.Tool.execute(
+    result = insert_text.Tool.execute(
         coder,
         file_path="example.txt",
         content="inserted line",
         position="top",
     )
 
-    assert result.startswith("Successfully executed InsertBlock.")
-    assert file_path.read_text().splitlines()[0] == "inserted line"
-    coder.io.tool_error.assert_not_called()
-
-
-def test_position_top_ignores_blank_patterns(coder_with_file):
-    coder, file_path = coder_with_file
-
-    result = insert_block.Tool.execute(
-        coder,
-        file_path="example.txt",
-        content="inserted line",
-        position="top",
-        after_pattern="",
-    )
-
-    assert result.startswith("Successfully executed InsertBlock.")
+    assert result.startswith("Successfully executed InsertText.")
     assert file_path.read_text().splitlines()[0] == "inserted line"
     coder.io.tool_error.assert_not_called()
 
@@ -104,12 +88,12 @@ def test_position_top_ignores_blank_patterns(coder_with_file):
 def test_mutually_exclusive_parameters_raise(coder_with_file):
     coder, file_path = coder_with_file
 
-    result = insert_block.Tool.execute(
+    result = insert_text.Tool.execute(
         coder,
         file_path="example.txt",
         content="new line",
         position="top",
-        after_pattern="first line",
+        line_number=1,
     )
 
     assert result.startswith("Error: Must specify exactly one of")
@@ -119,7 +103,7 @@ def test_mutually_exclusive_parameters_raise(coder_with_file):
 
 def test_trailing_newline_preservation(coder_with_file):
     coder, file_path = coder_with_file
-    insert_block.Tool.execute(
+    insert_text.Tool.execute(
         coder,
         file_path="example.txt",
         content="inserted line",
@@ -137,7 +121,7 @@ def test_no_trailing_newline_preservation(coder_with_file):
     content_without_trailing_newline = "first line\nsecond line"
     file_path.write_text(content_without_trailing_newline)
 
-    insert_block.Tool.execute(
+    insert_text.Tool.execute(
         coder,
         file_path="example.txt",
         content="inserted line",
@@ -146,4 +130,40 @@ def test_no_trailing_newline_preservation(coder_with_file):
 
     content = file_path.read_text()
     assert not content.endswith("\n"), "File should preserve lack of trailing newline"
+    coder.io.tool_error.assert_not_called()
+
+
+def test_line_number_beyond_file_length_appends(coder_with_file):
+    coder, file_path = coder_with_file
+    # file_path has "first line\nsecond line\n" (2 lines)
+
+    result = insert_text.Tool.execute(
+        coder,
+        file_path="example.txt",
+        content="appended line",
+        line_number=10,
+    )
+
+    assert result.startswith("Successfully executed InsertText.")
+    content = file_path.read_text()
+    assert content == "first line\nsecond line\nappended line\n"
+    coder.io.tool_error.assert_not_called()
+
+
+def test_line_number_beyond_file_length_appends_no_trailing_newline(coder_with_file):
+    coder, file_path = coder_with_file
+    file_path.write_text("first line\nsecond line")  # No trailing newline
+
+    result = insert_text.Tool.execute(
+        coder,
+        file_path="example.txt",
+        content="appended line",
+        line_number=10,
+    )
+
+    assert result.startswith("Successfully executed InsertText.")
+    content = file_path.read_text()
+    # Current implementation joins with \n, so it should result in:
+    # "first line\nsecond line\nappended line"
+    assert content == "first line\nsecond line\nappended line"
     coder.io.tool_error.assert_not_called()

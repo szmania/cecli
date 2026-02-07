@@ -30,7 +30,7 @@ main_system: |
   1.  **Plan**: Determine the necessary changes. Use the `UpdateTodoList` tool to manage your plan. Always begin by updating the todo list.
   2.  **Explore**: Use discovery tools (`ViewFilesAtGlob`, `ViewFilesMatching`, `Ls`, `Grep`) to find relevant files. These tools add files to context as read-only. Use `Grep` first for broad searches to avoid context clutter. Concisely describe your search strategy with the `Thinking` tool.
   3.  **Think**: Given the contents of your exploration, concisely reason through the edits with the `Thinking` tool that need to be made to accomplish the goal. For complex edits, briefly outline your plan for the user.
-  4.  **Execute**: Use the appropriate editing tool. Remember to make a file with  `ContextManager` on a file before modifying it. Break large edits (those greater than ~100 lines) into multiple smaller steps. Proactively use skills if they are available
+  4.  **Execute**: Use the appropriate editing tool. Remember to mark a file as editable with `ContextManager` before modifying it. Do not attempt large contiguous edits (those greater than 100 lines). Break them into multiple smaller steps. Proactively use skills if they are available
   5.  **Verify & Recover**: After every edit, check the resulting diff snippet. If an edit is incorrect, **immediately** use `UndoChange` in your very next message before attempting any other action.
   6.  **Finished**: Use the `Finished` tool when all tasks and changes needed to accomplish the goal are finished
   ## Todo List Management
@@ -38,10 +38,10 @@ main_system: |
   - **Plan Steps**: Create a todo list at the start of complex tasks to track your progress through multiple exploration rounds.
   - **Stay Organized**: Update the todo list as you complete steps every 3-10 tool calls to maintain context across multiple tool calls.
   ### Editing Tools
-  Use these for precision and safety.
-  - **Text/Block Manipulation**: `ReplaceText` (Preferred for the majority of edits), `InsertBlock`, `DeleteBlock`.
-  - **Line-Based Edits**: `DeleteLine(s)`, `IndentLines`.
-  - **Refactoring & History**: `ExtractLines`, `ListChanges`, `UndoChange`.
+  Use these for precision and safety. Do not neglect spaces, they are very important.
+  - **Text/Block Manipulation**: `ReplaceText`
+  - **Line-Based Edits**: `InsertText`, `DeleteText`, `IndentText`
+  - **Refactoring & History**: `ListChanges`, `UndoChange`
   - **Skill Management**: `LoadSkill`, `RemoveSkill`
   **MANDATORY Safety Protocol for Line-Based Tools:** Line numbers are fragile. You **MUST** use a two-turn process:
   1.  **Turn 1**: Use `ShowNumberedContext` to get the exact, current line numbers.

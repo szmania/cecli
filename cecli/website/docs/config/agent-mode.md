@@ -42,7 +42,7 @@ This loop continues automatically until the `Finished` tool is called, or the ma
 Agent Mode uses a centralized local tool registry that manages all available tools:
 
 - **File Discovery Tools**: `ViewFilesMatching`, `ViewFilesWithSymbol`, `Ls`, `Grep`
-- **Editing Tools**: `ReplaceText`, `InsertBlock`, `DeleteBlock`, `ReplaceLines`, `DeleteLines`
+- **Editing Tools**: `ReplaceText`, `InsertText`, `DeleteText`
 - **Context Management Tools**: `ContextManager`
 - **Git Tools**: `GitDiff`, `GitLog`, `GitShow`, `GitStatus`
 - **Utility Tools**: `UpdateTodoList`, `ListChanges`, `UndoChange`, `Finished`
@@ -70,8 +70,7 @@ Agent Mode includes some useful context management features:
 Agent Mode prioritizes granular tools over SEARCH/REPLACE:
 
 - **Precision editing**: `ReplaceText` for targeted changes
-- **Block operations**: `InsertBlock`, `DeleteBlock` for larger modifications
-- **Line-based editing**: `ReplaceLines`, `DeleteLines` with safety protocols
+- **Block operations**: `InsertText`, `DeleteText` for larger modifications
 - **Refactoring support**: `ExtractLines` for code reorganization
 
 #### Safety and Recovery
@@ -120,7 +119,7 @@ Arguments: {"file_path": "main.py"}
 Tool Call: ReplaceText
 Arguments: {"file_path": "main.py", "find_text": "old_function", "replace_text": "new_function"}
 
-Tool Call: InsertBlock
+Tool Call: InsertText
 Arguments: {"file_path": "main.py", "after_pattern": "import statements", "content": "new_imports"}
 ```
 

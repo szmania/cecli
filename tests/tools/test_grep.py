@@ -38,15 +38,19 @@ def test_dash_prefixed_pattern_is_searched_literally(search_term, tmp_path, monk
 
     result = grep.Tool.execute(
         coder,
-        pattern=search_term,
-        file_pattern="*.txt",
-        directory=".",
-        use_regex=False,
-        case_insensitive=False,
-        context_before=0,
-        context_after=0,
+        searches=[
+            {
+                "pattern": search_term,
+                "file_pattern": "*.txt",
+                "directory": ".",
+                "use_regex": False,
+                "case_insensitive": False,
+                "context_before": 0,
+                "context_after": 0,
+            }
+        ],
     )
 
-    assert "Found matches" in result
+    assert "Matches for" in result
     assert search_term in result
     coder.io.tool_error.assert_not_called()

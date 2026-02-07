@@ -3,35 +3,30 @@ from cecli.tools.utils.helpers import (
     ToolError,
     apply_change,
     determine_line_range,
-    find_pattern_indices,
     format_tool_result,
     handle_tool_error,
-    select_occurrence_index,
     validate_file_for_edit,
 )
 
 
 class Tool(BaseTool):
-    NORM_NAME = "indentlines"
+    NORM_NAME = "indenttext"
     SCHEMA = {
         "type": "function",
         "function": {
-            "name": "IndentLines",
-            "description": "Indent a block of lines in a file.",
+            "name": "IndentText",
+            "description": "Indent lines in a file.",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "file_path": {"type": "string"},
-                    "start_pattern": {"type": "string"},
-                    "end_pattern": {"type": "string"},
+                    "line_number": {"type": "integer"},
                     "line_count": {"type": "integer"},
                     "indent_levels": {"type": "integer", "default": 1},
-                    "near_context": {"type": "string"},
-                    "occurrence": {"type": "integer", "default": 1},
                     "change_id": {"type": "string"},
                     "dry_run": {"type": "boolean", "default": False},
                 },
-                "required": ["file_path", "start_pattern"],
+                "required": ["file_path", "line_number"],
             },
         },
     }
@@ -41,57 +36,45 @@ class Tool(BaseTool):
         cls,
         coder,
         file_path,
-        start_pattern,
-        end_pattern=None,
+        line_number,
         line_count=None,
         indent_levels=1,
-        near_context=None,
-        occurrence=1,
         change_id=None,
         dry_run=False,
         **kwargs,
     ):
         """
-        Indent or unindent a block of lines in a file using utility functions.
+        Indent or unindent a block of lines in a file.
 
         Parameters:
         - coder: The Coder instance
         - file_path: Path to the file to modify
-        - start_pattern: Pattern marking the start of the block to indent (line containing this pattern)
-        - end_pattern: Optional pattern marking the end of the block (line containing this pattern)
-        - line_count: Optional number of lines to indent (alternative to end_pattern)
+        - line_number: Line number to start indenting from (1-based)
+        - line_count: Optional number of lines to indent
         - indent_levels: Number of levels to indent (positive) or unindent (negative)
-        - near_context: Optional text nearby to help locate the correct instance of the start_pattern
-        - occurrence: Which occurrence of the start_pattern to use (1-based index, or -1 for last)
         - change_id: Optional ID for tracking the change
         - dry_run: If True, simulate the change without modifying the file
 
         Returns a result message.
         """
-        tool_name = "IndentLines"
+        tool_name = "IndentText"
         try:
             # 1. Validate file and get content
             abs_path, rel_path, original_content = validate_file_for_edit(coder, file_path)
             lines = original_content.splitlines()
 
-            # 2. Find the start line
-            pattern_desc = f"Start pattern '{start_pattern}'"
-            if near_context:
-                pattern_desc += f" near context '{near_context}'"
-            start_pattern_indices = find_pattern_indices(lines, start_pattern, near_context)
-            start_line_idx = select_occurrence_index(
-                start_pattern_indices, occurrence, pattern_desc
-            )
+            # 2. Determine the range
+            start_line_idx = line_number - 1
+            pattern_desc = f"line {line_number}"
 
-            # 3. Determine the end line
             start_line, end_line = determine_line_range(
                 coder=coder,
                 file_path=rel_path,
                 lines=lines,
                 start_pattern_line_index=start_line_idx,
-                end_pattern=end_pattern,
+                end_pattern=None,
                 line_count=line_count,
-                target_symbol=None,  # IndentLines uses patterns, not symbols
+                target_symbol=None,
                 pattern_desc=pattern_desc,
             )
 
@@ -126,19 +109,17 @@ class Tool(BaseTool):
                 return "Warning: No changes made (indentation would not change file)"
 
             # 5. Generate diff for feedback
-            num_occurrences = len(start_pattern_indices)
-            occurrence_str = f"occurrence {occurrence} of " if num_occurrences > 1 else ""
             action = "indent" if indent_levels > 0 else "unindent"
             levels = abs(indent_levels)
             level_text = "level" if levels == 1 else "levels"
             num_lines = end_line - start_line + 1
+            basis_desc = f"line {line_number}"
 
             # 6. Handle dry run
             if dry_run:
                 dry_run_message = (
                     f"Dry run: Would {action} {num_lines} lines ({start_line + 1}-{end_line + 1})"
-                    f" by {levels} {level_text} (based on {occurrence_str}start pattern"
-                    f" '{start_pattern}') in {file_path}."
+                    f" by {levels} {level_text} (based on {basis_desc}) in {file_path}."
                 )
                 return format_tool_result(
                     coder,
@@ -152,12 +133,9 @@ class Tool(BaseTool):
             metadata = {
                 "start_line": start_line + 1,
                 "end_line": end_line + 1,
-                "start_pattern": start_pattern,
-                "end_pattern": end_pattern,
+                "line_number": line_number,
                 "line_count": line_count,
                 "indent_levels": indent_levels,
-                "near_context": near_context,
-                "occurrence": occurrence,
             }
             final_change_id = apply_change(
                 coder,
@@ -165,7 +143,7 @@ class Tool(BaseTool):
                 rel_path,
                 original_content,
                 new_content,
-                "indentlines",
+                "indenttext",
                 metadata,
                 change_id,
             )
@@ -176,7 +154,7 @@ class Tool(BaseTool):
             action_past = "Indented" if indent_levels > 0 else "Unindented"
             success_message = (
                 f"{action_past} {num_lines} lines by {levels} {level_text} (from"
-                f" {occurrence_str}start pattern) in {file_path}"
+                f" {basis_desc}) in {file_path}"
             )
             return format_tool_result(
                 coder,

@@ -5,39 +5,34 @@ from cecli.tools.utils.base_tool import BaseTool
 from cecli.tools.utils.helpers import (
     ToolError,
     apply_change,
-    find_pattern_indices,
     format_tool_result,
     handle_tool_error,
     is_provided,
-    select_occurrence_index,
     validate_file_for_edit,
 )
 from cecli.tools.utils.output import tool_body_unwrapped, tool_footer, tool_header
 
 
 class Tool(BaseTool):
-    NORM_NAME = "insertblock"
+    NORM_NAME = "inserttext"
     SCHEMA = {
         "type": "function",
         "function": {
-            "name": "InsertBlock",
+            "name": "InsertText",
             "description": (
-                "Insert a block of content into a file. Mutually Exclusive Parameters:"
-                " after_pattern, before_pattern, position."
+                "Insert a content into a file. Mutually Exclusive Parameters:"
+                " position, line_number."
             ),
             "parameters": {
                 "type": "object",
                 "properties": {
                     "file_path": {"type": "string"},
                     "content": {"type": "string"},
-                    "after_pattern": {"type": "string"},
-                    "before_pattern": {"type": "string"},
-                    "occurrence": {"type": "integer", "default": 1},
+                    "line_number": {"type": "integer"},
                     "change_id": {"type": "string"},
                     "dry_run": {"type": "boolean", "default": False},
                     "position": {"type": "string", "enum": ["top", "bottom", ""]},
                     "auto_indent": {"type": "boolean", "default": True},
-                    "use_regex": {"type": "boolean", "default": False},
                 },
                 "required": ["file_path", "content"],
             },
@@ -50,45 +45,37 @@ class Tool(BaseTool):
         coder,
         file_path,
         content,
-        after_pattern=None,
-        before_pattern=None,
-        occurrence=1,
+        line_number=None,
         change_id=None,
         dry_run=False,
         position=None,
         auto_indent=True,
-        use_regex=False,
         **kwargs,
     ):
         """
-        Insert a block of text after or before a specified pattern using utility functions.
+        Insert a block of text at a line number or special position.
 
         Args:
             coder: The coder instance
             file_path: Path to the file to modify
             content: The content to insert
-            after_pattern: Pattern to insert after (mutually exclusive with before_pattern and position)
-            before_pattern: Pattern to insert before (mutually exclusive with after_pattern and position)
-            occurrence: Which occurrence of the pattern to use (1-based, or -1 for last)
+            line_number: Line number to insert at (1-based, mutually exclusive with position)
             change_id: Optional ID for tracking changes
             dry_run: If True, only simulate the change
-            position: Special position like "top" or "bottom" (mutually exclusive with before_pattern and after_pattern)
+            position: Special position like "top" or "bottom" (mutually exclusive with line_number)
             auto_indent: If True, automatically adjust indentation of inserted content
-            use_regex: If True, treat patterns as regular expressions
         """
-        tool_name = "InsertBlock"
+        tool_name = "InsertText"
         try:
             # 1. Validate parameters
-            if sum(is_provided(x) for x in [after_pattern, before_pattern, position]) != 1:
+            if sum(is_provided(x) for x in [position, line_number]) != 1:
                 # Check if file is empty or contains only whitespace
                 abs_path, rel_path, original_content = validate_file_for_edit(coder, file_path)
                 if not original_content.strip():
                     # File is empty or contains only whitespace, default to inserting at beginning
                     position = "top"
                 else:
-                    raise ToolError(
-                        "Must specify exactly one of: after_pattern, before_pattern, or position"
-                    )
+                    raise ToolError("Must specify exactly one of: position or line_number")
 
             # 2. Validate file and get content
             abs_path, rel_path, original_content = validate_file_for_edit(coder, file_path)
@@ -101,8 +88,6 @@ class Tool(BaseTool):
             # 3. Determine insertion point
             insertion_line_idx = 0
             pattern_type = ""
-            pattern_desc = ""
-            occurrence_str = ""
 
             if position:
                 # Handle special positions
@@ -118,27 +103,14 @@ class Tool(BaseTool):
                         " 'end_of_file'"
                     )
             else:
-                # Handle pattern-based insertion
-                pattern = after_pattern if after_pattern else before_pattern
-                pattern_type = "after" if after_pattern else "before"
-                pattern_desc = f"Pattern '{pattern}'"
-
-                # Find pattern matches
-                pattern_line_indices = find_pattern_indices(lines, pattern, use_regex=use_regex)
-
-                # Select the target occurrence
-                target_line_idx = select_occurrence_index(
-                    pattern_line_indices, occurrence, pattern_desc
-                )
-
-                # Determine insertion point
-                insertion_line_idx = target_line_idx
-                if pattern_type == "after":
-                    insertion_line_idx += 1  # Insert on the line *after* the matched line
-
-                # Format occurrence info for output
-                num_occurrences = len(pattern_line_indices)
-                occurrence_str = f"occurrence {occurrence} of " if num_occurrences > 1 else ""
+                # Handle line number insertion (1-based)
+                if line_number < 1:
+                    insertion_line_idx = 0
+                elif line_number > len(lines) + 1:
+                    insertion_line_idx = len(lines)
+                else:
+                    insertion_line_idx = line_number - 1
+                pattern_type = "at line"
 
             # 4. Handle indentation if requested
             content_lines = content.splitlines()
@@ -196,9 +168,9 @@ class Tool(BaseTool):
                     dry_run_message = f"Dry run: Would insert block {pattern_type} {file_path}."
                 else:
                     dry_run_message = (
-                        f"Dry run: Would insert block {pattern_type} {occurrence_str}pattern"
-                        f" '{pattern}' in {file_path} at line {insertion_line_idx + 1}."
+                        f"Dry run: Would insert block {pattern_type} {line_number} in {file_path}."
                     )
+
                 return format_tool_result(
                     coder,
                     tool_name,
@@ -210,13 +182,10 @@ class Tool(BaseTool):
             # 7. Apply Change (Not dry run)
             metadata = {
                 "insertion_line_idx": insertion_line_idx,
-                "after_pattern": after_pattern,
-                "before_pattern": before_pattern,
+                "line_number": line_number,
                 "position": position,
-                "occurrence": occurrence,
                 "content": content,
                 "auto_indent": auto_indent,
-                "use_regex": use_regex,
             }
             final_change_id = apply_change(
                 coder,
@@ -224,7 +193,7 @@ class Tool(BaseTool):
                 rel_path,
                 original_content,
                 new_content,
-                "insertblock",
+                "inserttext",
                 metadata,
                 change_id,
             )
@@ -235,10 +204,7 @@ class Tool(BaseTool):
             if position:
                 success_message = f"Inserted block {pattern_type} {file_path}"
             else:
-                success_message = (
-                    f"Inserted block {pattern_type} {occurrence_str}pattern in {file_path} at line"
-                    f" {insertion_line_idx + 1}"
-                )
+                success_message = f"Inserted block {pattern_type} {line_number} in {file_path}"
 
             return format_tool_result(
                 coder,
@@ -253,7 +219,7 @@ class Tool(BaseTool):
 
         except Exception as e:
             coder.io.tool_error(
-                f"Error in InsertBlock: {str(e)}\n{traceback.format_exc()}"
+                f"Error in InsertText: {str(e)}\n{traceback.format_exc()}"
             )  # Add traceback
             return f"Error: {str(e)}"
 
