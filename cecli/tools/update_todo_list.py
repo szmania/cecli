@@ -1,6 +1,6 @@
 from cecli.tools.utils.base_tool import BaseTool
 from cecli.tools.utils.helpers import ToolError, format_tool_result, handle_tool_error
-from cecli.tools.utils.output import tool_body_unwrapped, tool_footer, tool_header
+from cecli.tools.utils.output import tool_footer, tool_header
 
 
 class Tool(BaseTool):
@@ -13,9 +13,27 @@ class Tool(BaseTool):
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "content": {
-                        "type": "string",
-                        "description": "The new content for the todo list.",
+                    "tasks": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "task": {"type": "string", "description": "The task description."},
+                                "done": {
+                                    "type": "boolean",
+                                    "description": "Whether the task is completed.",
+                                },
+                                "current": {
+                                    "type": "boolean",
+                                    "description": (
+                                        "Whether this is the current task being worked on. Current"
+                                        " tasks are marked with '→' in the todo list."
+                                    ),
+                                },
+                            },
+                            "required": ["task", "done"],
+                        },
+                        "description": "Array of task items to update the todo list with.",
                     },
                     "append": {
                         "type": "boolean",
@@ -36,15 +54,15 @@ class Tool(BaseTool):
                         ),
                     },
                 },
-                "required": ["content"],
+                "required": ["tasks"],
             },
         },
     }
 
     @classmethod
-    def execute(cls, coder, content, append=False, change_id=None, dry_run=False, **kwargs):
+    def execute(cls, coder, tasks, append=False, change_id=None, dry_run=False, **kwargs):
         """
-        Update the todo list file (.cecli/todo.txt) with new content.
+        Update the todo list file (.cecli/todo.txt) with formatted task items.
         Can either replace the entire content or append to it.
         """
         tool_name = "UpdateTodoList"
@@ -52,6 +70,37 @@ class Tool(BaseTool):
             # Define the todo file path
             todo_file_path = ".cecli/todo.txt"
             abs_path = coder.abs_root_path(todo_file_path)
+
+            # Format tasks into string
+            done_tasks = []
+            remaining_tasks = []
+
+            for task_item in tasks:
+                if task_item.get("done", False):
+                    done_tasks.append(f"✓ {task_item['task']}")
+                else:
+                    # Check if this is the current task
+                    if task_item.get("current", False):
+                        remaining_tasks.append(f"→ {task_item['task']}")
+                    else:
+                        remaining_tasks.append(f"○ {task_item['task']}")
+
+            # Build formatted content
+            content_lines = []
+            if done_tasks:
+                content_lines.append("Done:")
+                content_lines.extend(done_tasks)
+                content_lines.append("")
+
+            if remaining_tasks:
+                content_lines.append("Remaining:")
+                content_lines.extend(remaining_tasks)
+
+            # Remove trailing empty line if present
+            if content_lines and content_lines[-1] == "":
+                content_lines.pop()
+
+            content = "\n".join(content_lines)
 
             # Get existing content if appending
             existing_content = ""
@@ -127,6 +176,48 @@ class Tool(BaseTool):
 
     @classmethod
     def format_output(cls, coder, mcp_server, tool_response):
+        import json
+
+        from cecli.tools.utils.output import color_markers
+
+        color_start, color_end = color_markers(coder)
+
         tool_header(coder=coder, mcp_server=mcp_server, tool_response=tool_response)
-        tool_body_unwrapped(coder=coder, tool_response=tool_response)
+
+        # Parse the parameters to display formatted todo list
+        params = json.loads(tool_response.function.arguments)
+        tasks = params.get("tasks", [])
+
+        if tasks:
+            # Format tasks for display
+            done_tasks = []
+            remaining_tasks = []
+
+            for task_item in tasks:
+                if task_item.get("done", False):
+                    done_tasks.append(f"✓ {task_item['task']}")
+                else:
+                    # Check if this is the current task
+                    if task_item.get("current", False):
+                        remaining_tasks.append(f"→ {task_item['task']}")
+                    else:
+                        remaining_tasks.append(f"○ {task_item['task']}")
+
+            # Display formatted todo list
+            coder.io.tool_output("")
+            coder.io.tool_output(f"{color_start}Todo List:{color_end}")
+
+            if done_tasks:
+                coder.io.tool_output("Done:")
+                for task in done_tasks:
+                    coder.io.tool_output(task)
+                coder.io.tool_output("")
+
+            if remaining_tasks:
+                coder.io.tool_output("Remaining:")
+                for task in remaining_tasks:
+                    coder.io.tool_output(task)
+
+            coder.io.tool_output("")
+
         tool_footer(coder=coder, tool_response=tool_response)
