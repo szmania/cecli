@@ -1266,11 +1266,28 @@ def get_chat_model_names():
 
 
 def fuzzy_match_models(name):
+    import fnmatch
+
+    # Handle empty string case - return all models
+    if not name:
+        return sorted(get_chat_model_names())
+
     name = name.lower()
     chat_models = get_chat_model_names()
-    matching_models = [m for m in chat_models if name in m.lower()]
+
+    # Check if the name contains glob patterns
+    if "*" in name or "?" in name or "[" in name:
+        # Use glob pattern matching
+        matching_models = [
+            m for m in chat_models if fnmatch.fnmatchcase(m.lower(), "*" + name + "*")
+        ]
+    else:
+        matching_models = [m for m in chat_models if name in m.lower()]
+
     if matching_models:
         return sorted(set(matching_models))
+
+    # Fall back to fuzzy matching if no glob or substring matches
     models = set(chat_models)
     matching_models = difflib.get_close_matches(name, models, n=3, cutoff=0.8)
     return sorted(set(matching_models))

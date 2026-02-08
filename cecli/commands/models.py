@@ -32,10 +32,16 @@ class ModelsCommand(BaseCommand):
         help_text = super().get_help()
         help_text += "\nUsage:\n"
         help_text += "  /models <partial-name>  # Search for models matching the partial name\n"
+        help_text += "  /models <glob-pattern>  # Search using glob patterns (*, ?, [])\n"
         help_text += "\nExamples:\n"
         help_text += "  /models gpt-4          # Search for GPT-4 models\n"
         help_text += "  /models claude         # Search for Claude models\n"
         help_text += "  /models o1             # Search for o1 models\n"
+        help_text += "  /models gemini/*       # Search for all Gemini models\n"
+        help_text += "  /models gpt-4*         # Search for models starting with 'gpt-4'\n"
+        help_text += "  /models *gpt*          # Search for models containing 'gpt'\n"
         help_text += "\nThis command searches through the available LLM models and displays\n"
         help_text += "matching models with their details including cost and capabilities.\n"
+        help_text += "Supports glob patterns: * (any characters), ? (single character),\n"
+        help_text += "[] (character class).\n"
         return help_text
