@@ -148,7 +148,6 @@ grpcio==1.78.0
     # via
     #   google-api-core
     #   grpcio-status
-    #   litellm
 grpcio-status==1.78.0
     # via google-api-core
 h11==0.16.0
@@ -215,7 +214,7 @@ kiwisolver==1.4.9
     # via matplotlib
 linkify-it-py==2.0.3
     # via markdown-it-py
-litellm==1.80.11
+litellm==1.81.11
     # via -r requirements/requirements.in
 llama-index-core==0.14.8
     # via llama-index-embeddings-huggingface
