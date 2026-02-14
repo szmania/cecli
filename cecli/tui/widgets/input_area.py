@@ -301,6 +301,19 @@ class InputArea(TextArea):
                 event.stop()
                 event.prevent_default()
                 self._history_next()
+        elif self.app.is_key_for("input_start", event.key):
+            # Move cursor to start of first line
+            event.stop()
+            event.prevent_default()
+            self.cursor_location = (0, 0)
+        elif self.app.is_key_for("input_end", event.key):
+            # Move cursor to end of last line
+            event.stop()
+            event.prevent_default()
+            lines = self.text.split("\n")
+            row = max(0, len(lines) - 1)
+            col = len(lines[row])
+            self.cursor_location = (row, col)
 
     def on_text_area_changed(self, event) -> None:
         """Update completions as user types."""

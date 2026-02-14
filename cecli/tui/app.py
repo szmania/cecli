@@ -203,6 +203,8 @@ class TUI(App):
             "stop": "escape",
             "cycle_forward": "tab",
             "cycle_backward": "shift+tab",
+            "input_start": "ctrl+home",
+            "input_end": "ctrl+end",
             "editor": "ctrl+o",
             "history": "ctrl+r",
             "focus": "ctrl+f",

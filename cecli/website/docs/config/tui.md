@@ -80,6 +80,8 @@ The TUI provides customizable key bindings for all major actions. The default ke
 | Search History | `ctrl+r` | Search through history for previous commands (requires fzf to be installed) | 
 | Cycle Forward | `tab` | Cycle forward through completion suggestions |
 | Cycle Backward | `shift+tab` | Cycle backward through completion suggestions |
+| Input Start | `ctrl+home` | Move cursor to start of first line |
+| Input End | `ctrl+end` | Move cursor to end of last line |
 | Focus | `ctrl+f` | Focus the input area |
 | Clear | `ctrl+l` | Clear the output area |
 | Quit | `ctrl+q` | Exit the TUI |
