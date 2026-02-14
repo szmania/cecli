@@ -190,6 +190,10 @@ The current priorities are to improve core capabilities and user experience of t
     * Past Decision Records
     * Repo Map Found Files
 
+11. **Quality of Life**
+  * [ ] Add hot keys support for running repeatable commands like switching between preferred models
+  * [ ] Unified error message logging inside of `.cecli` directory
+
 ### All Contributors (Both Cecli and Aider main)
 
 <table>
