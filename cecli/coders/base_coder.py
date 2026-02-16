@@ -660,6 +660,7 @@ class Coder:
         # Model
         main_model = self.main_model
         weak_model = main_model.weak_model
+        agent_model = main_model.agent_model
 
         if weak_model is not main_model:
             prefix = "Main model"
@@ -696,6 +697,10 @@ class Coder:
 
         if weak_model is not main_model:
             output = f"Weak model: {weak_model.name}"
+            lines.append(output)
+
+        if agent_model is not main_model:
+            output = f"Agent model: {agent_model.name}"
             lines.append(output)
 
         # Repo
