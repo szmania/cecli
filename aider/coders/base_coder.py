@@ -347,6 +347,7 @@ class Coder:
         self.suggest_shell_commands = suggest_shell_commands
         self.detect_urls = detect_urls
         self.args = args
+        self.max_reflections = getattr(self.args, "max_reflections", 3) if self.args else 3
 
         self.mcp_servers = mcp_servers
         self.mcp_tools = mcp_tools
