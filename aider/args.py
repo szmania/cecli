@@ -259,6 +259,18 @@ def get_parser(default_config_files, git_root):
             " If unspecified, defaults to the model's max_chat_history_tokens."
         ),
     )
+    group.add_argument(
+        "--max-reflections",
+        type=int,
+        default=3,
+        help="Maximum number of reflections allowed for non-agent coders (default: 3)",
+    )
+    group.add_argument(
+        "--agent-max-reflections",
+        type=int,
+        default=15,
+        help="Maximum number of reflections allowed for agent coders (default: 15)",
+    )
 
     ########
     group = parser.add_argument_group("TUI Settings")

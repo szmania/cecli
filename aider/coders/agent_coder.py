@@ -151,7 +151,7 @@ class AgentCoder(Coder):
 
         # Set high max reflections to allow many exploration rounds
         # This controls how many automatic iterations the LLM can do
-        self.max_reflections = 15
+        self.max_reflections = getattr(self.args, "agent_max_reflections", 15) if self.args else 15
 
         # Enable enhanced context blocks by default
         self.use_enhanced_context = True
