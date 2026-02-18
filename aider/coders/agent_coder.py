@@ -151,8 +151,11 @@ class AgentCoder(Coder):
 
         # Set high max reflections to allow many exploration rounds
         # This controls how many automatic iterations the LLM can do
+        # Prioritize agent_max_reflections, then max_reflections, then default to 15
         if hasattr(self, "args") and self.args:
-            self.max_reflections = getattr(self.args, "agent_max_reflections", 15)
+            self.max_reflections = getattr(self.args, "agent_max_reflections", None)
+            if self.max_reflections is None:
+                self.max_reflections = getattr(self.args, "max_reflections", 15)
         else:
             self.max_reflections = 15
 
