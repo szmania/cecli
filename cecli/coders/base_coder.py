@@ -120,6 +120,8 @@ class Coder:
     num_tool_calls = 0
     max_tool_calls = 25
     edit_format = None
+    file_diffs = True
+    hashlines = False
     yield_stream = False
     temperature = None
     auto_lint = True
@@ -587,6 +589,7 @@ class Coder:
             pass
 
         self.custom = customizations
+        self.file_diffs = nested.getter(self.args, "file_diffs", True)
 
         if nested.getter(self.custom, "prompt_map.all", None):
             prompts = PromptRegistry.get_prompt(nested.getter(self.custom, "prompt_map.all"))
@@ -1689,13 +1692,16 @@ class Coder:
 
         # Check if combined messages exceed the token limit,
         # Get messages from ConversationManager
+        # Get messages from ConversationManager
         done_messages = ConversationManager.get_messages_dict(MessageTag.DONE)
         cur_messages = ConversationManager.get_messages_dict(MessageTag.CUR)
+        diff_messages = ConversationManager.get_messages_dict(MessageTag.DIFFS)
 
         # Exclude first cur_message since that's the user's initial input
         done_tokens = self.summarizer.count_tokens(done_messages)
         cur_tokens = self.summarizer.count_tokens(cur_messages[1:] if len(cur_messages) > 1 else [])
-        combined_tokens = done_tokens + cur_tokens
+        diff_tokens = self.summarizer.count_tokens(diff_messages)
+        combined_tokens = done_tokens + cur_tokens + diff_tokens
 
         if not force and combined_tokens < self.context_compaction_max_tokens:
             return
@@ -1803,6 +1809,14 @@ class Coder:
 
             self.io.tool_output("...chat history compacted.")
             self.io.update_spinner(self.io.last_spinner_text)
+
+            # Clear all diff messages
+            ConversationManager.clear_tag(MessageTag.DIFFS)
+            # Reset ConversationFiles cache entirely
+            from cecli.helpers.conversation.files import ConversationFiles
+
+            ConversationFiles.clear_file_cache()
+
         except Exception as e:
             self.io.tool_warning(f"Context compaction failed: {e}")
             self.io.tool_warning("Proceeding with full history for now.")

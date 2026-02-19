@@ -197,6 +197,13 @@ def get_parser(default_config_files, git_root):
         help="Use agent edit format for the main chat (autonomous file management)",
     )
     group.add_argument(
+        "--hashline",
+        action="store_const",
+        dest="edit_format",
+        const="hashline",
+        help="Use hashline edit format for the main chat",
+    )
+    group.add_argument(
         "--auto-accept-architect",
         action=argparse.BooleanOptionalAction,
         default=True,
@@ -246,6 +253,12 @@ def get_parser(default_config_files, git_root):
             "Soft limit on tokens for chat history, after which summarization begins."
             " If unspecified, defaults to the model's max_chat_history_tokens."
         ),
+    )
+    group.add_argument(
+        "--file-diffs",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Whether to store file diffs in context or reload files (default: True)",
     )
     group.add_argument(
         "--retries",

@@ -39,6 +39,7 @@ class AgentCoder(Coder):
     edit_format = "agent"
     prompt_format = "agent"
     context_management_enabled = True
+    hashlines = True
 
     def __init__(self, *args, **kwargs):
         self.recently_removed = {}
@@ -56,6 +57,7 @@ class AgentCoder(Coder):
             "grep",
             "listchanges",
             "shownumberedcontext",
+            "thinking",
         }
         self.write_tools = {
             "command",
@@ -679,7 +681,7 @@ class AgentCoder(Coder):
         """
         Track tool usage before calling the base implementation.
         """
-        self.agent_finished = False
+
         await self.auto_save_session()
         self.last_round_tools = []
         if self.partial_response_tool_calls:
@@ -1054,6 +1056,8 @@ You have used the following tool(s) repeatedly:""")
         inp = await super().preproc_user_input(inp)
         if inp and not inp.startswith('<context name="user_input" from="agent">'):
             inp = f'<context name="user_input" from="agent">\n{inp}\n</context>'
+
+        self.agent_finished = False
         return inp
 
     def get_directory_structure(self):

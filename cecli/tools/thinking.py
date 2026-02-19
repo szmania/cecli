@@ -35,7 +35,7 @@ class Tool(BaseTool):
         iterates over tools to ideally help it guide itself to a proper solution
         """
         coder.io.tool_output("🧠 Thoughts recorded in context")
-        return "🧠 Thoughts recorded in context"
+        return "🧠 Thoughts recorded in context. Please proceed with your task"
 
     @classmethod
     def format_output(cls, coder, mcp_server, tool_response):

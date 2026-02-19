@@ -1,5 +1,6 @@
 import os
 
+from cecli.helpers.hashline import hashline
 from cecli.tools.utils.base_tool import BaseTool
 from cecli.tools.utils.helpers import (
     ToolError,
@@ -176,11 +177,17 @@ class Tool(BaseTool):
                 # 6. Format output for this operation
                 # Use rel_path for user-facing messages
                 output_lines = [f"Displaying context around {found_by} in {rel_path}:"]
-                max_line_num_width = len(str(end_line_idx + 1))  # Width for padding
+
+                # Generate hashline for the entire file
+                hashed_content = hashline(content)
+                hashed_lines = hashed_content.splitlines()
+
+                # Extract the context window from hashed lines
+                context_hashed_lines = hashed_lines[start_line_idx : end_line_idx + 1]
 
                 for i in range(start_line_idx, end_line_idx + 1):
-                    line_num_str = str(i + 1).rjust(max_line_num_width)
-                    output_lines.append(f"{line_num_str} | {lines[i]}")
+                    hashed_line = context_hashed_lines[i - start_line_idx]
+                    output_lines.append(hashed_line)
 
                 # Add separator between multiple show operations
                 if show_index > 0:

@@ -1,8 +1,8 @@
+from cecli.helpers.hashline import HashlineError, apply_hashline_operation
 from cecli.tools.utils.base_tool import BaseTool
 from cecli.tools.utils.helpers import (
     ToolError,
     apply_change,
-    determine_line_range,
     format_tool_result,
     handle_tool_error,
     validate_file_for_edit,
@@ -15,17 +15,29 @@ class Tool(BaseTool):
         "type": "function",
         "function": {
             "name": "DeleteText",
-            "description": "Delete a block of lines from a file.",
+            "description": (
+                "Delete a block of lines from a file using hashline markers. "
+                'Uses start_line and end_line parameters with format "{hash_fragment}:{line_num}" '
+                "to specify the range to delete."
+            ),
             "parameters": {
                 "type": "object",
                 "properties": {
                     "file_path": {"type": "string"},
-                    "line_number": {"type": "integer"},
-                    "line_count": {"type": "integer"},
+                    "start_line": {
+                        "type": "string",
+                        "description": (
+                            'Hashline format for start line: "{hash_fragment}:{line_num}"'
+                        ),
+                    },
+                    "end_line": {
+                        "type": "string",
+                        "description": 'Hashline format for end line: "{hash_fragment}:{line_num}"',
+                    },
                     "change_id": {"type": "string"},
                     "dry_run": {"type": "boolean", "default": False},
                 },
-                "required": ["file_path", "line_number"],
+                "required": ["file_path", "start_line", "end_line"],
             },
         },
     }
@@ -35,54 +47,41 @@ class Tool(BaseTool):
         cls,
         coder,
         file_path,
-        line_number,
-        line_count=None,
+        start_line,
+        end_line,
         change_id=None,
         dry_run=False,
         **kwargs,
     ):
         """
-        Delete a block of text based on line numbers.
+        Delete a block of text using hashline markers.
         """
         tool_name = "DeleteText"
         try:
             # 1. Validate file and get content
             abs_path, rel_path, original_content = validate_file_for_edit(coder, file_path)
-            lines = original_content.splitlines()
 
-            # 2. Determine the range
-            start_line_idx = line_number - 1
-            pattern_desc = f"line {line_number}"
+            # 2. Apply hashline operation for deletion
+            try:
+                new_content = apply_hashline_operation(
+                    original_content=original_content,
+                    start_line_hash=start_line,
+                    end_line_hash=end_line,
+                    operation="delete",
+                    text=None,
+                )
+            except (ToolError, HashlineError) as e:
+                raise ToolError(f"Hashline deletion failed: {str(e)}")
 
-            start_line, end_line = determine_line_range(
-                coder=coder,
-                file_path=rel_path,
-                lines=lines,
-                start_pattern_line_index=start_line_idx,
-                end_pattern=None,
-                line_count=line_count,
-                target_symbol=None,
-                pattern_desc=pattern_desc,
-            )
-
-            # 4. Prepare the deletion
-            deleted_lines = lines[start_line : end_line + 1]
-            new_lines = lines[:start_line] + lines[end_line + 1 :]
-            new_content = "\n".join(new_lines)
-
+            # Check if any changes were made
             if original_content == new_content:
                 coder.io.tool_warning("No changes made: deletion would not change file")
                 return "Warning: No changes made (deletion would not change file)"
 
-            # 5. Generate diff for feedback
-            num_deleted = end_line - start_line + 1
-            basis_desc = f"line {line_number}"
-
-            # 6. Handle dry run
+            # 3. Handle dry run
             if dry_run:
                 dry_run_message = (
-                    f"Dry run: Would delete {num_deleted} lines ({start_line + 1}-{end_line + 1})"
-                    f" based on {basis_desc} in {file_path}."
+                    f"Dry run: Would delete lines {start_line} to {end_line} in {file_path}."
                 )
                 return format_tool_result(
                     coder,
@@ -92,13 +91,10 @@ class Tool(BaseTool):
                     dry_run_message=dry_run_message,
                 )
 
-            # 7. Apply Change (Not dry run)
+            # 4. Apply Change (Not dry run)
             metadata = {
-                "start_line": start_line + 1,
-                "end_line": end_line + 1,
-                "line_number": line_number,
-                "line_count": line_count,
-                "deleted_content": "\n".join(deleted_lines),
+                "start_line": start_line,
+                "end_line": end_line,
             }
             final_change_id = apply_change(
                 coder,
@@ -112,11 +108,8 @@ class Tool(BaseTool):
             )
 
             coder.files_edited_by_tools.add(rel_path)
-            # 8. Format and return result, adding line range to success message
-            success_message = (
-                f"Deleted {num_deleted} lines ({start_line + 1}-{end_line + 1}) (from"
-                f" {basis_desc}) in {file_path}"
-            )
+            # 5. Format and return result
+            success_message = f"Deleted lines {start_line} to {end_line} in {file_path}"
             return format_tool_result(
                 coder,
                 tool_name,

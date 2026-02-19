@@ -26,6 +26,7 @@ from .editor import EditCommand, EditorCommand
 from .editor_model import EditorModelCommand
 from .exit import ExitCommand
 from .git import GitCommand
+from .hashline import HashlineCommand
 from .help import HelpCommand
 from .history_search import HistorySearchCommand
 from .lint import LintCommand
@@ -96,6 +97,7 @@ CommandRegistry.register(EditorCommand)
 CommandRegistry.register(EditorModelCommand)
 CommandRegistry.register(ExitCommand)
 CommandRegistry.register(GitCommand)
+CommandRegistry.register(HashlineCommand)
 CommandRegistry.register(HelpCommand)
 CommandRegistry.register(HistorySearchCommand)
 CommandRegistry.register(LintCommand)
@@ -163,6 +165,7 @@ __all__ = [
     "get_available_files",
     "GitCommand",
     "glob_filtered_to_repo",
+    "HashlineCommand",
     "HelpCommand",
     "HistorySearchCommand",
     "LintCommand",

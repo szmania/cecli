@@ -1,8 +1,8 @@
-import difflib
 import os
 import weakref
 from typing import Any, Dict, Optional
 
+from cecli.helpers.hashline import get_hashline_content_diff, hashline
 from cecli.repomap import RepoMap
 
 from .manager import ConversationManager
@@ -70,6 +70,8 @@ class ConversationFiles:
                 coder = cls.get_coder()
                 try:
                     content = coder.io.read_text(abs_fname)
+                    if coder.hashlines:
+                        content = hashline(content)
                 except Exception:
                     content = ""  # Empty content for unreadable files
 
@@ -183,6 +185,8 @@ class ConversationFiles:
         rel_fname = coder.get_rel_fname(fname)
         try:
             current_content = coder.io.read_text(abs_fname)
+            if coder.hashlines:
+                current_content = hashline(current_content)
         except Exception:
             return None
 
@@ -195,17 +199,13 @@ class ConversationFiles:
             abs_fname, cls._file_contents_original[abs_fname]
         )
 
-        # Generate diff between snapshot and current content
-        diff_lines = difflib.unified_diff(
-            snapshot_content.splitlines(),
-            current_content.splitlines(),
+        # Generate diff between snapshot and current content using hashline helper
+        diff_text = get_hashline_content_diff(
+            old_content=snapshot_content,
+            new_content=current_content,
             fromfile=f"{rel_fname} (snapshot)",
             tofile=f"{rel_fname} (current)",
-            lineterm="",
-            n=3,
         )
-
-        diff_text = "\n".join([line for line in list(diff_lines)])
 
         # If there's a diff, update the last snapshot with current content
         if diff_text.strip():
@@ -240,23 +240,12 @@ class ConversationFiles:
             # Add diff message to conversation
             diff_message = {
                 "role": "user",
-                "content": (
-                    f"File {rel_fname} has changed. Here is a diff of the changes:\n\n{diff}"
-                ),
+                "content": f"File Diff For:\n{rel_fname}\n\n{diff}",
             }
-
-            if coder and hasattr(coder, "abs_fnames"):
-                tag = (
-                    MessageTag.EDIT_FILES
-                    if abs_fname in coder.abs_fnames
-                    else MessageTag.CHAT_FILES
-                )
-            else:
-                tag = MessageTag.CHAT_FILES
 
             ConversationManager.add_message(
                 message_dict=diff_message,
-                tag=tag,
+                tag=MessageTag.DIFFS,
             )
 
         return diff
