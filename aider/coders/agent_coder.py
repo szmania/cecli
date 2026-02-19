@@ -524,67 +524,65 @@ class AgentCoder(Coder):
     def _call_tool_execute(self, execute_func, params):
         """
         Call a tool's execute function with the appropriate signature.
-        
+
         Supports both old-style (self, args, coder) and new-style @classmethod (cls, coder, **params).
         """
         import inspect
-        
+
         try:
             # Get the signature of the execute function
             sig = inspect.signature(execute_func)
             params_dict = dict(sig.parameters)
-            
-            # Check if it's a classmethod (first parameter is usually 'cls' or 'self' but bound differently)
-            # For classmethods, the first parameter is automatically filled
-            is_classmethod = isinstance(execute_func, classmethod)
-            
+
             # Check if the function has an 'args' parameter (old-style)
-            has_args_param = 'args' in params_dict
-            
-            if has_args_param and not is_classmethod:
-                # Old-style: execute(self, args, coder) - instance method
-                # Need to create an instance and call the bound method
-                # execute_func is Tool.execute (unbound)
-                # Get the class from the function
-                tool_class = execute_func.__self__.__class__ if hasattr(execute_func, '__self__') else execute_func.__class__
-                if hasattr(tool_class, '__name__') and tool_class.__name__ == 'function':
-                    # It's a plain function, not a method
-                    tool_class = None
-                
-                if tool_class and hasattr(tool_class, '__call__'):
-                    # Create instance and call bound method
-                    instance = tool_class()
-                    bound_execute = instance.execute
-                    return bound_execute(params, self)  # args=params, coder=self as positional
+            has_args_param = "args" in params_dict
+
+            # If it's a bound method (like instance.execute), sig.parameters won't include 'self'
+            # If it's an unbound method (like Tool.execute), sig.parameters will include 'self'
+            has_self_param = "self" in params_dict or "cls" in params_dict
+
+            if has_args_param:
+                # Old-style: execute(args, coder) or execute(self, args, coder)
+                if has_self_param:
+                    # Unbound method: Tool.execute(self, args, coder)
+                    # We need to instantiate the class
+                    if hasattr(execute_func, "__qualname__") and "." in execute_func.__qualname__:
+                        cls_name = execute_func.__qualname__.rsplit(".", 1)[0]
+                        # This is a bit hacky but we need the class.
+                        # Usually execute_func is Tool.execute
+                        # Let's try to get the class from the module
+                        import sys
+
+                        module = sys.modules[execute_func.__module__]
+                        tool_class = getattr(module, cls_name, None)
+                        if tool_class and inspect.isclass(tool_class):
+                            instance = tool_class()
+                            return instance.execute(params, self)
+
+                    # Fallback: call with None for self if we can't find the class
+                    return execute_func(None, params, self)
                 else:
-                    # Fallback: call as unbound with explicit self
-                    # Need to pass self as first positional argument
-                    return execute_func(None, params, self)  # self=None, args=params, coder=self as positional
+                    # Bound method: instance.execute(args, coder)
+                    return execute_func(params, self)
             else:
-                # New-style: @classmethod execute(cls, coder, **params) or similar
-                # Pass coder as keyword argument and unpack params
-                return execute_func(coder=self, **params)
+                # New-style: execute(coder, **params) or execute(cls, coder, **params)
+                if has_self_param:
+                    # Unbound method or classmethod
+                    # If it's a classmethod, it might already be bound if accessed via instance
+                    # but here we assume it needs the class or instance.
+                    return execute_func(coder=self, **params)
+                else:
+                    # Bound method or plain function
+                    return execute_func(coder=self, **params)
         except Exception as e:
-            # Add debug info
-            self.io.tool_error(f"Debug _call_tool_execute: execute_func={execute_func}, params={params}, error={e}")
             # Fallback: try the new-style call first, then old-style
             try:
                 return execute_func(coder=self, **params)
-            except TypeError as te1:
-                self.io.tool_error(f"Debug new-style failed: {te1}")
+            except TypeError:
                 try:
-                    # Try creating instance if possible
-                    if hasattr(execute_func, '__self__') and hasattr(execute_func.__self__, '__class__'):
-                        tool_class = execute_func.__self__.__class__
-                        instance = tool_class()
-                        bound_execute = instance.execute
-                        return bound_execute(params, self)  # args=params, coder=self as positional
-                    else:
-                        # Last resort: call with explicit None for self
-                        return execute_func(None, params, self)  # self=None, args=params, coder=self as positional
-                except Exception as e2:
-                    self.io.tool_error(f"Debug old-style failed: {e2}")
-                    raise e2 from e
+                    return execute_func(params, self)
+                except TypeError:
+                    raise e
 
     async def _execute_mcp_tool(self, server, tool_name, params):
         """Helper to execute a single MCP tool call, created from legacy format."""
