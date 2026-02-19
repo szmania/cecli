@@ -105,6 +105,7 @@ class ModelSettings:
     name: str
     edit_format: str = "diff"
     weak_model_name: Optional[str] = None
+    agent_model_name: Optional[str] = None
     use_repo_map: bool = False
     send_undo_reply: bool = False
     lazy: bool = False
@@ -314,6 +315,7 @@ class Model(ModelSettings):
         model,
         weak_model=None,
         editor_model=None,
+        agent_model=None,
         editor_edit_format=None,
         verbose=False,
         io=None,
@@ -341,6 +343,7 @@ class Model(ModelSettings):
         self.max_chat_history_tokens = 1024
         self.weak_model = None
         self.editor_model = None
+        self.agent_model = None
         self.extra_model_settings = next(
             (ms for ms in MODEL_SETTINGS if ms.name == "cecli/extra_params"), None
         )
@@ -354,6 +357,7 @@ class Model(ModelSettings):
         self.configure_model_settings(model)
         self._apply_provider_defaults()
         self.get_weak_model(weak_model)
+        self.get_agent_model(agent_model)
         self.retries = retries
         self.debug = debug
 
@@ -594,6 +598,30 @@ class Model(ModelSettings):
             return
         self.weak_model = Model(self.weak_model_name, weak_model=False, io=self.io)
         return self.weak_model
+
+    def get_agent_model(self, provided_weak_model):
+        if provided_weak_model is False:
+            self.agent_model = self
+            self.agent_model_name = None
+            return
+        if self.copy_paste_transport == "clipboard":
+            self.agent_model = self
+            self.agent_model_name = None
+            return
+        if isinstance(provided_weak_model, Model):
+            self.agent_model = provided_weak_model
+            self.agent_model_name = provided_weak_model.name
+            return
+        if provided_weak_model:
+            self.agent_model_name = provided_weak_model
+        if not self.agent_model_name:
+            self.agent_model = self
+            return
+        if self.agent_model_name == self.name:
+            self.agent_model = self
+            return
+        self.agent_model = Model(self.agent_model_name, agent_model=False, io=self.io)
+        return self.agent_model
 
     def commit_message_models(self):
         return [self.weak_model, self]

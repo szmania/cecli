@@ -311,6 +311,12 @@ def get_parser(default_config_files, git_root):
         default=None,
     )
     group.add_argument(
+        "--agent-model",
+        metavar="AGENT_MODEL",
+        default=None,
+        help="Specify the model to use for Agent mode (default depends on --model)",
+    )
+    group.add_argument(
         "--auto-save",
         action=argparse.BooleanOptionalAction,
         default=False,
@@ -1124,7 +1130,10 @@ def main():
             shell = sys.argv[2]
             if shell not in shtab.SUPPORTED_SHELLS:
                 print(f"Error: Unsupported shell '{shell}'.", file=sys.stderr)
-                print(f"Supported shells are: {', '.join(shtab.SUPPORTED_SHELLS)}", file=sys.stderr)
+                print(
+                    f"Supported shells are: {', '.join(shtab.SUPPORTED_SHELLS)}",
+                    file=sys.stderr,
+                )
                 sys.exit(1)
             parser = get_parser([], None)
             parser.prog = "cecli"  # Set the program name on the parser
@@ -1132,7 +1141,10 @@ def main():
         else:
             print("Error: Please specify a shell for completion.", file=sys.stderr)
             print(f"Usage: python {sys.argv[0]} completion <shell_name>", file=sys.stderr)
-            print(f"Supported shells are: {', '.join(shtab.SUPPORTED_SHELLS)}", file=sys.stderr)
+            print(
+                f"Supported shells are: {', '.join(shtab.SUPPORTED_SHELLS)}",
+                file=sys.stderr,
+            )
             sys.exit(1)
     else:
         # Default to YAML for any other unrecognized argument, or if 'yaml' was explicitly passed

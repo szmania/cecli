@@ -30,6 +30,7 @@ class SettingsCommand(BaseCommand):
             ("Main model", coder.main_model),
             ("Editor model", getattr(coder.main_model, "editor_model", None)),
             ("Weak model", getattr(coder.main_model, "weak_model", None)),
+            ("Agent model", getattr(coder.main_model, "agent_model", None)),
         ]
         for label, model in active_models:
             if not model:

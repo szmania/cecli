@@ -842,6 +842,7 @@ async def main_async(argv=None, input=None, output=None, force_git_root=None, re
     main_model_name, main_model_overrides = apply_model_overrides(args.model)
     weak_model_name, weak_model_overrides = apply_model_overrides(args.weak_model)
     editor_model_name, editor_model_overrides = apply_model_overrides(args.editor_model)
+    agent_model_name, agent_model_overrides = apply_model_overrides(args.agent_model)
     weak_model_obj = None
     if weak_model_name:
         weak_model_obj = models.Model(
@@ -864,6 +865,18 @@ async def main_async(argv=None, input=None, output=None, force_git_root=None, re
             retries=args.retries,
             debug=args.debug,
         )
+    agent_model_obj = None
+    if agent_model_name:
+        agent_model_obj = models.Model(
+            agent_model_name,
+            agent_model=False,
+            verbose=args.verbose,
+            io=io,
+            override_kwargs=agent_model_overrides,
+            retries=args.retries,
+            debug=args.debug,
+        )
+
     if main_model_name.startswith("openrouter/") and not os.environ.get("OPENROUTER_API_KEY"):
         io.tool_warning(
             f"The specified model '{main_model_name}' requires an OpenRouter API key, which was not"
@@ -889,6 +902,7 @@ async def main_async(argv=None, input=None, output=None, force_git_root=None, re
         main_model_name,
         weak_model=weak_model_obj,
         editor_model=editor_model_obj,
+        agent_model=agent_model_obj,
         editor_edit_format=args.editor_edit_format,
         verbose=args.verbose,
         io=io,

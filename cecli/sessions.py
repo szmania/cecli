@@ -152,6 +152,7 @@ class SessionManager:
             "model": self.coder.main_model.name,
             "weak_model": self.coder.main_model.weak_model.name,
             "editor_model": self.coder.main_model.editor_model.name,
+            "agent_model": self.coder.main_model.agent_model.name,
             "editor_edit_format": self.coder.main_model.editor_edit_format,
             "edit_format": self.coder.edit_format,
             "chat_history": {
