@@ -464,12 +464,14 @@ class AgentCoder(Coder):
                         # Skip empty parameter sets
                         if not params:
                             continue
+                        # Add debug info
+                        self.io.tool_output(f"Debug: Calling tool {norm_tool_name} via tool_manager, execute_func={execute_func}, params={params}")
                         # Pass the coder instance to the execute function
                         if asyncio.iscoroutinefunction(execute_func):
-                            tasks.append(execute_func(coder=self, **params))
+                            tasks.append(self._call_tool_execute(execute_func, params))
                         else:
                             tasks.append(
-                                asyncio.to_thread(execute_func, coder=self, **params)
+                                asyncio.to_thread(self._call_tool_execute, execute_func, params)
                             )
                 else:
                     # Handle MCP tools for tools not in registry
@@ -518,6 +520,71 @@ class AgentCoder(Coder):
                 }
             )
         return tool_responses
+
+    def _call_tool_execute(self, execute_func, params):
+        """
+        Call a tool's execute function with the appropriate signature.
+        
+        Supports both old-style (self, args, coder) and new-style @classmethod (cls, coder, **params).
+        """
+        import inspect
+        
+        try:
+            # Get the signature of the execute function
+            sig = inspect.signature(execute_func)
+            params_dict = dict(sig.parameters)
+            
+            # Check if it's a classmethod (first parameter is usually 'cls' or 'self' but bound differently)
+            # For classmethods, the first parameter is automatically filled
+            is_classmethod = isinstance(execute_func, classmethod)
+            
+            # Check if the function has an 'args' parameter (old-style)
+            has_args_param = 'args' in params_dict
+            
+            if has_args_param and not is_classmethod:
+                # Old-style: execute(self, args, coder) - instance method
+                # Need to create an instance and call the bound method
+                # execute_func is Tool.execute (unbound)
+                # Get the class from the function
+                tool_class = execute_func.__self__.__class__ if hasattr(execute_func, '__self__') else execute_func.__class__
+                if hasattr(tool_class, '__name__') and tool_class.__name__ == 'function':
+                    # It's a plain function, not a method
+                    tool_class = None
+                
+                if tool_class and hasattr(tool_class, '__call__'):
+                    # Create instance and call bound method
+                    instance = tool_class()
+                    bound_execute = instance.execute
+                    return bound_execute(params, self)  # args=params, coder=self as positional
+                else:
+                    # Fallback: call as unbound with explicit self
+                    # Need to pass self as first positional argument
+                    return execute_func(None, params, self)  # self=None, args=params, coder=self as positional
+            else:
+                # New-style: @classmethod execute(cls, coder, **params) or similar
+                # Pass coder as keyword argument and unpack params
+                return execute_func(coder=self, **params)
+        except Exception as e:
+            # Add debug info
+            self.io.tool_error(f"Debug _call_tool_execute: execute_func={execute_func}, params={params}, error={e}")
+            # Fallback: try the new-style call first, then old-style
+            try:
+                return execute_func(coder=self, **params)
+            except TypeError as te1:
+                self.io.tool_error(f"Debug new-style failed: {te1}")
+                try:
+                    # Try creating instance if possible
+                    if hasattr(execute_func, '__self__') and hasattr(execute_func.__self__, '__class__'):
+                        tool_class = execute_func.__self__.__class__
+                        instance = tool_class()
+                        bound_execute = instance.execute
+                        return bound_execute(params, self)  # args=params, coder=self as positional
+                    else:
+                        # Last resort: call with explicit None for self
+                        return execute_func(None, params, self)  # self=None, args=params, coder=self as positional
+                except Exception as e2:
+                    self.io.tool_error(f"Debug old-style failed: {e2}")
+                    raise e2 from e
 
     async def _execute_mcp_tool(self, server, tool_name, params):
         """Helper to execute a single MCP tool call, created from legacy format."""
@@ -1447,9 +1514,9 @@ class AgentCoder(Coder):
             try:
                 # Pass the coder instance to the execute function
                 if asyncio.iscoroutinefunction(execute_func):
-                    result = await execute_func(coder=self, **params)
+                    result = await self._call_tool_execute(execute_func, params)
                 else:
-                    result = await asyncio.to_thread(execute_func, coder=self, **params)
+                    result = await asyncio.to_thread(self._call_tool_execute, execute_func, params)
                 return str(result)
             except Exception as e:
                 self.io.tool_error(
