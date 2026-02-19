@@ -272,12 +272,10 @@ def find_hashline_range(
 
     # Try to find start line
     found_start_line = None
-    start_found_by_exact_match = False
     if allow_exact_match:
         found_start_line = find_hashline_by_exact_match(
             hashed_lines, start_hash_fragment, start_line_num_str
         )
-        start_found_by_exact_match = found_start_line is not None
 
     if found_start_line is None:
         found_start_line = find_hashline_by_fragment(
@@ -313,19 +311,24 @@ def find_hashline_range(
                 f"end line {expected_found_end_line + 1} is out of range."
             )
 
-        # Only verify end hash fragment if start was NOT found by exact match
-        # If start was found by exact match, we trust the line numbers
-        if not start_found_by_exact_match:
-            actual_end_hashed_line = hashed_lines[expected_found_end_line]
-            actual_end_hash_fragment = actual_end_hashed_line.split(":", 1)[0]
+        # Check if end hash fragment matches at the expected position
+        # If not, use find_hashline_by_fragment() to find the closest match
+        actual_end_hashed_line = hashed_lines[expected_found_end_line]
+        actual_end_hash_fragment = actual_end_hashed_line.split(":", 1)[0]
 
-            if actual_end_hash_fragment != end_hash_fragment:
+        if actual_end_hash_fragment != end_hash_fragment:
+            # Instead of raising an error, try to find the closest matching hash fragment
+            # near where the end line would be based on distance from start line
+            found_end_line = find_hashline_by_fragment(
+                hashed_lines, end_hash_fragment, expected_found_end_line
+            )
+            if found_end_line is None:
                 raise HashlineError(
-                    f"End line hash mismatch. Expected '{end_hash_fragment}' at line"
-                    f" {expected_found_end_line + 1}, got '{actual_end_hash_fragment}'."
+                    f"End line hash fragment '{end_hash_fragment}' not found near "
+                    f"expected position {expected_found_end_line + 1}."
                 )
-
-        found_end_line = expected_found_end_line
+        else:
+            found_end_line = expected_found_end_line
 
     # Verify end line is not before start line
     if found_end_line < found_start_line:
