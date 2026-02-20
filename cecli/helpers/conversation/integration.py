@@ -37,7 +37,6 @@ class ConversationChunks:
         Args:
             coder: The coder instance
         """
-        # Add system prompt
         system_prompt = coder.gpt_prompts.main_system
         if system_prompt:
             # Apply system_prompt_prefix if set on the model
@@ -45,8 +44,10 @@ class ConversationChunks:
                 system_prompt = coder.main_model.system_prompt_prefix + "\n" + system_prompt
 
             ConversationManager.add_message(
-                message_dict={"role": "system", "content": system_prompt},
+                message_dict={"role": "system", "content": coder.fmt_system_prompt(system_prompt)},
                 tag=MessageTag.SYSTEM,
+                hash_key=("main", "system_prompt"),
+                force=True,
             )
 
         # Add examples if available
@@ -68,6 +69,8 @@ class ConversationChunks:
             ConversationManager.add_message(
                 message_dict=msg,
                 tag=MessageTag.REMINDER,
+                hash_key=("main", "system_reminder"),
+                force=True,
             )
 
     @classmethod

@@ -499,6 +499,9 @@ class AgentCoder(Coder):
             # Use parent's implementation which may use conversation system if flag is enabled
             return super().format_chat_chunks()
 
+        # Choose appropriate fence based on file content
+        self.choose_fence()
+
         ConversationChunks.initialize_conversation_system(self)
         # Decrement mark_for_delete values before adding new messages
         ConversationManager.decrement_mark_for_delete()
