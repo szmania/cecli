@@ -866,7 +866,7 @@ two
     async def test_check_for_urls(self):
         io = InputOutput(yes=True)
         mock_args = MagicMock()
-        mock_args.yes_always_commands = False
+        mock_args.yes_always_commands = True
         mock_args.disable_scraping = False
         coder = await Coder.create(self.GPT35, None, io=io, args=mock_args)
 
@@ -1030,7 +1030,7 @@ This command will print 'Hello, World!' to the console."""
         with GitTemporaryDirectory():
             io = InputOutput(yes=True)
             mock_args = MagicMock()
-            mock_args.yes_always_commands = False
+            mock_args.yes_always_commands = True
             mock_args.disable_scraping = False
             coder = await Coder.create(self.GPT35, "diff", io=io, detect_urls=True, args=mock_args)
 
