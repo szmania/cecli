@@ -19,7 +19,7 @@ configure cecli with the proper token limits
 for unusual models.
 
 But, you can register context window limits and costs for models that aren't known
-to cecli. Create a `.aider.model.metadata.json` file in one of these locations:
+to cecli. Create a `.cecli.model.metadata.json` file in one of these locations:
 
 - Your home directory.
 - The root if your git repo.
@@ -48,7 +48,7 @@ The json file should be a dictionary with an entry for each model, as follows:
 
 {: .tip }
 Use a fully qualified model name with a `provider/` at the front
-in the `.aider.model.metadata.json` file.
+in the `.cecli.model.metadata.json` file.
 For example, use `deepseek/deepseek-chat`, not just `deepseek-chat`.
 That prefix should match the `litellm_provider` field.
 
@@ -71,7 +71,7 @@ a model that cecli doesn't know about.
 
 ### Configuration file locations
 
-You can override or add settings for any model by creating a `.aider.model.settings.yml` file in one of these locations:
+You can override or add settings for any model by creating a `.cecli.model.settings.yml` file in one of these locations:
 
 - Your home directory.
 - The root of your git repo.

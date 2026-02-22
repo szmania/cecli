@@ -6,7 +6,7 @@ description: How to configure cecli with a YAML config file.
 
 # YAML config file
 
-Most of cecli's options can be set in an `.aider.conf.yml` file.
+Most of cecli's options can be set in an `.cecli.conf.yml` file.
 cecli will look for a this file in these locations:
 
 - Your home directory.
@@ -40,20 +40,20 @@ read: [CONVENTIONS.md, anotherfile.txt, thirdfile.py]
 
 Below is a sample of the YAML config file, which you
 can also
-[download from GitHub](https://github.com/dwash96/cecli/blob/main/cecli/website/assets/sample.aider.conf.yml).
+[download from GitHub](https://github.com/dwash96/cecli/blob/main/cecli/website/assets/sample.cecli.conf.yml).
 
 <!--[[[cog
 from cecli.args import get_sample_yaml
 from pathlib import Path
 text=get_sample_yaml()
-Path("cecli/website/assets/sample.aider.conf.yml").write_text(text)
+Path("cecli/website/assets/sample.cecli.conf.yml").write_text(text)
 cog.outl("```")
 cog.out(text)
 cog.outl("```")
 ]]]-->
 ```
 ##########################################################
-# Sample .aider.conf.yml
+# Sample .cecli.conf.yml
 # This file lists *all* the valid configuration entries.
 # Place in your home dir, or at the root of your git repo.
 ##########################################################
@@ -121,10 +121,10 @@ cog.outl("```")
 #list-models: xxx
 
 ## Specify a file with cecli model settings for unknown models
-#model-settings-file: .aider.model.settings.yml
+#model-settings-file: .cecli.model.settings.yml
 
 ## Specify a file with context window and costs for unknown models
-#model-metadata-file: .aider.model.metadata.json
+#model-metadata-file: .cecli.model.metadata.json
 
 ## Add a model alias (can be used multiple times)
 #alias: xxx
@@ -209,16 +209,16 @@ cog.outl("```")
 ################
 # History Files:
 
-## Specify the chat input history file (default: .aider.input.history)
-#input-history-file: .aider.input.history
+## Specify the chat input history file (default: .cecli.input.history)
+#input-history-file: .cecli.input.history
 
-## Specify the chat history file (default: .aider.dev.history.md)
-#chat-history-file: .aider.dev.history.md
+## Specify the chat history file (default: .cecli.dev.history.md)
+#chat-history-file: .cecli.dev.history.md
 
 ## Restore the previous chat history messages (default: False)
 #restore-chat-history: false
 
-## Log the conversation with the LLM to this file (for example, .aider.llm.history)
+## Log the conversation with the LLM to this file (for example, .cecli.llm.history)
 #llm-history-file: xxx
 
 ##################
@@ -275,14 +275,14 @@ cog.outl("```")
 ## Enable/disable looking for a git repo (default: True)
 #git: true
 
-## Enable/disable adding .aider* to .gitignore (default: True)
+## Enable/disable adding .cecli* to .gitignore (default: True)
 #gitignore: true
 
 ## Enable/disable the addition of files listed in .gitignore to cecli's editing scope.
 #add-gitignore-files: false
 
-## Specify the cecli ignore file (default: .aiderignore in git root)
-#cecliignore: .aiderignore
+## Specify the cecli ignore file (default: .cecli.ignore in git root)
+#cecliignore: .cecli.ignore
 
 ## Only consider files in the current subtree of the git repository
 #subtree-only: false
@@ -479,7 +479,7 @@ cog.outl("```")
 ## Line endings to use when writing files (default: platform)
 #line-endings: platform
 
-## Specify the config file (default: search for .aider.conf.yml in git root, cwd or home directory)
+## Specify the config file (default: search for .cecli.conf.yml in git root, cwd or home directory)
 #config: xxx
 
 ## Specify the .env file to load (default: .env in git root)

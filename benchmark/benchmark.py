@@ -873,7 +873,9 @@ async def run_test_real(
 
     from cecli import models
     from cecli.coders import Coder
+    from cecli.helpers.conversation import ConversationFiles, ConversationManager
     from cecli.io import InputOutput
+    from cecli.main import SwitchCoderSignal
 
     if not os.path.isdir(testdir):
         if dry:
@@ -1053,6 +1055,7 @@ async def run_test_real(
         use_git=True,
         auto_commits=False,
         dirty_commits=False,
+        auto_lint=False,
         stream=False,
         verbose=verbose,
         # auto_lint=False,  # disabled for code-in-json experiments
@@ -1088,6 +1091,15 @@ async def run_test_real(
 
     dur = 0
     test_outcomes = []
+
+    ConversationManager.initialize(
+        coder,
+        reset=True,
+        reformat=True,
+    )
+
+    ConversationFiles.reset()
+
     for i in range(tries):
         start = time.time()
 
@@ -1103,7 +1115,10 @@ async def run_test_real(
 
             await coder.apply_updates()
         else:
-            response = await coder.run(with_message=instructions, preproc=False)
+            try:
+                response = await coder.run(with_message=instructions, preproc=False)
+            except SwitchCoderSignal:
+                pass
 
         dur += time.time() - start
 

@@ -93,7 +93,7 @@ cecli --security-config '{"allowed-domains": ["github.com", "docs.python.org", "
 
 ### YAML Configuration File Examples
 
-In `.aider.conf.yml` or `~/.aider.conf.yml`:
+In `.cecli.conf.yml` or `~/.cecli.conf.yml`:
 
 ```yaml
 # Restrict to GitHub and Python documentation

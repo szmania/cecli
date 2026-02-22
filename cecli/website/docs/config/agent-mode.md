@@ -276,7 +276,7 @@ use-enhanced-map: true
 
 #### Complete Configuration Example
 
-Complete configuration example in YAML configuration file (`.aider.conf.yml` or `~/.aider.conf.yml`):
+Complete configuration example in YAML configuration file (`.cecli.conf.yml` or `~/.cecli.conf.yml`):
 
 ```yaml
 # Enable Agent Mode

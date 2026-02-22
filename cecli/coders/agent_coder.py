@@ -39,6 +39,7 @@ class AgentCoder(Coder):
     edit_format = "agent"
     prompt_format = "agent"
     context_management_enabled = True
+    hashlines = True
 
     def __init__(self, *args, **kwargs):
         self.recently_removed = {}
@@ -56,6 +57,7 @@ class AgentCoder(Coder):
             "grep",
             "listchanges",
             "shownumberedcontext",
+            "thinking",
         }
         self.write_tools = {
             "command",
@@ -497,6 +499,9 @@ class AgentCoder(Coder):
             # Use parent's implementation which may use conversation system if flag is enabled
             return super().format_chat_chunks()
 
+        # Choose appropriate fence based on file content
+        self.choose_fence()
+
         ConversationChunks.initialize_conversation_system(self)
         # Decrement mark_for_delete values before adding new messages
         ConversationManager.decrement_mark_for_delete()
@@ -679,7 +684,7 @@ class AgentCoder(Coder):
         """
         Track tool usage before calling the base implementation.
         """
-        self.agent_finished = False
+
         await self.auto_save_session()
         self.last_round_tools = []
         if self.partial_response_tool_calls:
@@ -940,7 +945,7 @@ I will proceed based on the tool results and updated context.""")
         for i, tool in enumerate(recent_history, 1):
             context_parts.append(f"{i}. {tool}")
         context_parts.append("\n\n")
-        if repetitive_tools:
+        if repetitive_tools and len(self.tool_usage_history) >= 8:
             context_parts.append("""**Instruction:**
 You have used the following tool(s) repeatedly:""")
             context_parts.append("### DO NOT USE THE FOLLOWING TOOLS/FUNCTIONS")
@@ -1054,6 +1059,8 @@ You have used the following tool(s) repeatedly:""")
         inp = await super().preproc_user_input(inp)
         if inp and not inp.startswith('<context name="user_input" from="agent">'):
             inp = f'<context name="user_input" from="agent">\n{inp}\n</context>'
+
+        self.agent_finished = False
         return inp
 
     def get_directory_structure(self):

@@ -21,7 +21,7 @@ Multiple aliases can be defined by using the `--alias` option multiple times. Ea
 ## Configuration File
 
 Of course,
-you can also define aliases in your [`.aider.conf.yml` file](https://cecli.dev/docs/config/cecli_conf.html):
+you can also define aliases in your [`.cecli.conf.yml` file](https://cecli.dev/docs/config/cecli_conf.html):
 
 ```yaml
 alias:
@@ -101,7 +101,7 @@ CECLI/Cecli supports model names with colon-separated suffixes (e.g., `gpt-5:hig
 
 ### Configuration File
 
-Add a structure like the following to your config.yml file or create a `.aider.model.overrides.yml` file (or specify a different file with `--model-overrides-file` if there are global defaults you want):
+Add a structure like the following to your config.yml file or create a `.cecli.model.overrides.yml` file (or specify a different file with `--model-overrides-file` if there are global defaults you want):
 
 ```yaml
 model-overrides:
@@ -133,7 +133,7 @@ You can use these suffixes with any model argument:
 
 ```bash
 # Main model with high reasoning effort (using file)
-cecli --model gpt-5:high --model-overrides-file .aider.model.overrides.yml
+cecli --model gpt-5:high --model-overrides-file .cecli.model.overrides.yml
 
 # Main model with high reasoning effort (using direct JSON/YAML)
 cecli --model gpt-5:high --model-overrides '{"gpt-5": {"high": {"temperature": 0.8, "top_p": 0.9, "extra_body": {"reasoning_effort": "high"}}}}'

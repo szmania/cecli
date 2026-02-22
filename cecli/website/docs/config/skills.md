@@ -74,7 +74,7 @@ Skills are configured through the `agent-config` parameter in the YAML configura
 - **`skills_includelist`**: Array of skill names to include (whitelist)
 - **`skills_excludelist`**: Array of skill names to exclude (blacklist)
 
-Complete configuration example in YAML configuration file (`.aider.conf.yml` or `~/.aider.conf.yml`):
+Complete configuration example in YAML configuration file (`.cecli.conf.yml` or `~/.cecli.conf.yml`):
 
 ```yaml
 # Enable Agent Mode

@@ -11,7 +11,7 @@ cecli lets you specify API keys in a few ways:
 - On the command line
 - As environment variables
 - In a `.env` file
-- In your `.aider.conf.yml` config file
+- In your `.cecli.conf.yml` config file
 
 ---
 
@@ -78,7 +78,7 @@ DEEPSEEK_API_KEY=baz
 
 
 You can also set API keys in the 
-[`.aider.conf.yml` file](/docs/config/cecli_conf.html)
+[`.cecli.conf.yml` file](/docs/config/cecli_conf.html)
 via the `api-key` entry:
 
 ```

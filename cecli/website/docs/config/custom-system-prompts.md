@@ -24,9 +24,9 @@ Custom system prompts can be configured using the `prompt_map` configuration opt
 ```yaml
 custom:
     prompt_map:
-      agent: .aider/custom/prompts/agent.yml
-      base: .aider/custom/prompts/base.yml
-      all: .aider/custom/prompts/all.yml
+      agent: .cecli/custom/prompts/agent.yml
+      base: .cecli/custom/prompts/base.yml
+      all: .cecli/custom/prompts/all.yml
 ```
 
 The `prompt_map` configuration option allows you to specify which custom prompt files to use for different prompt types.
@@ -74,7 +74,7 @@ main_system: |
 Here's a complete example of a custom agent prompt that changes the language and adds specific directives:
 
 ```yaml
-# .aider/custom/prompts/agent.yml
+# .cecli/custom/prompts/agent.yml
 # Agent prompts - inherits from base.yaml
 # Overrides specific prompts
 _inherits: [agent, base]
@@ -93,7 +93,7 @@ main_system: |
 
 ### Complete Configuration Example
 
-Complete configuration example in YAML configuration file (`.aider.conf.yml` or `~/.aider.conf.yml`):
+Complete configuration example in YAML configuration file (`.cecli.conf.yml` or `~/.cecli.conf.yml`):
 
 ```yaml
 # Model configuration
@@ -103,12 +103,12 @@ weak-model: gemini/gemini-3-flash-preview
 # Custom prompts configuration
 custom:
     prompt_map:
-      agent: .aider/custom/prompts/agent.yml
-      base: .aider/custom/prompts/my-base.yml
+      agent: .cecli/custom/prompts/agent.yml
+      base: .cecli/custom/prompts/my-base.yml
 
 # Custom commands configuration
 custom:
-    command-paths: [".aider/custom/commands/"]
+    command-paths: [".cecli/custom/commands/"]
 
 # Other cecli options
 agent: true

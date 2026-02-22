@@ -6,29 +6,29 @@ from cecli.commands.utils.helpers import format_command_result
 from cecli.helpers.conversation import ConversationManager, MessageTag
 
 
-class EditorModelCommand(BaseCommand):
-    NORM_NAME = "editor-model"
-    DESCRIPTION = "Switch the Editor Model to a new LLM"
+class AgentModelCommand(BaseCommand):
+    NORM_NAME = "agent-model"
+    DESCRIPTION = "Switch the Agent Model to a new LLM"
 
     @classmethod
     async def execute(cls, io, coder, args, **kwargs):
-        """Execute the editor-model command with given parameters."""
+        """Execute the agent-model command with given parameters."""
         arg_split = args.split(" ", 1)
         model_name = arg_split[0].strip()
         if not model_name:
-            # If no model name provided, show current editor model
-            current_editor_model = coder.main_model.editor_model.name
-            io.tool_output(f"Current editor model: {current_editor_model}")
+            # If no model name provided, show current agent model
+            current_agent_model = coder.main_model.agent_model.name
+            io.tool_output(f"Current agent model: {current_agent_model}")
             return format_command_result(
-                io, "editor-model", f"Displayed current editor model: {current_editor_model}"
+                io, "agent-model", f"Displayed current agent model: {current_agent_model}"
             )
 
-        # Create a new model with the same main model and editor model, but updated editor model
+        # Create a new model with the same main model and editor model, but updated agent model
         model = models.Model(
             coder.main_model.name,
-            editor_model=model_name,
+            editor_model=coder.main_model.editor_model.name,
             weak_model=coder.main_model.weak_model.name,
-            agent_model=coder.main_model.agent_model.name,
+            agent_model=model_name,
             io=io,
             retries=coder.main_model.retries,
             debug=coder.main_model.debug,
@@ -36,7 +36,7 @@ class EditorModelCommand(BaseCommand):
         await models.sanity_check_models(io, model)
 
         if len(arg_split) > 1:
-            # implement architect coder-like generation call for editor model
+            # implement architect coder-like generation call for agent model
             message = arg_split[1].strip()
 
             # Store the original model configuration
@@ -112,32 +112,32 @@ class EditorModelCommand(BaseCommand):
 
     @classmethod
     def get_completions(cls, io, coder, args) -> List[str]:
-        """Get completion options for editor-model command."""
+        """Get completion options for agent-model command."""
         return models.get_chat_model_names()
 
     @classmethod
     def get_help(cls) -> str:
-        """Get help text for the editor-model command."""
+        """Get help text for the agent-model command."""
         help_text = super().get_help()
         help_text += "\nUsage:\n"
-        help_text += "  /editor-model <model-name>              # Switch to a new editor model\n"
+        help_text += "  /agent-model <model-name>              # Switch to a new agent model\n"
         help_text += (
-            "  /editor-model <model-name> <prompt>     # Use a specific editor model for a single"
+            "  /agent-model <model-name> <prompt>     # Use a specific agent model for a single"
             " prompt\n"
         )
         help_text += "\nExamples:\n"
         help_text += (
-            "  /editor-model gpt-4o-mini               # Switch to GPT-4o Mini as editor model\n"
+            "  /agent-model gpt-4o-mini               # Switch to GPT-4o Mini as agent model\n"
         )
         help_text += (
-            "  /editor-model claude-3-haiku            # Switch to Claude 3 Haiku as editor model\n"
+            "  /agent-model claude-3-haiku            # Switch to Claude 3 Haiku as agent model\n"
         )
-        help_text += '  /editor-model o1-mini "review this code" # Use o1-mini to review code\n'
+        help_text += '  /agent-model o1-mini "review this code" # Use o1-mini to review code\n'
         help_text += (
-            "\nWhen switching editor models, the main model and editor model remain unchanged.\n"
+            "\nWhen switching agent models, the main model and editor model remain unchanged.\n"
         )
         help_text += (
-            "\nIf you provide a prompt after the model name, that editor model will be used\n"
+            "\nIf you provide a prompt after the model name, that agent model will be used\n"
         )
-        help_text += "just for that prompt, then you'll return to your original editor model.\n"
+        help_text += "just for that prompt, then you'll return to your original agent model.\n"
         return help_text

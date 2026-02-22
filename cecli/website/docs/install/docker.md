@@ -17,10 +17,10 @@ docker run \
   -it \
   --user $(id -u):$(id -g) \
   --volume $(pwd):/app dustinwashington/cecli \
-  --volume $(pwd)/.aider.conf.yml:/.aider.conf.yml \
-  --volume $(pwd)/.aider.env:/.aider/.env \
+  --volume $(pwd)/.cecli.conf.yml:/.cecli.conf.yml \
+  --volume $(pwd)/.cecli.env:/.cecli/.env \
   [...other args...] \
-  --config /app/.aider.conf.yml 
+  --config /app/.cecli.conf.yml 
 ```
 
 ## How to use it

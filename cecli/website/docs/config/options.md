@@ -161,12 +161,12 @@ Aliases:
 
 ### `--model-settings-file MODEL_SETTINGS_FILE`
 Specify a file with cecli model settings for unknown models  
-Default: .aider.model.settings.yml  
+Default: .cecli.model.settings.yml  
 Environment variable: `CECLI_MODEL_SETTINGS_FILE`  
 
 ### `--model-metadata-file MODEL_METADATA_FILE`
 Specify a file with context window and costs for unknown models  
-Default: .aider.model.metadata.json  
+Default: .cecli.model.metadata.json  
 Environment variable: `CECLI_MODEL_METADATA_FILE`  
 
 ### `--alias ALIAS:MODEL`
@@ -302,13 +302,13 @@ Environment variable: `CECLI_MAP_MAX_LINE_LENGTH`
 ## History Files:
 
 ### `--input-history-file INPUT_HISTORY_FILE`
-Specify the chat input history file (default: .aider.input.history)  
-Default: .aider.input.history  
+Specify the chat input history file (default: .cecli.input.history)  
+Default: .cecli.input.history  
 Environment variable: `CECLI_INPUT_HISTORY_FILE`  
 
 ### `--chat-history-file CHAT_HISTORY_FILE`
-Specify the chat history file (default: .aider.dev.history.md)  
-Default: .aider.dev.history.md  
+Specify the chat history file (default: .cecli.dev.history.md)  
+Default: .cecli.dev.history.md  
 Environment variable: `CECLI_CHAT_HISTORY_FILE`  
 
 ### `--restore-chat-history`
@@ -320,7 +320,7 @@ Aliases:
   - `--no-restore-chat-history`
 
 ### `--llm-history-file LLM_HISTORY_FILE`
-Log the conversation with the LLM to this file (for example, .aider.llm.history)  
+Log the conversation with the LLM to this file (for example, .cecli.llm.history)  
 Environment variable: `CECLI_LLM_HISTORY_FILE`  
 
 ## Output settings:
@@ -412,7 +412,7 @@ Aliases:
   - `--no-git`
 
 ### `--gitignore`
-Enable/disable adding .aider* to .gitignore (default: True)  
+Enable/disable adding .cecli* to .gitignore (default: True)  
 Default: True  
 Environment variable: `CECLI_GITIGNORE`  
 Aliases:
@@ -427,10 +427,10 @@ Aliases:
   - `--add-gitignore-files`
   - `--no-add-gitignore-files`
 
-### `--aiderignore AIDERIGNORE`
-Specify the cecli ignore file (default: .aiderignore in git root)  
-Default: .aiderignore  
-Environment variable: `CECLI_AIDERIGNORE`  
+### `--cecli-ignore CECLI_IGNORE`
+Specify the cecli ignore file (default: .cecli.ignore in git root)  
+Default: .cecli.ignore  
+Environment variable: `CECLI_IGNORE`  
 
 ### `--subtree-only`
 Only consider files in the current subtree of the git repository  
@@ -761,7 +761,7 @@ Default: platform
 Environment variable: `CECLI_LINE_ENDINGS`  
 
 ### `--config CONFIG_FILE`
-Specify the config file (default: search for .aider.conf.yml in git root, cwd or home directory)  
+Specify the config file (default: search for .cecli.conf.yml in git root, cwd or home directory)  
 Aliases:
   - `-c CONFIG_FILE`
   - `--config CONFIG_FILE`
@@ -823,68 +823,4 @@ Environment variable: `CECLI_EDITOR`
 Print shell completion script for the specified SHELL and exit. Supported shells: bash, tcsh, zsh. Example: cecli --shell-completions bash  
 Environment variable: `CECLI_SHELL_COMPLETIONS`  
 
-## Deprecated model settings:
-
-### `--opus`
-Use claude-3-opus-20240229 model for the main chat (deprecated, use --model)  
-Default: False  
-Environment variable: `CECLI_OPUS`  
-
-### `--sonnet`
-Use anthropic/claude-3-7-sonnet-20250219 model for the main chat (deprecated, use --model)  
-Default: False  
-Environment variable: `CECLI_SONNET`  
-
-### `--haiku`
-Use claude-3-5-haiku-20241022 model for the main chat (deprecated, use --model)  
-Default: False  
-Environment variable: `CECLI_HAIKU`  
-
-### `--4`
-Use gpt-4-0613 model for the main chat (deprecated, use --model)  
-Default: False  
-Environment variable: `CECLI_4`  
-Aliases:
-  - `--4`
-  - `-4`
-
-### `--4o`
-Use gpt-4o model for the main chat (deprecated, use --model)  
-Default: False  
-Environment variable: `CECLI_4O`  
-
-### `--mini`
-Use gpt-4o-mini model for the main chat (deprecated, use --model)  
-Default: False  
-Environment variable: `CECLI_MINI`  
-
-### `--4-turbo`
-Use gpt-4-1106-preview model for the main chat (deprecated, use --model)  
-Default: False  
-Environment variable: `CECLI_4_TURBO`  
-
-### `--35turbo`
-Use gpt-3.5-turbo model for the main chat (deprecated, use --model)  
-Default: False  
-Environment variable: `CECLI_35TURBO`  
-Aliases:
-  - `--35turbo`
-  - `--35-turbo`
-  - `--3`
-  - `-3`
-
-### `--deepseek`
-Use deepseek/deepseek-chat model for the main chat (deprecated, use --model)  
-Default: False  
-Environment variable: `CECLI_DEEPSEEK`  
-
-### `--o1-mini`
-Use o1-mini model for the main chat (deprecated, use --model)  
-Default: False  
-Environment variable: `CECLI_O1_MINI`  
-
-### `--o1-preview`
-Use o1-preview model for the main chat (deprecated, use --model)  
-Default: False  
-Environment variable: `CECLI_O1_PREVIEW`  
 <!--[[[end]]]-->

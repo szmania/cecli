@@ -1,6 +1,10 @@
-import difflib
 import json
 
+from cecli.helpers.hashline import (
+    HashlineError,
+    apply_hashline_operations,
+    get_hashline_diff,
+)
 from cecli.tools.utils.base_tool import BaseTool
 from cecli.tools.utils.helpers import (
     ToolError,
@@ -20,7 +24,10 @@ class Tool(BaseTool):
             "name": "ReplaceText",
             "description": (
                 "Replace text in one or more files. Can handle an array of up to 10 edits across"
-                " multiple files. Each edit must include its own file_path."
+                " multiple files. Each edit must include its own file_path. Use hashline ranges"
+                " with the start_line and end_line parameters with format"
+                ' "{line_num}|{hash_fragment}". For empty files, use "0|aa" as the hashline'
+                " reference."
             ),
             "parameters": {
                 "type": "object",
@@ -34,13 +41,22 @@ class Tool(BaseTool):
                                     "type": "string",
                                     "description": "Required file path for this specific edit.",
                                 },
-                                "find_text": {"type": "string"},
                                 "replace_text": {"type": "string"},
-                                "line_number": {"type": "integer"},
-                                "occurrence": {"type": "integer", "default": 1},
-                                "replace_all": {"type": "boolean", "default": False},
+                                "start_line": {
+                                    "type": "string",
+                                    "description": (
+                                        "Hashline format for start line:"
+                                        ' "{line_num}|{hash_fragment}"'
+                                    ),
+                                },
+                                "end_line": {
+                                    "type": "string",
+                                    "description": (
+                                        'Hashline format for end line: "{line_num}|{hash_fragment}"'
+                                    ),
+                                },
                             },
-                            "required": ["file_path", "find_text", "replace_text"],
+                            "required": ["file_path", "replace_text", "start_line", "end_line"],
                         },
                         "description": "Array of edits to apply.",
                     },
@@ -98,51 +114,43 @@ class Tool(BaseTool):
                         coder, file_path_key
                     )
 
-                    # Process all edits for this file
-                    current_content = original_content
+                    # Process all edits for this file using batch operations
+                    operations = []
                     file_metadata = []
                     file_successful_edits = 0
                     file_failed_edits = []
 
                     for edit_index, edit in file_edits:
                         try:
-                            edit_find_text = edit.get("find_text")
                             edit_replace_text = edit.get("replace_text")
-                            edit_line_number = edit.get("line_number")
-                            edit_occurrence = edit.get("occurrence", 1)
-                            edit_replace_all = edit.get("replace_all", False)
+                            edit_start_line = edit.get("start_line")
+                            edit_end_line = edit.get("end_line")
 
-                            if edit_find_text is None or edit_replace_text is None:
+                            if edit_replace_text is None:
                                 raise ToolError(
-                                    f"Edit {edit_index + 1} missing find_text or replace_text"
+                                    f"Edit {edit_index + 1} missing required replace_text parameter"
                                 )
 
-                            # Process this edit
-                            new_content, metadata = cls._process_single_edit(
-                                coder,
-                                file_path_key,
-                                edit_find_text,
-                                edit_replace_text,
-                                edit_line_number,
-                                edit_occurrence,
-                                current_content,
-                                rel_path,
-                                abs_path,
-                                edit_replace_all,
+                            # Add operation to batch
+                            operations.append(
+                                {
+                                    "start_line_hash": edit_start_line,
+                                    "end_line_hash": edit_end_line,
+                                    "operation": "replace",
+                                    "text": edit_replace_text,
+                                }
                             )
 
-                            if metadata is not None:  # Edit made a change
-                                current_content = new_content
-                                file_metadata.append(metadata)
-                                file_successful_edits += 1
-                            else:
-                                # Edit didn't change anything (identical replacement)
-                                file_failed_edits.append(
-                                    f"Edit {edit_index + 1}: No change (replacement identical to"
-                                    " original)"
-                                )
+                            # Create metadata for this edit
+                            metadata = {
+                                "start_line": edit_start_line,
+                                "end_line": edit_end_line,
+                                "replace_text": edit_replace_text,
+                            }
+                            file_metadata.append(metadata)
+                            file_successful_edits += 1
 
-                        except ToolError as e:
+                        except (ToolError, HashlineError) as e:
                             # Record failed edit but continue with others
                             file_failed_edits.append(f"Edit {edit_index + 1}: {str(e)}")
                             continue
@@ -152,7 +160,17 @@ class Tool(BaseTool):
                         all_failed_edits.extend(file_failed_edits)
                         continue
 
-                    new_content = current_content
+                    # Apply all operations in batch
+                    try:
+                        new_content, _, _ = apply_hashline_operations(
+                            original_content=original_content,
+                            operations=operations,
+                        )
+                    except (ToolError, HashlineError) as e:
+                        # If batch operation fails, mark all operations as failed
+                        for edit_index, _ in file_edits:
+                            all_failed_edits.append(f"Edit {edit_index + 1}: {str(e)}")
+                        continue
 
                     # Check if any changes were made for this file
                     if original_content == new_content:
@@ -181,6 +199,7 @@ class Tool(BaseTool):
                         "failed_edits": file_failed_edits if file_failed_edits else None,
                     }
 
+                    # Apply the change (common path for both hashline and non-hashline cases)
                     final_change_id = apply_change(
                         coder,
                         abs_path,
@@ -235,6 +254,11 @@ class Tool(BaseTool):
                 )
 
             # 6. Format and return result
+            # Log failed edit messages to console for visibility
+            if all_failed_edits:
+                for failed_msg in all_failed_edits:
+                    coder.io.tool_error(failed_msg)
+
             if files_processed == 1:
                 # Single file case for backward compatibility
                 result = all_results[0]
@@ -243,6 +267,8 @@ class Tool(BaseTool):
                 )
                 if result["failed_edits"]:
                     success_message += f" ({len(result['failed_edits'])} failed)"
+                    # Include failed edit details in message to LLM
+                    success_message += "\nFailed edits:\n" + "\n".join(result["failed_edits"])
                 change_id_to_return = result.get("change_id")
             else:
                 # Multiple files case
@@ -251,6 +277,8 @@ class Tool(BaseTool):
                 )
                 if all_failed_edits:
                     success_message += f" ({len(all_failed_edits)} failed)"
+                    # Include failed edit details in message to LLM
+                    success_message += "\nFailed edits:\n" + "\n".join(all_failed_edits)
                 change_id_to_return = None  # Multiple change IDs, can't return single one
 
             return format_tool_result(
@@ -292,168 +320,44 @@ class Tool(BaseTool):
                 coder.io.tool_output("")
 
             for edit_index, edit in file_edits:
-                # Show diff for this edit
-                diff = difflib.unified_diff(
-                    edit.get("find_text", "").splitlines(),
-                    edit.get("replace_text", "").splitlines(),
-                    lineterm="",
-                    n=float("inf"),
-                )
-                diff_lines = list(diff)[2:]  # Skip header lines
-                if diff_lines:
+                # Show diff for this edit using hashline diff
+                replace_text = edit.get("replace_text", "")
+                start_line = edit.get("start_line")
+                end_line = edit.get("end_line")
+
+                # Try to read the file to get original content for diff
+                diff_output = ""
+
+                if file_path_key and start_line and end_line:
+                    try:
+                        # Try to read the file
+                        abs_path = coder.abs_root_path(file_path_key)
+                        original_content = coder.io.read_text(abs_path)
+
+                        if original_content is not None:
+                            # Generate diff using get_hashline_diff
+                            diff_output = get_hashline_diff(
+                                original_content=original_content,
+                                start_line_hash=start_line,
+                                end_line_hash=end_line,
+                                operation="replace",
+                                text=replace_text,
+                            )
+                    except HashlineError as e:
+                        # If hashline verification fails, show the error
+                        diff_output = f"Hashline verification failed: {str(e)}"
+                    except Exception:
+                        # If we can't read the file or generate diff, continue without it
+                        pass
+
+                # Only show diff section if we have diff output
+                if diff_output:
                     if len(params["edits"]) > 1:
                         coder.io.tool_output(f"{color_start}diff_{edit_index + 1}:{color_end}")
                     else:
                         coder.io.tool_output(f"{color_start}diff:{color_end}")
 
-                    coder.io.tool_output("\n".join([line for line in diff_lines]))
+                    coder.io.tool_output(diff_output)
                     coder.io.tool_output("")
 
         tool_footer(coder=coder, tool_response=tool_response)
-
-    @classmethod
-    def _process_single_edit(
-        cls,
-        coder,
-        file_path,
-        find_text,
-        replace_text,
-        line_number=None,
-        occurrence=1,
-        original_content=None,
-        rel_path=None,
-        abs_path=None,
-        replace_all=False,
-    ):
-        """
-        Process a single edit and return the modified content and metadata.
-        """
-        # Find all occurrences of the text in the file
-        occurrence_indices = coder._find_occurrences(original_content, find_text, None)
-
-        if not occurrence_indices:
-            err_msg = f"Text '{find_text}' not found in file '{file_path}'."
-            raise ToolError(err_msg)
-
-        # Handle replace_all case
-        if replace_all:
-            # Replace all occurrences
-            new_content = original_content
-            replaced_count = 0
-
-            # Need to process from end to beginning to maintain correct indices
-            for idx in reversed(occurrence_indices):
-                new_content = new_content[:idx] + replace_text + new_content[idx + len(find_text) :]
-                replaced_count += 1
-
-            if original_content == new_content:
-                return original_content, None  # No change
-
-            metadata = {
-                "start_index": occurrence_indices[0] if occurrence_indices else None,
-                "find_text": find_text,
-                "replace_text": replace_text,
-                "line_number": line_number,
-                "occurrence": -1,  # Special value indicating all occurrences
-                "replaced_count": replaced_count,
-            }
-
-            return new_content, metadata
-
-        # Original logic for single occurrence replacement
-        # If line_number is provided, find the occurrence closest to that line
-        if line_number is not None:
-            try:
-                line_number = int(line_number)
-                # Validate line number is within file bounds
-                lines = original_content.splitlines(keepends=True)
-                if line_number < 1 or line_number > len(lines):
-                    raise ToolError(
-                        f"Line number {line_number} is out of range. File has {len(lines)} lines."
-                    )
-
-                # Calculate which line each occurrence is on
-                occurrence_lines = []
-                for occ_idx in occurrence_indices:
-                    # Count newlines before this occurrence to determine line number
-                    lines_before = original_content[:occ_idx].count("\n")
-                    line_num = lines_before + 1  # Convert to 1-based line numbering
-                    occurrence_lines.append((occ_idx, line_num))
-
-                # Find the occurrence on or after the specified line number
-                # If none found, use the last occurrence before the line number
-                target_idx = None
-                min_distance_after = float("inf")
-                last_before_idx = None
-                last_before_distance = float("inf")
-
-                for i, (occ_idx, occ_line) in enumerate(occurrence_lines):
-                    distance = occ_line - line_number
-
-                    if distance >= 0:  # On or after the line number
-                        if distance < min_distance_after:
-                            min_distance_after = distance
-                            target_idx = i
-                    else:  # Before the line number
-                        if abs(distance) < last_before_distance:
-                            last_before_distance = abs(distance)
-                            last_before_idx = i
-
-                # If no occurrence on or after, use the closest before
-                if target_idx is None and last_before_idx is not None:
-                    target_idx = last_before_idx
-
-                if target_idx is None:
-                    raise ToolError(f"No occurrence of '{find_text}' found in file '{file_path}'.")
-
-                selected_occurrence = (
-                    1  # We're selecting based on line_number, so occurrence is always 1
-                )
-
-            except ValueError:
-                raise ToolError(f"Invalid line number: '{line_number}'. Must be an integer.")
-        else:
-            # No line_number specified, use the occurrence parameter
-            num_occurrences = len(occurrence_indices)
-            try:
-                occurrence = int(occurrence)
-                if occurrence == -1:
-                    if num_occurrences == 0:
-                        raise ToolError(
-                            f"Text '{find_text}' not found, cannot select last occurrence."
-                        )
-                    target_idx = num_occurrences - 1
-                    selected_occurrence = occurrence
-                elif 1 <= occurrence <= num_occurrences:
-                    target_idx = occurrence - 1  # Convert 1-based to 0-based
-                    selected_occurrence = occurrence
-                else:
-                    err_msg = (
-                        f"Occurrence number {occurrence} is out of range. Found"
-                        f" {num_occurrences} occurrences of '{find_text}' in '{file_path}'."
-                    )
-                    raise ToolError(err_msg)
-            except ValueError:
-                raise ToolError(f"Invalid occurrence value: '{occurrence}'. Must be an integer.")
-
-        start_index = occurrence_indices[target_idx]
-
-        # Perform the replacement
-        new_content = (
-            original_content[:start_index]
-            + replace_text
-            + original_content[start_index + len(find_text) :]
-        )
-
-        if original_content == new_content:
-            return original_content, None  # No change
-
-        metadata = {
-            "start_index": start_index,
-            "find_text": find_text,
-            "replace_text": replace_text,
-            "line_number": line_number,
-            "occurrence": selected_occurrence,
-        }
-
-        return new_content, metadata

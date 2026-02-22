@@ -36,7 +36,7 @@ to find or contribute conventions files.
 ## Always load conventions
 
 You can also configure cecli to always load your conventions file
-in the [`.aider.conf.yml` config file](https://cecli.dev/docs/config/cecli_conf.html):
+in the [`.cecli.conf.yml` config file](https://cecli.dev/docs/config/cecli_conf.html):
 
 
 ```yaml

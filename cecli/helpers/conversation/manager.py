@@ -89,6 +89,8 @@ class ConversationManager:
                     timestamp=time.monotonic_ns(),  # Updated timestamp
                     mark_for_delete=msg.mark_for_delete,
                     force=True,
+                    update_timestamp=True,
+                    message_id=msg.message_id,
                 )
 
         # Enable debug mode if coder has verbose attribute and it's True
@@ -119,6 +121,8 @@ class ConversationManager:
         mark_for_delete: Optional[int] = None,
         hash_key: Optional[Tuple[str, ...]] = None,
         force: bool = False,
+        update_timestamp: bool = True,
+        message_id: Optional[str] = None,
     ) -> BaseMessage:
         """
         Idempotently add message if hash not already present.
@@ -132,6 +136,7 @@ class ConversationManager:
             mark_for_delete: Countdown for deletion (None = permanent)
             hash_key: Custom hash key for message identification
             force: If True, update existing message with same hash
+            update_timestamp: If True, update timestamp when force=True (default True)
 
         Returns:
             The created or updated BaseMessage instance
@@ -158,6 +163,7 @@ class ConversationManager:
             timestamp=timestamp,
             mark_for_delete=mark_for_delete,
             hash_key=hash_key,
+            message_id=message_id,
         )
 
         # Check if message already exists
@@ -169,7 +175,8 @@ class ConversationManager:
                 existing_message.message_dict = message_dict
                 existing_message.tag = tag.value
                 existing_message.priority = priority
-                existing_message.timestamp = timestamp
+                if update_timestamp:
+                    existing_message.timestamp = timestamp
                 existing_message.mark_for_delete = mark_for_delete
                 # Clear cache for this tag and all messages cache since message was updated
                 cls._tag_cache.pop(tag.value, None)

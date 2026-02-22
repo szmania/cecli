@@ -57,11 +57,11 @@ code you want to work on and use the `--subtree-only` switch.
 This will tell cecli to ignore the repo outside of the
 directory you start in.
 
-You can also create a `.aiderignore` file to tell cecli
+You can also create a `.cecli.ignore` file to tell cecli
 to ignore parts of the repo that aren't relevant to your task.
 This file conforms to `.gitignore` syntax and conventions.
 For example, to focus only on specific directories in a monorepo,
-you could create a `.aiderignore` file with:
+you could create a `.cecli.ignore` file with:
 
 ```
 # Ignore everything
@@ -78,7 +78,7 @@ you could create a `.aiderignore` file with:
 !baz/**
 ```
 
-You can use `--aiderignore <filename>` to name a specific file
+You can use `--cecli-ignore <filename>` to name a specific file
 to use for ignore patterns.
 You might have a few of these handy for when you want to work on
 frontend, backend, etc portions of your repo.
@@ -335,7 +335,7 @@ But the LLM may not comply.
 
 Yes, you can now share cecli chat logs in a pretty way.
 
-1. Copy the markdown logs you want to share from `.aider.dev.history.md` and make a github gist. Or publish the raw markdown logs on the web any way you'd like.
+1. Copy the markdown logs you want to share from `.cecli.chat.history.md` and make a github gist. Or publish the raw markdown logs on the web any way you'd like.
 
    ```
    https://gist.github.com/cecli-AI/2087ab8b64034a078c0a209440ac8be0

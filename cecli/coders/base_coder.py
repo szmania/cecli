@@ -120,6 +120,8 @@ class Coder:
     num_tool_calls = 0
     max_tool_calls = 25
     edit_format = None
+    file_diffs = True
+    hashlines = False
     yield_stream = False
     temperature = None
     auto_lint = True
@@ -587,6 +589,7 @@ class Coder:
             pass
 
         self.custom = customizations
+        self.file_diffs = nested.getter(self.args, "file_diffs", True)
 
         if nested.getter(self.custom, "prompt_map.all", None):
             prompts = PromptRegistry.get_prompt(nested.getter(self.custom, "prompt_map.all"))
@@ -660,6 +663,7 @@ class Coder:
         # Model
         main_model = self.main_model
         weak_model = main_model.weak_model
+        agent_model = main_model.agent_model
 
         if weak_model is not main_model:
             prefix = "Main model"
@@ -696,6 +700,10 @@ class Coder:
 
         if weak_model is not main_model:
             output = f"Weak model: {weak_model.name}"
+            lines.append(output)
+
+        if agent_model is not main_model:
+            output = f"Agent model: {agent_model.name}"
             lines.append(output)
 
         # Repo
@@ -1608,6 +1616,10 @@ class Coder:
             if self.enable_context_compaction:
                 await self.compact_context_if_needed()
 
+            if nested.getter(self, "agent_finished", False):
+                await self.auto_save_session(force=True)
+                break
+
             await self.auto_save_session(force=True)
 
     def _is_url_allowed(self, url):
@@ -1664,7 +1676,7 @@ class Coder:
                     subject=url,
                     group=group,
                     allow_never=True,
-                    explicit_yes_required=self.args.yes_always_commands,
+                    explicit_yes_required=not self.args.yes_always_commands,
                 ):
                     inp += "\n\n"
                     inp += await self.commands.execute("web", url, return_content=True)
@@ -1689,13 +1701,16 @@ class Coder:
 
         # Check if combined messages exceed the token limit,
         # Get messages from ConversationManager
+        # Get messages from ConversationManager
         done_messages = ConversationManager.get_messages_dict(MessageTag.DONE)
         cur_messages = ConversationManager.get_messages_dict(MessageTag.CUR)
+        diff_messages = ConversationManager.get_messages_dict(MessageTag.DIFFS)
 
         # Exclude first cur_message since that's the user's initial input
         done_tokens = self.summarizer.count_tokens(done_messages)
         cur_tokens = self.summarizer.count_tokens(cur_messages[1:] if len(cur_messages) > 1 else [])
-        combined_tokens = done_tokens + cur_tokens
+        diff_tokens = self.summarizer.count_tokens(diff_messages)
+        combined_tokens = done_tokens + cur_tokens + diff_tokens
 
         if not force and combined_tokens < self.context_compaction_max_tokens:
             return
@@ -1803,6 +1818,14 @@ class Coder:
 
             self.io.tool_output("...chat history compacted.")
             self.io.update_spinner(self.io.last_spinner_text)
+
+            # Clear all diff messages
+            ConversationManager.clear_tag(MessageTag.DIFFS)
+            # Reset ConversationFiles cache entirely
+            from cecli.helpers.conversation.files import ConversationFiles
+
+            ConversationFiles.clear_file_cache()
+
         except Exception as e:
             self.io.tool_warning(f"Context compaction failed: {e}")
             self.io.tool_warning("Proceeding with full history for now.")
@@ -3699,9 +3722,14 @@ class Coder:
                 confirmation = await self.io.confirm_ask("Tweak Response?", allow_tweak=True)
 
                 if confirmation or confirmation == "tweak":
-                    self.partial_response_content = self.io.edit_in_editor(
-                        self.partial_response_content
-                    )
+                    if self.tui and self.tui():
+                        self.partial_response_content = self.tui().get_response_from_editor(
+                            self.partial_response_content
+                        )
+                    else:
+                        self.partial_response_content = self.io.edit_in_editor(
+                            self.partial_response_content
+                        )
 
             await asyncio.sleep(0.1)
 
@@ -3926,6 +3954,11 @@ class Coder:
 
     async def handle_shell_commands(self, commands_str, group):
         commands = command_parser.split_shell_commands(commands_str)
+
+        # Early return if none of the command strings have length after stripping whitespace
+        if not any(cmd.strip() for cmd in commands):
+            return
+
         command_count = sum(
             1 for cmd in commands if cmd.strip() and not cmd.strip().startswith("#")
         )
@@ -3933,7 +3966,7 @@ class Coder:
         if not await self.io.confirm_ask(
             prompt,
             subject="\n".join(commands),
-            explicit_yes_required=self.args.yes_always_commands,
+            explicit_yes_required=not self.args.yes_always_commands,
             group=group,
             allow_never=True,
         ):
@@ -3950,12 +3983,15 @@ class Coder:
             self.io.tool_output()
             self.io.tool_output(f"Running {command}")
             # Add the command to input history
-            self.io.add_to_input_history(f"/run {command.strip()}")
+            # self.io.add_to_input_history(f"/run {command.strip()}")
             exit_status, output = await asyncio.to_thread(
                 run_cmd, command, error_print=self.io.tool_error, cwd=self.root
             )
+
             if output:
                 accumulated_output += f"Output from {command}\n{output}\n"
+
+        print(accumulated_output)
 
         if accumulated_output.strip() and await self.io.confirm_ask(
             "Add command output to the chat?", allow_never=True

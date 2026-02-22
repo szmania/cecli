@@ -108,7 +108,7 @@ class Linter:
         if not lintres:
             return
 
-        res = "# Fix any errors below, if possible.\n\n"
+        res = "# Fix any linting errors below, if possible.\n\n"
         res += lintres.text
         res += "\n"
         res += tree_context(rel_fname, code, lintres.lines)

@@ -64,7 +64,7 @@ This ensures data isn't silently discarded by Ollama.
 
 If you'd like you can configure a fixed sized context window instead
 with an
-[`.aider.model.settings.yml` file](https://cecli.dev/docs/config/adv-model-settings.html#model-settings)
+[`.cecli.model.settings.yml` file](https://cecli.dev/docs/config/adv-model-settings.html#model-settings)
 like this:
 
 ```

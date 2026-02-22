@@ -23,7 +23,7 @@ Custom commands can be configured using the `command-paths` configuration option
 
 ```yaml
 custom:
-    command-paths: [".aider/custom/commands", "~/my-commands/", "./special_command.py"]
+    command-paths: [".cecli/custom/commands", "~/my-commands/", "./special_command.py"]
 ```
 
 The `command-paths` configuration option allows you to specify directories or files containing custom commands to load.
@@ -144,7 +144,7 @@ class CustomCommand(BaseCommand):
 
 #### Complete Configuration Example
 
-Complete configuration example in YAML configuration file (`.aider.conf.yml` or `~/.aider.conf.yml`):
+Complete configuration example in YAML configuration file (`.cecli.conf.yml` or `~/.cecli.conf.yml`):
 
 ```yaml
 # Model configuration
@@ -153,7 +153,7 @@ weak-model: gemini/gemini-3-flash-preview
 
 # Custom commands configuration
 custom:
-    command-paths: [".aider/custom/commands"]
+    command-paths: [".cecli/custom/commands"]
 
 # Other cecli options
 ...

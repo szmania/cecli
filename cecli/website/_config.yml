@@ -11,7 +11,7 @@ defaults:
       path: "README.md"
       type: "pages"
     values:
-      description: "aider is AI pair programming in your terminal"
+      description: "cecli speaks fluent terminal"
 
 exclude:
   - "tmp*"

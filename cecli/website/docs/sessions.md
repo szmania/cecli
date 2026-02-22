@@ -9,7 +9,7 @@ cecli provides session management commands that allow you to save, load, and man
 ## Session Commands
 
 ### `/save-session <name>`
-Save the current chat session to a named file in `.aider/sessions/`.
+Save the current chat session to a named file in `.cecli/sessions/`.
 
 ### Auto-Save and Auto-Load
 cecli can automatically save and load sessions using command line options:
@@ -42,7 +42,7 @@ When `--auto-save` is enabled, cecli will automatically save your session as 'au
 - All files in the chat (editable, read-only, and read-only stubs)
 - Current model and edit format settings
 - Auto-commit, auto-lint, and auto-test settings
-- Todo list content from `.aider.todo.txt`
+- Todo list content from `.cecli.todo.txt`
 - Session metadata (timestamp, version)
 
 ### `/load-session <name>`
@@ -60,7 +60,7 @@ Load a previously saved session by name or file path.
 - Restores the todo list content saved in the session
 
 ### `/list-sessions`
-List all available saved sessions in `.aider/sessions/`.
+List all available saved sessions in `.cecli/sessions/`.
 
 **Usage:**
 ```
@@ -76,7 +76,7 @@ List all available saved sessions in `.aider/sessions/`.
 ## How Sessions Work
 
 ### Session Storage
-Sessions are stored as JSON files in the `.aider/sessions/` directory within your project. Each session file contains:
+Sessions are stored as JSON files in the `.cecli/sessions/` directory within your project. Each session file contains:
 
 ```json
 {
@@ -148,16 +148,16 @@ Sessions are stored as JSON files in the `.aider/sessions/` directory within you
 - Session files include all file paths, so they work best when project structure is stable
 - External files (outside the project root) are stored with absolute paths
 - Missing files are skipped with warnings during loading
-- The todo list file (`.aider.todo.txt`) is cleared on startup; it is restored when you load a session or when you update it during a run
+- The todo list file (`.cecli.todo.txt`) is cleared on startup; it is restored when you load a session or when you update it during a run
 
 ### Version Control
-- Consider adding `.aider/sessions/` to your `.gitignore` if sessions contain sensitive information
+- Consider adding `.cecli/sessions/` to your `.gitignore` if sessions contain sensitive information
 
 ## Troubleshooting
 
 ### Session Not Found
 If `/load-session` reports "Session not found":
-- Check that the session file exists in `.aider/sessions/`
+- Check that the session file exists in `.cecli/sessions/`
 - Verify the session name matches exactly
 - Use `/list-sessions` to see available sessions
 
@@ -166,7 +166,7 @@ If files are reported as missing during loading:
 - The files may have been moved or deleted
 - Session files store relative paths, so directory structure changes can affect this
 - External files must exist at their original locations
-- The todo list (`.aider.todo.txt`) is cleared on startup unless restored from a loaded session
+- The todo list (`.cecli.todo.txt`) is cleared on startup unless restored from a loaded session
 
 ### Corrupted Sessions
 If a session fails to load:

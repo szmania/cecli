@@ -58,8 +58,10 @@ class TokensCommand(BaseCommand):
         # chat history
         msgs_done = ConversationManager.get_messages_dict(tag=MessageTag.DONE)
         msgs_cur = ConversationManager.get_messages_dict(tag=MessageTag.CUR)
+        msgs_diffs = ConversationManager.get_messages_dict(tag=MessageTag.DIFFS)
         tokens_done = 0
         tokens_cur = 0
+        tokens_diffs = 0
 
         if msgs_done:
             tokens_done = coder.main_model.token_count(msgs_done)
@@ -67,8 +69,15 @@ class TokensCommand(BaseCommand):
         if msgs_cur:
             tokens_cur = coder.main_model.token_count(msgs_cur)
 
+        if msgs_diffs:
+            tokens_diffs = coder.main_model.token_count(msgs_diffs)
+
         if tokens_cur + tokens_done:
             res.append((tokens_cur + tokens_done, "chat history", "use /clear to clear"))
+            # Add separate line for diffs if they exist
+
+        if tokens_diffs:
+            res.append((tokens_diffs, "file diffs", "part of chat history"))
 
         # repo map
         if coder.repo_map:
@@ -98,18 +107,17 @@ class TokensCommand(BaseCommand):
             for msg in readonly_msgs:
                 # Extract file name from message content
                 content = msg.get("content", "")
-                if content.startswith("File Contents"):
+                if content.startswith("Original File Contents For"):
                     # Extract file path from "File Contents {path}:"
-                    lines = content.split("\n", 1)
+                    lines = content.split("\n", 3)
                     if lines:
-                        file_line = lines[0]
-                        if file_line.startswith("File Contents"):
-                            fname = file_line[13:].rstrip(":")
-                            # Calculate tokens for this message
-                            tokens = coder.main_model.token_count([msg])
-                            if fname not in file_tokens:
-                                file_tokens[fname] = 0
-                            file_tokens[fname] += tokens
+                        file_line = lines[1]
+                        fname = file_line.strip()
+                        # Calculate tokens for this message
+                        tokens = coder.main_model.token_count([msg])
+                        if fname not in file_tokens:
+                            file_tokens[fname] = 0
+                        file_tokens[fname] += tokens
                 elif "image_file" in msg:
                     # Handle image files
                     fname = msg.get("image_file")
@@ -134,18 +142,17 @@ class TokensCommand(BaseCommand):
                 for msg in msgs:
                     # Extract file name from message content
                     content = msg.get("content", "")
-                    if content.startswith("File Contents"):
+                    if content.startswith("Original File Contents For"):
                         # Extract file path from "File Contents {path}:"
-                        lines = content.split("\n", 1)
+                        lines = content.split("\n", 3)
                         if lines:
-                            file_line = lines[0]
-                            if file_line.startswith("File Contents"):
-                                fname = file_line[13:].rstrip(":")
-                                # Calculate tokens for this message
-                                tokens = coder.main_model.token_count([msg])
-                                if fname not in editable_file_tokens:
-                                    editable_file_tokens[fname] = 0
-                                editable_file_tokens[fname] += tokens
+                            file_line = lines[1]
+                            fname = file_line.strip()
+                            # Calculate tokens for this message
+                            tokens = coder.main_model.token_count([msg])
+                            if fname not in editable_file_tokens:
+                                editable_file_tokens[fname] = 0
+                            editable_file_tokens[fname] += tokens
                     elif "image_file" in msg:
                         # Handle image files
                         fname = msg.get("image_file")

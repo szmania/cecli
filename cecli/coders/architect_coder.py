@@ -18,13 +18,20 @@ class ArchitectCoder(AskCoder):
             return
 
         tweak_responses = getattr(self.args, "tweak_responses", False)
-        confirmation = await self.io.confirm_ask("Edit the files?", allow_tweak=tweak_responses)
+        confirmation = await self.io.confirm_ask(
+            "Edit the files?",
+            allow_tweak=tweak_responses,
+            explicit_yes_required=not self.auto_accept_architect,
+        )
 
-        if not self.auto_accept_architect and not confirmation:
+        if not confirmation:
             return
 
         if confirmation == "tweak":
-            content = self.io.edit_in_editor(content)
+            if self.tui and self.tui():
+                content = self.tui().get_response_from_editor(content)
+            else:
+                content = self.io.edit_in_editor(content)
 
         await asyncio.sleep(0.1)
 

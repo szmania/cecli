@@ -101,10 +101,10 @@ cog.outl("```")
 #CECLI_LIST_MODELS=
 
 ## Specify a file with cecli model settings for unknown models
-#CECLI_MODEL_SETTINGS_FILE=.aider.model.settings.yml
+#CECLI_MODEL_SETTINGS_FILE=.cecli.model.settings.yml
 
 ## Specify a file with context window and costs for unknown models
-#CECLI_MODEL_METADATA_FILE=.aider.model.metadata.json
+#CECLI_MODEL_METADATA_FILE=.cecli.model.metadata.json
 
 ## Add a model alias (can be used multiple times)
 #CECLI_ALIAS=
@@ -175,16 +175,16 @@ cog.outl("```")
 ################
 # History Files:
 
-## Specify the chat input history file (default: .aider.input.history)
-#CECLI_INPUT_HISTORY_FILE=.aider.input.history
+## Specify the chat input history file (default: .cecli.input.history)
+#CECLI_INPUT_HISTORY_FILE=.cecli.input.history
 
-## Specify the chat history file (default: .aider.dev.history.md)
-#CECLI_CHAT_HISTORY_FILE=.aider.dev.history.md
+## Specify the chat history file (default: .cecli.dev.history.md)
+#CECLI_CHAT_HISTORY_FILE=.cecli.dev.history.md
 
 ## Restore the previous chat history messages (default: False)
 #CECLI_RESTORE_CHAT_HISTORY=false
 
-## Log the conversation with the LLM to this file (for example, .aider.llm.history)
+## Log the conversation with the LLM to this file (for example, .cecli.llm.history)
 #CECLI_LLM_HISTORY_FILE=
 
 ##################
@@ -241,14 +241,14 @@ cog.outl("```")
 ## Enable/disable looking for a git repo (default: True)
 #CECLI_GIT=true
 
-## Enable/disable adding .aider* to .gitignore (default: True)
+## Enable/disable adding .cecli* to .gitignore (default: True)
 #CECLI_GITIGNORE=true
 
 ## Enable/disable the addition of files listed in .gitignore to cecli's editing scope.
 #CECLI_ADD_GITIGNORE_FILES=false
 
-## Specify the cecli ignore file (default: .aiderignore in git root)
-#CECLI_cecliIGNORE=.aiderignore
+## Specify the cecli ignore file (default: .cecli.ignore in git root)
+#CECLI_IGNORE=.cecli.ignore
 
 ## Only consider files in the current subtree of the git repository
 #CECLI_SUBTREE_ONLY=false

@@ -13,6 +13,11 @@ from cecli.helpers.file_searcher import handle_core_files
 
 warnings.simplefilter("ignore", category=FutureWarning)
 
+os.environ["TQDM_DISABLE"] = "1"
+os.environ["HF_HUB_DISABLE_PROGRESS_BARS"] = "1"
+os.environ["HF_DATASETS_DISABLE_PROGRESS_BARS"] = "1"
+os.environ["TOKENIZERS_PARALLELISM"] = "true"
+
 
 async def install_help_extra(io):
     pip_install_cmd = [
@@ -102,10 +107,14 @@ def get_index():
 
 class Help:
     def __init__(self):
+        from huggingface_hub.utils import disable_progress_bars
         from llama_index.core import Settings
         from llama_index.embeddings.huggingface import HuggingFaceEmbedding
+        from transformers import logging
 
-        os.environ["TOKENIZERS_PARALLELISM"] = "true"
+        disable_progress_bars()
+        logging.set_verbosity_error()
+
         Settings.embed_model = HuggingFaceEmbedding(model_name="BAAI/bge-small-en-v1.5")
         index = get_index()
         self.retriever = index.as_retriever(similarity_top_k=20)

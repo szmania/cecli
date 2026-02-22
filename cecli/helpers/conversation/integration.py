@@ -37,7 +37,6 @@ class ConversationChunks:
         Args:
             coder: The coder instance
         """
-        # Add system prompt
         system_prompt = coder.gpt_prompts.main_system
         if system_prompt:
             # Apply system_prompt_prefix if set on the model
@@ -45,16 +44,20 @@ class ConversationChunks:
                 system_prompt = coder.main_model.system_prompt_prefix + "\n" + system_prompt
 
             ConversationManager.add_message(
-                message_dict={"role": "system", "content": system_prompt},
+                message_dict={"role": "system", "content": coder.fmt_system_prompt(system_prompt)},
                 tag=MessageTag.SYSTEM,
+                hash_key=("main", "system_prompt"),
+                force=True,
             )
 
         # Add examples if available
         if hasattr(coder.gpt_prompts, "example_messages"):
             example_messages = coder.gpt_prompts.example_messages
             for i, msg in enumerate(example_messages):
+                msg_copy = msg.copy()
+                msg_copy["content"] = coder.fmt_system_prompt(msg_copy["content"])
                 ConversationManager.add_message(
-                    message_dict=msg,
+                    message_dict=msg_copy,
                     tag=MessageTag.EXAMPLES,
                     priority=75 + i,  # Slight offset for ordering within examples
                 )
@@ -68,6 +71,8 @@ class ConversationChunks:
             ConversationManager.add_message(
                 message_dict=msg,
                 tag=MessageTag.REMINDER,
+                hash_key=("main", "system_reminder"),
+                force=True,
             )
 
     @classmethod
@@ -79,6 +84,50 @@ class ConversationChunks:
         Args:
             coder: The coder instance
         """
+
+        """
+        # Check diff message ratio and clear if too many diffs
+        diff_messages = ConversationManager.get_messages_dict(MessageTag.DIFFS)
+        read_only_messages = ConversationManager.get_messages_dict(MessageTag.READONLY_FILES)
+        chat_messages = ConversationManager.get_messages_dict(MessageTag.CHAT_FILES)
+        edit_messages = ConversationManager.get_messages_dict(MessageTag.EDIT_FILES)
+
+        # Calculate token counts for token-based ratio check
+        diff_tokens = coder.main_model.token_count(diff_messages) if diff_messages else 0
+
+        # Calculate tokens for readonly, chat, and edit tag messages
+        other_tokens = 0
+        if read_only_messages:
+            other_tokens += coder.main_model.token_count(read_only_messages)
+        if chat_messages:
+            other_tokens += coder.main_model.token_count(chat_messages)
+        if edit_messages:
+            other_tokens += coder.main_model.token_count(edit_messages)
+
+        # Calculate message counts for message-based ratio check
+        diff_count = len(diff_messages)
+        other_count = len(read_only_messages) + len(chat_messages) + len(edit_messages)
+
+        # Clear diff messages and file caches if EITHER:
+        # 1. Diff tokens > 33% of other message tokens (token-based check)
+        # 2. Diff message count ratio > 5:1 (message count-based check for periodic refresh)
+        should_clear = False
+
+        # Token-based check
+        if diff_tokens > 0 and other_tokens > 0 and diff_tokens / other_tokens > 0.33:
+            should_clear = True
+
+        # Message count-based check (for periodic refresh)
+        if diff_count > 0 and other_count > 0 and diff_count / other_count > 5:
+            should_clear = True
+
+        if should_clear:
+            # Clear all diff messages
+            ConversationManager.clear_tag(MessageTag.DIFFS)
+            # Clear ConversationFiles caches to force regeneration
+            ConversationFiles.clear_file_cache()
+        """
+
         # Get all tracked files (both regular and image files)
         tracked_files = ConversationFiles.get_all_tracked_files()
 
@@ -342,6 +391,7 @@ class ConversationChunks:
             List of read-only file messages
         """
         messages = []
+        refresh = not coder.file_diffs
 
         # Separate image files from regular files
         regular_files = []
@@ -363,11 +413,7 @@ class ConversationChunks:
         # Process regular files
         for fname in regular_files:
             # First, add file to cache and check for changes
-            ConversationFiles.add_file(fname)
-
-            # Check if file has changed and add diff message if needed
-            if ConversationFiles.has_file_changed(fname):
-                ConversationFiles.update_file_diff(fname)
+            ConversationFiles.add_file(fname, force_refresh=refresh)
 
             # Get file content (with proper caching and stub generation)
             content = ConversationFiles.get_file_stub(fname)
@@ -375,18 +421,25 @@ class ConversationChunks:
                 # Add user message with file path as hash_key
                 rel_fname = coder.get_rel_fname(fname)
 
+                # Create user message
+                file_preamble = "Original File Contents For:"
+                file_postamble = "Modifications will be communicated as diff messages.\n\n"
+
+                if refresh:
+                    file_preamble = "Current File Contents For:"
+                    file_postamble = ""
+
                 user_msg = {
                     "role": "user",
-                    "content": (
-                        f"Here are the original file contents for {rel_fname}:\n\n{content}"
-                        "\n\nModifications will be communicated as diff messages."
-                    ),
+                    "content": f"{file_preamble}\n{rel_fname}\n\n{content}\n\n{file_postamble}",
                 }
 
                 ConversationManager.add_message(
                     message_dict=user_msg,
                     tag=MessageTag.READONLY_FILES,
                     hash_key=("file_user", fname),  # Use file path as part of hash_key
+                    force=True,
+                    update_timestamp=False,
                 )
                 messages.append(user_msg)
 
@@ -399,8 +452,14 @@ class ConversationChunks:
                     message_dict=assistant_msg,
                     tag=MessageTag.READONLY_FILES,
                     hash_key=("file_assistant", fname),  # Use file path as part of hash_key
+                    force=True,
+                    update_timestamp=False,
                 )
                 messages.append(assistant_msg)
+
+            # Check if file has changed and add diff message if needed
+            if ConversationFiles.has_file_changed(fname):
+                ConversationFiles.update_file_diff(fname)
 
         # Handle image files using coder.get_images_message()
         if image_files:
@@ -445,6 +504,7 @@ class ConversationChunks:
             Dictionary with chat_files and edit_files lists
         """
         result = {"chat_files": [], "edit_files": []}
+        refresh = not coder.file_diffs
 
         if not hasattr(coder, "abs_fnames"):
             return result
@@ -463,11 +523,7 @@ class ConversationChunks:
         # Process regular files
         for fname in regular_files:
             # First, add file to cache and check for changes
-            ConversationFiles.add_file(fname)
-
-            # Check if file has changed and add diff message if needed
-            if ConversationFiles.has_file_changed(fname):
-                ConversationFiles.update_file_diff(fname)
+            ConversationFiles.add_file(fname, force_refresh=refresh)
 
             # Get file content (with proper caching and stub generation)
             content = ConversationFiles.get_file_stub(fname)
@@ -477,12 +533,16 @@ class ConversationChunks:
             rel_fname = coder.get_rel_fname(fname)
 
             # Create user message
+            file_preamble = "Original File Contents For:"
+            file_postamble = "Modifications will be communicated as diff messages.\n\n"
+
+            if refresh:
+                file_preamble = "Current File Contents For:"
+                file_postamble = ""
+
             user_msg = {
                 "role": "user",
-                "content": (
-                    f"Here are the original file contents for {rel_fname}:\n\n{content}"
-                    "\n\nModifications will be communicated as diff messages."
-                ),
+                "content": f"{file_preamble}\n{rel_fname}\n\n{content}\n\n{file_postamble}",
             }
 
             # Create assistant message
@@ -500,6 +560,8 @@ class ConversationChunks:
                 message_dict=user_msg,
                 tag=tag,
                 hash_key=("file_user", fname),  # Use file path as part of hash_key
+                force=True,
+                update_timestamp=False,
             )
 
             # Add assistant message to ConversationManager with file path as hash_key
@@ -507,7 +569,13 @@ class ConversationChunks:
                 message_dict=assistant_msg,
                 tag=tag,
                 hash_key=("file_assistant", fname),  # Use file path as part of hash_key
+                force=True,
+                update_timestamp=False,
             )
+
+            # Check if file has changed and add diff message if needed
+            if ConversationFiles.has_file_changed(fname):
+                ConversationFiles.update_file_diff(fname)
 
         # Handle image files using coder.get_images_message()
         if image_files:

@@ -29,11 +29,12 @@ class BaseMessage:
     timestamp: int = field(default_factory=lambda: time.monotonic_ns())
     mark_for_delete: Optional[int] = field(default=None)
     hash_key: Optional[Tuple[str, ...]] = field(default=None)
-    message_id: str = field(init=False)
+    message_id: Optional[str] = field(default=None)
 
     def __post_init__(self):
         """Generate message ID after initialization."""
-        self.message_id = self.generate_id()
+        if self.message_id is None:
+            self.message_id = self.generate_id()
 
         # Validate message structure
         if "role" not in self.message_dict:

@@ -51,7 +51,7 @@ cecli can work with Sonnet 3.7's new thinking tokens, but does not ask Sonnet to
 thinking tokens by default.
 
 Enabling thinking currently requires manual configuration.
-You need to add the following to your `.aider.model.settings.yml` 
+You need to add the following to your `.cecli.model.settings.yml` 
 [model settings file](/docs/config/adv-model-settings.html#model-settings).
 Adjust the `budget_tokens` value to change the target number of thinking tokens.
 

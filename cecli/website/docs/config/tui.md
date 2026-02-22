@@ -30,7 +30,7 @@ tui: true
 
 ### Complete Configuration Example
 
-Complete configuration example in YAML configuration file (`.aider.conf.yml` or `~/.aider.conf.yml`). The base theme is pretty nice but if you want different colors and key bindings, do you thing:
+Complete configuration example in YAML configuration file (`.cecli.conf.yml` or `~/.cecli.conf.yml`). The base theme is pretty nice but if you want different colors and key bindings, do you thing:
 
 ```yaml
 tui: true

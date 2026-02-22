@@ -8,7 +8,7 @@ description: Information on all of cecli's settings and how to use them.
 
 cecli has many options which can be set with
 command line switches.
-Most options can also be set in an `.aider.conf.yml` file
+Most options can also be set in an `.cecli.conf.yml` file
 which can be placed in your home directory or at the root of
 your git repo. 
 Or by setting environment variables like `CECLI_xxx`
@@ -22,7 +22,7 @@ With a command line switch:
 $ cecli --dark-mode
 ```
 
-Using a `.aider.conf.yml` file:
+Using a `.cecli.conf.yml` file:
 
 ```yaml
 dark-mode: true
@@ -51,7 +51,7 @@ The `retries` option is a JSON object that can be configured with the following 
 - `retry-backoff-factor`: The backoff factor to use between retries.
 - `retry-on-unavailable`: Whether to retry on 503 Service Unavailable errors.
 
-Example usage in `.aider.conf.yml`:
+Example usage in `.cecli.conf.yml`:
 
 ```yaml
 retries:

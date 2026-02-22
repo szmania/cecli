@@ -156,7 +156,7 @@ If you're using a model through a different provider (like Azure or custom deplo
 you may need to [configure model settings](/docs/config/adv-model-settings.html)
 if you see errors related to temperature or system prompt.
 
-Include settings for your new provider in `.aider.model.settings.yml` file
+Include settings for your new provider in `.cecli.model.settings.yml` file
 at the root of your project or in your home directory.
 
 ### Temperature, streaming and system prompt

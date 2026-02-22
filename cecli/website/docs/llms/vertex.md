@@ -43,7 +43,7 @@ cecli --model vertex_ai/claude-3-5-sonnet@20240620
 Or you can use the [YAML config](/docs/config/cecli_conf.html) to set the model to any of the 
 models supported by Vertex AI.
 
-Example `.aider.conf.yml` file:
+Example `.cecli.conf.yml` file:
 
 ```yaml
 model: vertex_ai/claude-3-5-sonnet@20240620

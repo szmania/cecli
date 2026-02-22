@@ -10,17 +10,17 @@ has_toc: false
 Below are some chat transcripts showing what it's like to code with aider.
 In the chats, you'll see a variety of coding tasks like generating new code, editing existing code, debugging, exploring unfamiliar code, etc.
 
-* [**Hello World Flask App**](https://aider.chat/examples/hello-world-flask.html): Start from scratch and have aider create a simple Flask app with various endpoints, such as adding two numbers and calculating the Fibonacci sequence.
+* [**Hello World Flask App**](https://cecli.dev/examples/hello-world-flask.html): Start from scratch and have aider create a simple Flask app with various endpoints, such as adding two numbers and calculating the Fibonacci sequence.
 
-* [**Javascript Game Modification**](https://aider.chat/examples/2048-game.html): Dive into an existing open-source repo, and get aider's help to understand it and make modifications.
+* [**Javascript Game Modification**](https://cecli.dev/examples/2048-game.html): Dive into an existing open-source repo, and get aider's help to understand it and make modifications.
 
-* [**Complex Multi-file Change with Debugging**](https://aider.chat/examples/complex-change.html): Aider makes a complex code change that is coordinated across multiple source files, and resolves bugs by reviewing error output and doc snippets.
+* [**Complex Multi-file Change with Debugging**](https://cecli.dev/examples/complex-change.html): Aider makes a complex code change that is coordinated across multiple source files, and resolves bugs by reviewing error output and doc snippets.
 
-* [**Create a Black Box Test Case**](https://aider.chat/examples/add-test.html): Aider creates a "black box" test case without access to the source of the method being tested, using only a [high level map of the repository based on ctags](https://aider.chat/docs/ctags.html).
+* [**Create a Black Box Test Case**](https://cecli.dev/examples/add-test.html): Aider creates a "black box" test case without access to the source of the method being tested, using only a [high level map of the repository based on ctags](https://cecli.dev/docs/ctags.html).
 
-* [**Honor the NO_COLOR env var**](https://aider.chat/examples/no-color.html): The user pastes the NO_COLOR spec from no-color.org into the chat, and aider modifies the application to conform.
+* [**Honor the NO_COLOR env var**](https://cecli.dev/examples/no-color.html): The user pastes the NO_COLOR spec from no-color.org into the chat, and aider modifies the application to conform.
 
-* [**Download, analyze and plot US Census data**](https://aider.chat/examples/census.html): Aider downloads census data, suggests some hypotheses to test, tests one and then summarizes and plots a graph of the results.
+* [**Download, analyze and plot US Census data**](https://cecli.dev/examples/census.html): Aider downloads census data, suggests some hypotheses to test, tests one and then summarizes and plots a graph of the results.
 
 * [**Semantic Search & Replace**](semantic-search-replace.md): Updating a collection of function calls, which requires dealing with various formatting and semantic differences in the various function call sites.
 

@@ -805,9 +805,10 @@ async def main_async(argv=None, input=None, output=None, force_git_root=None, re
     def apply_model_overrides(model_name):
         """Return (effective_model_name, override_kwargs) for a given model_name.
 
-        If model_name exactly matches a configured "base:suffix" override, we
-        switch to the base model and apply that override dict. Otherwise we
-        leave the name unchanged and return empty overrides.
+        If model_name ends with ":suffix" where suffix is configured for the
+        prefix (everything before the last colon), we switch to the prefix model
+        and apply that override dict. Otherwise we leave the name unchanged
+        and return empty overrides.
         """
         if not model_name:
             return model_name, {}
@@ -815,17 +816,33 @@ async def main_async(argv=None, input=None, output=None, force_git_root=None, re
         if model_name.startswith(models.COPY_PASTE_PREFIX):
             prefix = models.COPY_PASTE_PREFIX
             model_name = model_name[len(prefix) :]
-        entry = override_index.get(model_name)
-        if not entry:
-            model_name = prefix + model_name
-            return model_name, {}
-        base_model, cfg = entry
-        model_name = prefix + base_model
-        return model_name, cfg.copy()
+
+        # Try to find a matching override by checking all possible suffix matches.
+        # We iterate from right to left splitting on colons to handle cases where
+        # the base model name itself contains colons (e.g. "provider/model:tag:alias")
+        parts = model_name.split(":")
+        # We need at least one split to have a base and a suffix
+        for i in range(len(parts) - 1, 0, -1):
+            potential_base = ":".join(parts[:i])
+            potential_suffix = ":".join(parts[i:])
+
+            # Check if this base has the suffix configured
+            if potential_base in model_overrides:
+                suffixes = model_overrides[potential_base]
+                if isinstance(suffixes, dict) and potential_suffix in suffixes:
+                    cfg = suffixes[potential_suffix]
+                    if isinstance(cfg, dict):
+                        model_name = prefix + potential_base
+                        return model_name, cfg.copy()
+
+        # No match found
+        model_name = prefix + model_name
+        return model_name, {}
 
     main_model_name, main_model_overrides = apply_model_overrides(args.model)
     weak_model_name, weak_model_overrides = apply_model_overrides(args.weak_model)
     editor_model_name, editor_model_overrides = apply_model_overrides(args.editor_model)
+    agent_model_name, agent_model_overrides = apply_model_overrides(args.agent_model)
     weak_model_obj = None
     if weak_model_name:
         weak_model_obj = models.Model(
@@ -848,6 +865,18 @@ async def main_async(argv=None, input=None, output=None, force_git_root=None, re
             retries=args.retries,
             debug=args.debug,
         )
+    agent_model_obj = None
+    if agent_model_name:
+        agent_model_obj = models.Model(
+            agent_model_name,
+            agent_model=False,
+            verbose=args.verbose,
+            io=io,
+            override_kwargs=agent_model_overrides,
+            retries=args.retries,
+            debug=args.debug,
+        )
+
     if main_model_name.startswith("openrouter/") and not os.environ.get("OPENROUTER_API_KEY"):
         io.tool_warning(
             f"The specified model '{main_model_name}' requires an OpenRouter API key, which was not"
@@ -873,6 +902,7 @@ async def main_async(argv=None, input=None, output=None, force_git_root=None, re
         main_model_name,
         weak_model=weak_model_obj,
         editor_model=editor_model_obj,
+        agent_model=agent_model_obj,
         editor_edit_format=args.editor_edit_format,
         verbose=args.verbose,
         io=io,

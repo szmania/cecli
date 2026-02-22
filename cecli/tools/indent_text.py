@@ -1,8 +1,12 @@
+from cecli.helpers.hashline import (
+    HashlineError,
+    apply_hashline_operation,
+    extract_hashline_range,
+)
 from cecli.tools.utils.base_tool import BaseTool
 from cecli.tools.utils.helpers import (
     ToolError,
     apply_change,
-    determine_line_range,
     format_tool_result,
     handle_tool_error,
     validate_file_for_edit,
@@ -20,13 +24,21 @@ class Tool(BaseTool):
                 "type": "object",
                 "properties": {
                     "file_path": {"type": "string"},
-                    "line_number": {"type": "integer"},
-                    "line_count": {"type": "integer"},
+                    "start_line": {
+                        "type": "string",
+                        "description": (
+                            'Hashline format for start line: "{line_num}|{hash_fragment}"'
+                        ),
+                    },
+                    "end_line": {
+                        "type": "string",
+                        "description": 'Hashline format for end line: "{line_num}|{hash_fragment}"',
+                    },
                     "indent_levels": {"type": "integer", "default": 1},
                     "change_id": {"type": "string"},
                     "dry_run": {"type": "boolean", "default": False},
                 },
-                "required": ["file_path", "line_number"],
+                "required": ["file_path", "start_line", "end_line"],
             },
         },
     }
@@ -36,21 +48,21 @@ class Tool(BaseTool):
         cls,
         coder,
         file_path,
-        line_number,
-        line_count=None,
+        start_line,
+        end_line,
         indent_levels=1,
         change_id=None,
         dry_run=False,
         **kwargs,
     ):
         """
-        Indent or unindent a block of lines in a file.
+        Indent or unindent a block of lines in a file using hashline markers.
 
         Parameters:
         - coder: The Coder instance
         - file_path: Path to the file to modify
-        - line_number: Line number to start indenting from (1-based)
-        - line_count: Optional number of lines to indent
+        - start_line: Hashline format for start line: "{line_num}|{hash_fragment}"
+        - end_line: Hashline format for end line: "{line_num}|{hash_fragment}"
         - indent_levels: Number of levels to indent (positive) or unindent (negative)
         - change_id: Optional ID for tracking the change
         - dry_run: If True, simulate the change without modifying the file
@@ -61,24 +73,8 @@ class Tool(BaseTool):
         try:
             # 1. Validate file and get content
             abs_path, rel_path, original_content = validate_file_for_edit(coder, file_path)
-            lines = original_content.splitlines()
 
-            # 2. Determine the range
-            start_line_idx = line_number - 1
-            pattern_desc = f"line {line_number}"
-
-            start_line, end_line = determine_line_range(
-                coder=coder,
-                file_path=rel_path,
-                lines=lines,
-                start_pattern_line_index=start_line_idx,
-                end_pattern=None,
-                line_count=line_count,
-                target_symbol=None,
-                pattern_desc=pattern_desc,
-            )
-
-            # 4. Validate and prepare indentation
+            # 2. Validate indent_levels parameter
             try:
                 indent_levels = int(indent_levels)
             except ValueError:
@@ -86,40 +82,72 @@ class Tool(BaseTool):
                     f"Invalid indent_levels value: '{indent_levels}'. Must be an integer."
                 )
 
-            indent_str = " " * 4  # Assume 4 spaces per level
-            modified_lines = list(lines)
+            # 3. Extract the range content using hashline
+            try:
+                range_content = extract_hashline_range(
+                    original_content=original_content,
+                    start_line_hash=start_line,
+                    end_line_hash=end_line,
+                )
+            except HashlineError as e:
+                raise ToolError(f"Hashline range extraction failed: {str(e)}")
 
-            # Apply indentation logic (core logic remains)
-            for i in range(start_line, end_line + 1):
+            # 4. Apply indentation to the extracted range
+            # Strip hashline prefixes to get original content
+            from cecli.helpers.hashline import strip_hashline
+
+            original_range_content = strip_hashline(range_content)
+
+            # Split into lines and apply indentation
+            range_lines = original_range_content.splitlines(keepends=True)
+            indent_str = " " * 4  # Assume 4 spaces per level
+            modified_range_lines = []
+
+            for line in range_lines:
                 if indent_levels > 0:
-                    modified_lines[i] = (indent_str * indent_levels) + modified_lines[i]
+                    # Indent: add spaces
+                    modified_line = (indent_str * indent_levels) + line
                 elif indent_levels < 0:
+                    # Unindent: remove spaces
                     spaces_to_remove = abs(indent_levels) * len(indent_str)
-                    current_leading_spaces = len(modified_lines[i]) - len(
-                        modified_lines[i].lstrip(" ")
-                    )
+                    current_leading_spaces = len(line) - len(line.lstrip(" "))
                     actual_remove = min(spaces_to_remove, current_leading_spaces)
                     if actual_remove > 0:
-                        modified_lines[i] = modified_lines[i][actual_remove:]
+                        modified_line = line[actual_remove:]
+                    else:
+                        modified_line = line
+                else:
+                    # indent_levels == 0, no change
+                    modified_line = line
+                modified_range_lines.append(modified_line)
 
-            new_content = "\n".join(modified_lines)
+            # Join back into text
+            indented_range_content = "".join(modified_range_lines)
 
-            if original_content == new_content:
+            # 5. Check if any changes were made
+            if original_range_content == indented_range_content:
                 coder.io.tool_warning("No changes made: indentation would not change file")
                 return "Warning: No changes made (indentation would not change file)"
 
-            # 5. Generate diff for feedback
-            action = "indent" if indent_levels > 0 else "unindent"
-            levels = abs(indent_levels)
-            level_text = "level" if levels == 1 else "levels"
-            num_lines = end_line - start_line + 1
-            basis_desc = f"line {line_number}"
-
             # 6. Handle dry run
             if dry_run:
+                # Parse line numbers for display
+                try:
+                    start_line_num_str, _ = start_line.split(":", 1)
+                    end_line_num_str, _ = end_line.split(":", 1)
+                    start_line_num = int(start_line_num_str)
+                    end_line_num = int(end_line_num_str)
+                    num_lines = end_line_num - start_line_num + 1
+                except (ValueError, IndexError):
+                    num_lines = "unknown"
+
+                action = "indent" if indent_levels > 0 else "unindent"
+                levels = abs(indent_levels)
+                level_text = "level" if levels == 1 else "levels"
+
                 dry_run_message = (
-                    f"Dry run: Would {action} {num_lines} lines ({start_line + 1}-{end_line + 1})"
-                    f" by {levels} {level_text} (based on {basis_desc}) in {file_path}."
+                    f"Dry run: Would {action} {num_lines} lines ({start_line} to {end_line})"
+                    f" by {levels} {level_text} in {file_path}."
                 )
                 return format_tool_result(
                     coder,
@@ -129,12 +157,22 @@ class Tool(BaseTool):
                     dry_run_message=dry_run_message,
                 )
 
-            # 7. Apply Change (Not dry run)
+            # 7. Apply Change (Not dry run) using replace operation
+            try:
+                new_content = apply_hashline_operation(
+                    original_content=original_content,
+                    start_line_hash=start_line,
+                    end_line_hash=end_line,
+                    operation="replace",
+                    text=indented_range_content,
+                )
+            except (ToolError, HashlineError) as e:
+                raise ToolError(f"Hashline replacement failed: {str(e)}")
+
+            # 8. Apply the change
             metadata = {
-                "start_line": start_line + 1,
-                "end_line": end_line + 1,
-                "line_number": line_number,
-                "line_count": line_count,
+                "start_line": start_line,
+                "end_line": end_line,
                 "indent_levels": indent_levels,
             }
             final_change_id = apply_change(
@@ -150,11 +188,24 @@ class Tool(BaseTool):
 
             coder.files_edited_by_tools.add(rel_path)
 
-            # 8. Format and return result
+            # 9. Format and return result
+            # Parse line numbers for display
+            try:
+                start_line_num_str, _ = start_line.split(":", 1)
+                end_line_num_str, _ = end_line.split(":", 1)
+                start_line_num = int(start_line_num_str)
+                end_line_num = int(end_line_num_str)
+                num_lines = end_line_num - start_line_num + 1
+            except (ValueError, IndexError):
+                num_lines = "unknown"
+
             action_past = "Indented" if indent_levels > 0 else "Unindented"
+            levels = abs(indent_levels)
+            level_text = "level" if levels == 1 else "levels"
+
             success_message = (
-                f"{action_past} {num_lines} lines by {levels} {level_text} (from"
-                f" {basis_desc}) in {file_path}"
+                f"{action_past} {num_lines} lines ({start_line} to {end_line})"
+                f" by {levels} {level_text} in {file_path}"
             )
             return format_tool_result(
                 coder,
@@ -162,6 +213,7 @@ class Tool(BaseTool):
                 success_message,
                 change_id=final_change_id,
             )
+
         except ToolError as e:
             # Handle errors raised by utility functions (expected errors)
             return handle_tool_error(coder, tool_name, e, add_traceback=False)

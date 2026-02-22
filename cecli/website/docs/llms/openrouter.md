@@ -49,7 +49,7 @@ You can control which OpenRouter providers are used for your requests in two way
 [OpenRouter account settings](https://openrouter.ai/settings/preferences).
 This disables those named providers across all the models that you access via OpenRouter.
 
-2. By configuring "provider routing" in a `.aider.model.settings.yml` file.
+2. By configuring "provider routing" in a `.cecli.model.settings.yml` file.
 
 Place that file in your home directory or the root of your git project, with
 entries like this:

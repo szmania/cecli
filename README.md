@@ -1,6 +1,6 @@
 ## Why `cecli`?
 
-`cecli` (probably pronounced like "Cecily", aka `aider-ce`) is a community-driven fork of the [Aider](https://aider.chat/) AI pair programming tool.
+`cecli` (probably pronounced like "Cecily", aka `aider-ce`) is a community-driven fork of the [Aider](https://cecli.dev/) AI pair programming tool.
 Aider is a fantastic piece of software with a wonderful community but it has been painfully slow in receiving updates in the quickly evolving AI tooling space.
 
 We aim to foster an open, collaborative ecosystem where new features, experiments, and improvements can be developed and shared rapidly. We believe in genuine FOSS principles and actively welcome contributors of all skill levels.
@@ -25,7 +25,7 @@ LLMs are a part of our lives from here on out so join us in learning about and c
 * [Custom System Prompts](https://github.com/dwash96/cecli/blob/main/cecli/website/docs/config/custom-system-prompts.md)
 * [Custom Tools](https://github.com/dwash96/cecli/blob/main/cecli/website/docs/config/agent-mode.md#creating-custom-tools)
 * [Advanced Model Configuration](https://github.com/dwash96/cecli/blob/main/cecli/website/docs/config/model-aliases.md#advanced-model-settings)
-* [Aider Original Documentation (still mostly applies)](https://aider.chat/)
+* [Aider Original Documentation (still mostly applies)](https://cecli.dev/)
 
 You can see a selection of the enhancements and updates by comparing the help output:
 
@@ -74,7 +74,7 @@ enable-context-compaction: true
 context-compaction-max-tokens: 0.8
 env-file: .cecli.env
 show-model-warnings: true
-use-enhanced-map: true.p
+use-enhanced-map: true
 watch-files: false
 tui: true
 

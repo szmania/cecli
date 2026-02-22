@@ -22,7 +22,7 @@ You have two ways of sharing your MCP server configuration with cecli.
 
 ### Config Files
 
-You can configure MCP servers in your `.aider.conf.yml` file using either JSON or YAML format:
+You can configure MCP servers in your `.cecli.conf.yml` file using either JSON or YAML format:
 
 #### JSON Configuration
 
