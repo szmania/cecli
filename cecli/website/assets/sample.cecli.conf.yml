@@ -1,5 +1,5 @@
 ##########################################################
-# Sample .aider.conf.yml
+# Sample .cecli.conf.yml
 # This file lists *all* the valid configuration entries.
 # Place in your home dir, or at the root of your git repo.
 ##########################################################
@@ -413,7 +413,7 @@
 ## Line endings to use when writing files (default: platform)
 #line-endings: platform
 
-## Specify the config file (default: search for .aider.conf.yml in git root, cwd or home directory)
+## Specify the config file (default: search for .cecli.conf.yml in git root, cwd or home directory)
 #config: xxx
 
 ## Specify the .env file to load (default: .env in git root)
