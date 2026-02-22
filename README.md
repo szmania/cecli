@@ -176,10 +176,10 @@ The current priorities are to improve core capabilities and user experience of t
   * [ ] Integrate hook manager with coder classes with hooks for `start`, `on_message`, `end_message`, `pre_tool`, and `post_tool` 
 
 9. **Efficient File Editing**
-  * [ ] Explore use of hashline file representation for more targeted file editing
-  * [ ] Assuming viability, update SEARCH part of SEARCH/REPLACE with hashline identification
-  * [ ] Update agent mode edit tools to work with hashline identification
-  * [ ] Update internal file diff representation to support hashline propagation
+  * [x] Explore use of hashline file representation for more targeted file editing
+  * [x] Assuming viability, update SEARCH part of SEARCH/REPLACE with hashline identification (Done with new edit format)
+  * [x] Update agent mode edit tools to work with hashline identification
+  * [x] Update internal file diff representation to support hashline propagation
 
 10. **Dynamic Context Management** 
   * [ ] Update compaction to use observational memory sub agent calls to generate decision records that are used as the compaction basis
