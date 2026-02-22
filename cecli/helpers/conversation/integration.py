@@ -528,6 +528,7 @@ class ConversationChunks:
             # Get file content (with proper caching and stub generation)
             content = ConversationFiles.get_file_stub(fname)
             if not content:
+                ConversationFiles.clear_file_cache(fname)
                 continue
 
             rel_fname = coder.get_rel_fname(fname)

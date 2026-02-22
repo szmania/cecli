@@ -3753,6 +3753,7 @@ class Coder:
             return edited
 
         except ANY_GIT_ERROR as err:
+            self.io.tool_error(traceback.format_exc())
             self.io.tool_error(str(err))
             return edited
         except Exception as err:

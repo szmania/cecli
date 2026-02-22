@@ -1450,6 +1450,9 @@ class InputOutput:
         self._tool_message(message, strip, self.user_input_color)
 
     def tool_error(self, message="", strip=True):
+        # import traceback
+        # traceback.print_stack()
+
         self.num_error_outputs += 1
         message = self.format_json_in_string(message)
         self._tool_message(message, strip, self.tool_error_color)

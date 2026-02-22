@@ -275,6 +275,13 @@ def find_hashline_range(
     # Parse start_line_hash
     start_hash_fragment, start_line_num_str, start_line_num = parse_hashline(start_line_hash)
 
+    # Special handling for genesis anchor "0|aa" with empty content
+    if start_hash_fragment == "aa" and start_line_num == 0 and not hashed_lines:
+        # Genesis anchor for empty content - return 0 for both start and end
+        found_start_line = 0
+        found_end_line = 0
+        return found_start_line, found_end_line
+
     # Try to find start line
     found_start_line = None
     if allow_exact_match:
@@ -1054,20 +1061,25 @@ def apply_hashline_operations(
                     op["start_line_hash"]
                 )
 
-                # Try exact match first for insert operations
-                found_start = find_hashline_by_exact_match(
-                    hashed_lines, start_hash_fragment, start_line_num_str
-                )
-
-                if found_start is None:
-                    found_start = find_hashline_by_fragment(
-                        hashed_lines, start_hash_fragment, start_line_num
+                # Special handling for genesis anchor "0|aa" with empty content
+                if start_hash_fragment == "aa" and start_line_num == 0 and not hashed_lines:
+                    # Genesis anchor for empty content - insert at position 0
+                    found_start = 0
+                else:
+                    # Try exact match first for insert operations
+                    found_start = find_hashline_by_exact_match(
+                        hashed_lines, start_hash_fragment, start_line_num_str
                     )
 
-                if found_start is None:
-                    raise HashlineError(
-                        f"Start line hash fragment '{start_hash_fragment}' not found in file"
-                    )
+                    if found_start is None:
+                        found_start = find_hashline_by_fragment(
+                            hashed_lines, start_hash_fragment, start_line_num
+                        )
+
+                    if found_start is None:
+                        raise HashlineError(
+                            f"Start line hash fragment '{start_hash_fragment}' not found in file"
+                        )
 
                 resolved_ops.append(
                     {"index": i, "start_idx": found_start, "end_idx": found_start, "op": op}
@@ -1171,9 +1183,14 @@ def apply_hashline_operations(
                 text = op["text"]
                 if text and not text.endswith("\n"):
                     text += "\n"
-                if not hashed_lines[start_idx].endswith("\n"):
-                    hashed_lines[start_idx] += "\n"
-                hashed_lines.insert(start_idx + 1, text)
+                # Special handling for empty hashed_lines (genesis anchor case)
+                if hashed_lines:
+                    if not hashed_lines[start_idx].endswith("\n"):
+                        hashed_lines[start_idx] += "\n"
+                    hashed_lines.insert(start_idx + 1, text)
+                else:
+                    # Empty content with genesis anchor - just add the text
+                    hashed_lines.append(text)
             elif op["operation"] == "delete":
                 del hashed_lines[start_idx : end_idx + 1]
             elif op["operation"] == "replace":

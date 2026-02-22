@@ -116,36 +116,35 @@ class HashLineCoder(Coder):
             full_path = self.abs_root_path(path)
             new_content = None
 
-            if Path(full_path).exists():
-                try:
+            try:
+                # Read existing content or use empty string for new files
+                if Path(full_path).exists():
                     content = self.io.read_text(full_path)
-                    # Apply all hashline operations for this file in batch
-                    new_content, _, _ = apply_hashline_operations(
-                        original_content=strip_hashline(content),
-                        operations=operations,
-                    )
+                else:
+                    content = ""
 
-                    if dry_run:
-                        # For dry runs, preserve the original edit format
-                        updated_edits.extend(original_hashline_edits_by_file[path])
-                    else:
-                        updated_edits.append((path, operations, "Batch hashline operations"))
+                # Apply all hashline operations for this file in batch
+                new_content, _, _ = apply_hashline_operations(
+                    original_content=strip_hashline(content),
+                    operations=operations,
+                )
 
-                    if new_content:
-                        if not dry_run:
-                            self.io.write_text(full_path, new_content)
-                        passed.append((path, operations, "Batch hashline operations"))
-                    else:
-                        # No changes or failed
-                        failed.append((path, operations, "Batch hashline operations"))
+                if dry_run:
+                    # For dry runs, preserve the original edit format
+                    updated_edits.extend(original_hashline_edits_by_file[path])
+                else:
+                    updated_edits.append((path, operations, "Batch hashline operations"))
 
-                except (ValueError, HashlineError) as e:
-                    # Record failure
-                    failed.append((path, operations, f"Hashline batch operation failed: {e}"))
-                    continue
-            else:
-                # File doesn't exist
-                failed.append((path, operations, "File not found"))
+                # Write the file if operation was successful (no exception)
+                # new_content could be empty string for empty file creation
+                if not dry_run:
+                    self.io.write_text(full_path, new_content)
+                passed.append((path, operations, "Batch hashline operations"))
+
+            except (ValueError, HashlineError) as e:
+                # Record failure
+                failed.append((path, operations, f"Hashline batch operation failed: {e}"))
+                continue
 
         # Process regular edits one by one (existing logic)
         for edit in regular_edits:
@@ -156,9 +155,9 @@ class HashLineCoder(Coder):
             if not isinstance(original, str) or not isinstance(updated, str):
                 continue
 
-            if Path(full_path).exists():
-                content = self.io.read_text(full_path)
-                new_content = do_replace(full_path, content, original, updated, self.fence)
+            # Always try do_replace, it handles new file creation
+            content = self.io.read_text(full_path) if Path(full_path).exists() else ""
+            new_content = do_replace(full_path, content, original, updated, self.fence)
 
             # If the edit failed, and
             # this is not a "create a new file" with an empty original...
@@ -177,7 +176,7 @@ class HashLineCoder(Coder):
 
             updated_edits.append((path, original, updated))
 
-            if new_content:
+            if new_content is not None:
                 if not dry_run:
                     self.io.write_text(full_path, new_content)
                 passed.append(edit)
@@ -211,20 +210,6 @@ Please try this operation again using the hashline range that you want to modify
                 did_you_mean = find_similar_lines(original, content)
                 if did_you_mean:
                     res += f"""Did you mean to match some of these actual lines from {path}?
-
-{self.fence[0]}
-{did_you_mean}
-{self.fence[1]}
-
-"""
-                if updated in content and updated:
-                    res += f"""Are you sure you need this LOCATE/CONTENTS block?
-The CONTENTS lines are already in {path}!
-
-"""
-            did_you_mean = find_similar_lines(original, content)
-            if did_you_mean:
-                res += f"""Did you mean to match some of these actual lines from {path}?
 
 {self.fence[0]}
 {did_you_mean}
@@ -758,6 +743,10 @@ def find_filename(lines, fence, valid_fnames):
 def find_similar_lines(search_lines, content_lines, threshold=0.6):
     search_lines = search_lines.splitlines()
     content_lines = content_lines.splitlines()
+
+    # Handle empty search lines
+    if not search_lines:
+        return ""
 
     best_ratio = 0
     best_match = None
