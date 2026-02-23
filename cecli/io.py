@@ -48,6 +48,7 @@ from .dump import dump  # noqa: F401
 from .editor import pipe_editor
 from .utils import is_image_file, run_fzf
 from .waiting import Spinner
+from .interruptible_input import InterruptibleInput
 
 # Constants
 NOTIFICATION_MESSAGE = "cecli is waiting for your input"
@@ -493,6 +494,8 @@ class InputOutput:
         self.fallback_spinner = None
         self.fallback_spinner_enabled = True
 
+        self.interruptible_input = None
+
         if fancy_input:
             # If unicode is supported, use the rich 'dots2' spinner, otherwise an ascii fallback
             if self._spinner_supports_unicode():
@@ -764,6 +767,15 @@ class InputOutput:
                 self.prompt_session.app.exit()
             finally:
                 pass
+        else:
+            if self.interruptible_input is not None:
+                # Interrupt the dumb terminal input
+                self.interruptible_input.interrupt()
+            else:
+                # Give the user some feedback (this happens on Windows
+                # until someone extends InterruptibleInput to work
+                # there)
+                print("Warning: Interrupting input does not work in dumb termnal mode (yet!).")
 
     def reject_outstanding_confirmations(self):
         """Reject all outstanding confirmation dialogs."""
@@ -930,17 +942,17 @@ class InputOutput:
                 show = self.prompt_prefix
 
             try:
+                self.interrupted = False
+                if not multiline_input:
+                    if self.file_watcher:
+                        self.file_watcher.start()
+                    if self.clipboard_watcher:
+                        self.clipboard_watcher.start()
+
                 if self.prompt_session:
                     # Use placeholder if set, then clear it
                     default = self.placeholder or ""
                     self.placeholder = None
-
-                    self.interrupted = False
-                    if not multiline_input:
-                        if self.file_watcher:
-                            self.file_watcher.start()
-                        if self.clipboard_watcher:
-                            self.clipboard_watcher.start()
 
                     def get_continuation(width, line_number, is_soft_wrap):
                         return self.prompt_prefix
@@ -957,7 +969,21 @@ class InputOutput:
                         prompt_continuation=get_continuation,
                     )
                 else:
-                    line = await asyncio.get_event_loop().run_in_executor(None, input, show)
+                    try:
+                        self.interruptible_input = InterruptibleInput()
+                    except RuntimeError:
+                        # Fallback to non-interruptible input (Windows ...)
+                        line = await asyncio.get_event_loop().run_in_executor(None, input, show)
+
+                    if self.interruptible_input:
+                        try:
+                            line = await asyncio.get_event_loop().run_in_executor(None, self.interruptible_input.input, show)
+                        except InterruptedError:
+                            self.interrupted = True
+                            line = ""
+                        finally:
+                            self.interruptible_input.close()
+                            self.interruptible_input = None
 
                 # Check if we were interrupted by a file change
                 if self.interrupted:
