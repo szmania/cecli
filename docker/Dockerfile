@@ -41,9 +41,9 @@ RUN git config --system --add safe.directory /app
 ENV HOME=/app
 
 #########################
-FROM base AS aider-ce
+FROM base AS cecli
 
-ENV CECLI_DOCKER_IMAGE=dustinwashington/aider-ce
+ENV CECLI_DOCKER_IMAGE=dustinwashington/cecli
 
 # Copy requirements files
 COPY requirements.txt /tmp/cecli/
