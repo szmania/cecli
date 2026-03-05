@@ -22,7 +22,7 @@ requires.
 If this happens, you may see errors like these when running pip installs:
 
 ```
-cecli-dev 0.23.0 requires somepackage==X.Y.Z, but you have somepackage U.W.V which is incompatible. 
+cecli-dev 0.97.3 requires somepackage==X.Y.Z, but you have somepackage U.W.V which is incompatible. 
 ```
 
 ## Install with cecli-install, uv or pipx
@@ -56,7 +56,3 @@ latest versions of these libraries.
 
 Also be wary of upgrading `litellm`, as it changes versions frequently
 and sometimes introduces bugs or backwards incompatible changes.
-
-## Replit
-
-{% include replit-pipx.md %}
