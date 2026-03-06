@@ -64,6 +64,7 @@ class TokensCommand(BaseCommand):
         tokens_done = 0
         tokens_cur = 0
         tokens_diffs = 0
+        tokens_file_contexts = 0
 
         if msgs_done:
             tokens_done = coder.main_model.token_count(msgs_done)
