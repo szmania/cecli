@@ -211,34 +211,14 @@ class Coder:
 
             use_kwargs = dict(from_coder.original_kwargs)  # copy orig kwargs
 
-            # If the edit format changes, we can't leave old ASSISTANT
-            # messages in the chat history. The old edit format will
-            # confused the new LLM. It may try and imitate it, disobeying
-            # the system prompt.
-            # Get DONE messages from ConversationManager
-            done_messages = ConversationManager.get_messages_dict(MessageTag.DONE)
-            if edit_format != from_coder.edit_format and done_messages and summarize_from_coder:
-                try:
-                    io.tool_warning("Summarizing messages, please wait...")
-                    done_messages = await from_coder.summarizer.summarize_all(done_messages)
-                except (KeyboardInterrupt, ValueError):
-                    # If summarization fails, keep the original messages and warn the user
-                    io.tool_warning(
-                        "Chat history summarization failed, continuing with full history"
-                    )
-
-            # Bring along context from the old Coder
-            # Get CUR messages from ConversationManager
-            cur_messages = ConversationManager.get_messages_dict(MessageTag.CUR)
-
             update = dict(
                 fnames=list(from_coder.abs_fnames),
                 read_only_fnames=list(from_coder.abs_read_only_fnames),  # Copy read-only files
                 read_only_stubs_fnames=list(
                     from_coder.abs_read_only_stubs_fnames
                 ),  # Copy read-only stubs
-                done_messages=done_messages,
-                cur_messages=cur_messages,
+                done_messages=[],
+                cur_messages=[],
                 coder_commit_hashes=from_coder.coder_commit_hashes,
                 commands=from_coder.commands.clone(),
                 total_cost=from_coder.total_cost,
@@ -414,22 +394,6 @@ class Coder:
         self.abs_read_only_fnames = set()
         self.add_gitignore_files = add_gitignore_files
         self.abs_read_only_stubs_fnames = set()
-
-        # Always use ConversationManager as the source of truth
-        # Add any provided messages to ConversationManager
-        if done_messages:
-            for msg in done_messages:
-                ConversationManager.add_message(
-                    message_dict=msg,
-                    tag=MessageTag.DONE,
-                )
-
-        if cur_messages:
-            for msg in cur_messages:
-                ConversationManager.add_message(
-                    message_dict=msg,
-                    tag=MessageTag.CUR,
-                )
 
         self.io = io
         self.io.coder = weakref.ref(self)

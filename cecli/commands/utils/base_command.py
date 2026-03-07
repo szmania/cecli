@@ -1,7 +1,7 @@
 from abc import ABC, ABCMeta, abstractmethod
 from typing import List
 
-from cecli.helpers.conversation import ConversationManager, MessageTag
+from cecli.helpers.conversation import ConversationManager
 
 
 class CommandMeta(ABCMeta):
@@ -152,9 +152,7 @@ class BaseCommand(ABC, metaclass=CommandMeta):
         new_coder = await Coder.create(**kwargs)
 
         # Re-initialize ConversationManager with new coder
-        ConversationManager.initialize(
-            new_coder, reset=True, reformat=True, preserve_tags=[MessageTag.DONE, MessageTag.CUR]
-        )
+        ConversationManager.initialize(new_coder, reset=True, reformat=True, preserve_tags=True)
 
         await new_coder.generate(user_message=user_msg, preproc=False)
         coder.coder_commit_hashes = new_coder.coder_commit_hashes
@@ -164,7 +162,7 @@ class BaseCommand(ABC, metaclass=CommandMeta):
             original_coder,
             reset=True,
             reformat=True,
-            preserve_tags=[MessageTag.DONE, MessageTag.CUR],
+            preserve_tags=True,
         )
 
         from cecli.commands import SwitchCoderSignal

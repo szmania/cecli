@@ -3,7 +3,7 @@ from typing import List
 import cecli.models as models
 from cecli.commands.utils.base_command import BaseCommand
 from cecli.commands.utils.helpers import format_command_result
-from cecli.helpers.conversation import ConversationManager, MessageTag
+from cecli.helpers.conversation import ConversationManager
 
 
 class AgentModelCommand(BaseCommand):
@@ -69,7 +69,7 @@ class AgentModelCommand(BaseCommand):
                 temp_coder,
                 reset=True,
                 reformat=True,
-                preserve_tags=[MessageTag.DONE, MessageTag.CUR],
+                preserve_tags=True,
             )
 
             verbose = kwargs.get("verbose", False)
@@ -86,7 +86,7 @@ class AgentModelCommand(BaseCommand):
                     original_coder,
                     reset=True,
                     reformat=True,
-                    preserve_tags=[MessageTag.DONE, MessageTag.CUR],
+                    preserve_tags=True,
                 )
 
                 # Restore the original model configuration

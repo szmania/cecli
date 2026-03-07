@@ -1,7 +1,7 @@
 import asyncio
 
 from ..commands import SwitchCoderSignal
-from ..helpers.conversation import ConversationManager, MessageTag
+from ..helpers.conversation import ConversationManager
 from .ask_coder import AskCoder
 from .base_coder import Coder
 
@@ -61,9 +61,7 @@ class ArchitectCoder(AskCoder):
         editor_coder = await Coder.create(**new_kwargs)
 
         # Re-initialize ConversationManager with editor coder
-        ConversationManager.initialize(
-            editor_coder, reset=True, reformat=True, preserve_tags=[MessageTag.DONE, MessageTag.CUR]
-        )
+        ConversationManager.initialize(editor_coder, reset=True, reformat=True, preserve_tags=True)
 
         if self.verbose:
             editor_coder.show_announcements()
@@ -84,7 +82,7 @@ class ArchitectCoder(AskCoder):
                 original_coder or self,
                 reset=True,
                 reformat=True,
-                preserve_tags=[MessageTag.DONE, MessageTag.CUR],
+                preserve_tags=True,
             )
 
             self.total_cost = editor_coder.total_cost
@@ -96,7 +94,7 @@ class ArchitectCoder(AskCoder):
                 original_coder or self,
                 reset=True,
                 reformat=True,
-                preserve_tags=[MessageTag.DONE, MessageTag.CUR],
+                preserve_tags=True,
             )
 
         raise SwitchCoderSignal(main_model=self.main_model, edit_format="architect")
