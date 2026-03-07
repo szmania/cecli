@@ -2405,7 +2405,7 @@ class Coder:
                 force=True,  # Force update existing message
             )
 
-        if edited and self.auto_test:
+        if edited and self.auto_test and self.test_cmd:
             test_errors = await self.commands.execute("test", self.test_cmd)
             self.test_outcome = not test_errors
             if test_errors:
