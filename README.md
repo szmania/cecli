@@ -1,11 +1,11 @@
 ## Why `cecli`?
 
-`cecli` (probably pronounced like "Cecily", aka `aider-ce`) is a community-driven fork of the [Aider](https://cecli.dev/) AI pair programming tool.
-Aider is a fantastic piece of software with a wonderful community but it has been painfully slow in receiving updates in the quickly evolving AI tooling space.
+`cecli` (probably pronounced like "Cecily") is yet another cli agent crafted for extensibility and customization. Originally a fork of the [Aider](https://cecli.dev/) AI pair programming tool, we aim to make agentic coding as maximally effective as it can be based on the growing capabilities of large language models.
 
-We aim to foster an open, collaborative ecosystem where new features, experiments, and improvements can be developed and shared rapidly. We believe in genuine FOSS principles and actively welcome contributors of all skill levels.
+We aim to foster an open, collaborative ecosystem where new features, experiments, and improvements can be developed and shared rapidly. We believe in the principles of FOSS and actively welcome contributors of all skill levels.
 
 If you are looking for bleeding-edge features or want to get your hands dirty with the internals of an AI coding agent, here's your sign.
+
 LLMs are a part of our lives from here on out so join us in learning about and crafting the future.
 
 ### Links
