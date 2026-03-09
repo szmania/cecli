@@ -108,7 +108,7 @@ class Tool(BaseTool):
         for search_op in searches:
             pattern = search_op.get("pattern")
             file_pattern = search_op.get("file_pattern", "*")
-            directory = search_op.get("directory", ".")
+            directory = search_op.get("directory", search_op.get("path", "."))
             use_regex = search_op.get("use_regex", False)
             case_insensitive = search_op.get("case_insensitive", False)
             context_before = search_op.get("context_before", 5)
@@ -116,9 +116,6 @@ class Tool(BaseTool):
 
             try:
                 search_dir_path = Path(repo.root) / directory
-                if not search_dir_path.is_dir():
-                    all_results.append(f"Error: Directory not found: {directory}")
-                    continue
 
                 # Build the command arguments based on the available tool
                 cmd_args = [tool_path]
