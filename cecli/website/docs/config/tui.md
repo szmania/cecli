@@ -50,6 +50,7 @@ tui-config:
   other:
     dark: true
     input-cursor-text-style: "underline"
+    use_terminal_background: false
   key_bindings:
     newline: "shift+enter"
     submit: "enter"

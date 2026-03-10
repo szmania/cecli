@@ -3,8 +3,12 @@
 import concurrent.futures
 import json
 import queue
+from functools import lru_cache
 from pathlib import Path
 
+import textual.strip
+from rich.color import ColorSystem
+from rich.style import Style
 from textual import events
 from textual.app import App, ComposeResult
 
@@ -74,6 +78,9 @@ class TUI(App):
                 "input-cursor-text-style": other.get("input-cursor-text-style", "underline"),
             },
         )
+
+        if other.get("use_terminal_background", False):
+            patch_textual_strip_render_with_cache()
 
         self.bind(
             self._encode_keys(self.get_keys_for("newline")),
@@ -218,6 +225,7 @@ class TUI(App):
         # Default settings for the "other" section
         default_other = {
             "render_markdown": False,
+            "use_terminal_background": False,
         }
 
         # Merge default other settings with user-provided settings
@@ -1171,3 +1179,39 @@ class TUI(App):
 
         input_area.completion_active = False
         input_area.focus()
+
+
+def patch_textual_strip_render_with_cache():
+    # 1. Define the logic
+    def modified_render_ansi(cls, style: Style, color_system: ColorSystem) -> str:
+        """Modified ANSI generator that ignores background colors."""
+        sgr: list[str]
+        # Handle Attributes
+        if attributes := style._attributes & style._set_attributes:
+            _style_map = textual.strip.SGR_STYLES
+            sgr = [
+                _style_map[bit_offset]
+                for bit_offset in range(attributes.bit_length())
+                if attributes & (1 << bit_offset)
+            ]
+        else:
+            sgr = []
+
+        # Handle Foreground Color
+        if (color := style._color) is not None:
+            sgr.extend(color.downgrade(color_system).get_ansi_codes())
+
+        # BACKGROUND OVERRIDE: Skip the bgcolor block entirely
+
+        ansi = style._ansi = ";".join(sgr)
+        return ansi
+
+    # 2. Re-apply the EXACT cache settings from the original source
+    cached_version = lru_cache(maxsize=16384)(modified_render_ansi)
+
+    # 3. Convert to classmethod and inject
+    textual.strip.Strip.render_ansi = classmethod(cached_version)
+
+
+# Execute the patch
+# patch_textual_strip_render_with_cache()
