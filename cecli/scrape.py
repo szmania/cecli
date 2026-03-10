@@ -51,7 +51,7 @@ async def install_playwright(io):
     if has_playwright and has_chromium:
         return True
 
-    pip_cmd = utils.get_pip_install(["cecli[playwright]"])
+    pip_cmd = utils.get_pip_install(["cecli-dev[playwright]"])
     chromium_cmd = "-m playwright install --with-deps chromium"
     chromium_cmd = [sys.executable] + chromium_cmd.split()
 

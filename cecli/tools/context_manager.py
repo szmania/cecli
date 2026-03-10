@@ -86,6 +86,11 @@ class Tool(BaseTool):
         for f in editable_files:
             messages.append(cls._editable(coder, f))
 
+        if coder.tui and coder.tui():
+            coder.tui().refresh()
+
+        coder.context_blocks_cache = {}
+
         return "\n".join(messages)
 
     @staticmethod
@@ -95,12 +100,15 @@ class Tool(BaseTool):
             abs_path = coder.abs_root_path(file_path)
             rel_path = coder.get_rel_fname(abs_path)
             removed = False
+
             if abs_path in coder.abs_fnames:
                 coder.abs_fnames.remove(abs_path)
                 removed = True
-            elif abs_path in coder.abs_read_only_fnames:
+
+            if abs_path in coder.abs_read_only_fnames:
                 coder.abs_read_only_fnames.remove(abs_path)
                 removed = True
+
             if not removed:
                 coder.io.tool_output(f"⚠️ File '{file_path}' not in context")
                 return f"File not in context: {file_path}"

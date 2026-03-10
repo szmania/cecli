@@ -454,6 +454,20 @@ async def sanity_check_repo(repo, io):
     return False
 
 
+def interpolate_env_vars(value):
+    """Interpolate environment variables in the form ${VAR} or $VAR."""
+    if not isinstance(value, str):
+        return value
+
+    def replace_var(match):
+        var_name = match.group(1) or match.group(2)
+        return os.getenv(var_name, match.group(0))
+
+    # Matches ${VAR} or $VAR
+    pattern = r"\$\{([\w_]+)\}|\$([\w_]+)"
+    return re.sub(pattern, replace_var, value)
+
+
 PROJECT_ROOT = os.path.abspath(os.path.dirname(__file__))
 log_file = None
 file_excludelist = {
@@ -572,6 +586,15 @@ async def main_async(argv=None, input=None, output=None, force_git_root=None, re
     if hasattr(args, "hooks") and args.hooks is not None:
         args.hooks = convert_yaml_to_json_string(args.hooks)
 
+    # Interpolate environment variables in all string arguments
+    for key, value in vars(args).items():
+        if isinstance(value, str):
+            setattr(args, key, interpolate_env_vars(value))
+        elif isinstance(value, list):
+            setattr(
+                args, key, [interpolate_env_vars(v) if isinstance(v, str) else v for v in value]
+            )
+
     if args.debug:
         global log_file
         os.makedirs(".cecli/logs/", exist_ok=True)
@@ -661,7 +684,7 @@ async def main_async(argv=None, input=None, output=None, force_git_root=None, re
                 supress_tui = False
             except ImportError as e:
                 print("Error: --tui requires 'textual' package")
-                print("Install with: pip install cecli[tui]")
+                print("Install with: pip install cecli-dev[tui]")
                 print(f"Import error: {e}")
                 sys.exit(1)
 

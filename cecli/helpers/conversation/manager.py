@@ -2,7 +2,7 @@ import copy
 import json
 import time
 import weakref
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 from cecli.helpers import nested
 
@@ -38,7 +38,7 @@ class ConversationManager:
         coder,
         reset: bool = False,
         reformat: bool = False,
-        preserve_tags: Optional[List[str]] = None,
+        preserve_tags: Optional[Union[List[str], bool]] = None,
     ) -> None:
         """
         Set up singleton with weak reference to coder.
@@ -56,6 +56,14 @@ class ConversationManager:
         cls._initialized = True
 
         preserved_messages = []
+        if preserve_tags is True:
+            preserve_tags = [
+                MessageTag.DONE,
+                MessageTag.CUR,
+                MessageTag.DIFFS,
+                MessageTag.FILE_CONTEXTS,
+            ]
+
         if reset and preserve_tags:
             # New approach: loop over every single tag type and only clear tags NOT in preserve_tags
             # Get all MessageTag values
@@ -78,20 +86,10 @@ class ConversationManager:
 
         # If preserve_tags is truthy, re-add preserved messages with updated timestamps after reformat block
         if preserve_tags and preserved_messages:
-            for tag_type in preserve_tags:
-                cls.clear_tag(tag_type)
-
+            offset = 0
             for msg in preserved_messages:
-                cls.add_message(
-                    message_dict=msg.message_dict,
-                    tag=MessageTag(msg.tag),
-                    priority=msg.priority,
-                    timestamp=time.monotonic_ns(),  # Updated timestamp
-                    mark_for_delete=msg.mark_for_delete,
-                    force=True,
-                    update_timestamp=True,
-                    message_id=msg.message_id,
-                )
+                offset += 1
+                msg.timestamp = time.monotonic_ns() + offset
 
         # Enable debug mode if coder has verbose attribute and it's True
         if hasattr(coder, "verbose") and coder.verbose:
@@ -372,15 +370,22 @@ class ConversationManager:
         Returns:
             True if a message was removed, False otherwise
         """
-        for message in cls._messages:
-            if message.hash_key == hash_key:
-                cls._messages.remove(message)
+        messages_to_remove = [m for m in cls._messages if m.hash_key == hash_key]
+        if not messages_to_remove:
+            return False
+
+        tags_to_clear = set()
+        for message in messages_to_remove:
+            cls._messages.remove(message)
+            if message.message_id in cls._message_index:
                 del cls._message_index[message.message_id]
-                # Clear cache for this tag and all messages cache since message was removed
-                cls._tag_cache.pop(message.tag, None)
-                cls._tag_cache.pop(cls._ALL_MESSAGES_CACHE_KEY, None)
-                return True
-        return False
+            tags_to_clear.add(message.tag)
+
+        for tag in tags_to_clear:
+            cls._tag_cache.pop(tag, None)
+        cls._tag_cache.pop(cls._ALL_MESSAGES_CACHE_KEY, None)
+
+        return True
 
     @classmethod
     def get_tag_messages(cls, tag: str) -> List[BaseMessage]:

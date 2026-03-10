@@ -296,19 +296,23 @@ class InputArea(TextArea):
             self.post_message(self.CompletionDismiss())
         elif event.key == "up":
             # If on first line, navigate history
-            # Or use Ctrl+Up? Let's use Up if on first line for convenience, similar to typical shell
-            # BUT this is a text editor.
-            # Let's try: if cursor is at (0,0) or just row 0.
-            if self.cursor_location[0] == 0:
-                event.stop()
-                event.prevent_default()
-                self._history_prev()
+            current_row, current_col = self.cursor_location
+            if current_row == 0:
+                if current_col // self.size.width == 0:
+                    event.stop()
+                    event.prevent_default()
+                    self._history_prev()
         elif event.key == "down":
             # If on last line, navigate history
-            if self.cursor_location[0] == self.document.line_count - 1:
-                event.stop()
-                event.prevent_default()
-                self._history_next()
+            current_row, current_col = self.cursor_location
+            if current_row == self.document.line_count - 1:
+                if self.get_cursor_down_location()[1] == sum(
+                    len(s) for s in self.wrapped_document.lines[self.document.line_count - 1]
+                ):
+                    event.stop()
+                    event.prevent_default()
+                    self._history_next()
+                    self.cursor_location = (0, 0)
         elif self.app.is_key_for("input_start", event.key):
             # Move cursor to start of first line
             event.stop()

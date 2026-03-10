@@ -1,4 +1,7 @@
 # Import necessary functions
+import os
+import platform
+
 from cecli.helpers.background_commands import BackgroundCommandManager
 from cecli.run_cmd import run_cmd_subprocess
 from cecli.tools.utils.base_tool import BaseTool
@@ -121,6 +124,8 @@ class Tool(BaseTool):
 
         coder.io.tool_output(f"⚙️ Executing shell command with {timeout}s timeout: {command_string}")
 
+        shell = os.environ.get("SHELL", "/bin/sh")
+
         # Create output buffer
         buffer = CircularBuffer(max_size=4096)
 
@@ -128,6 +133,7 @@ class Tool(BaseTool):
         process = subprocess.Popen(
             command_string,
             shell=True,
+            executable=shell if platform.system() != "Windows" else None,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             stdin=subprocess.DEVNULL,

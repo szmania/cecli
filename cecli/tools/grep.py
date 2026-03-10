@@ -108,7 +108,7 @@ class Tool(BaseTool):
         for search_op in searches:
             pattern = search_op.get("pattern")
             file_pattern = search_op.get("file_pattern", "*")
-            directory = search_op.get("directory", ".")
+            directory = search_op.get("directory", search_op.get("path", "."))
             use_regex = search_op.get("use_regex", False)
             case_insensitive = search_op.get("case_insensitive", False)
             context_before = search_op.get("context_before", 5)
@@ -116,9 +116,6 @@ class Tool(BaseTool):
 
             try:
                 search_dir_path = Path(repo.root) / directory
-                if not search_dir_path.is_dir():
-                    all_results.append(f"Error: Directory not found: {directory}")
-                    continue
 
                 # Build the command arguments based on the available tool
                 cmd_args = [tool_path]
@@ -205,7 +202,27 @@ class Tool(BaseTool):
                 all_results.append(f"Error executing search for '{pattern}': {str(e)}")
 
         final_message = "\n\n".join(all_results)
+
         if coder.tui and coder.tui():
-            coder.io.tool_output(final_message)
+            # For the UI, show a summary to avoid cluttering the terminal
+            ui_summaries = []
+            for search_op, result in zip(searches, all_results):
+                pattern = search_op.get("pattern")
+                if "No matches found" in result:
+                    ui_summaries.append(f"No matches found for '{pattern}'.")
+                elif "Error" in result:
+                    ui_summaries.append(f"Error searching for '{pattern}'.")
+                else:
+                    # Count lines in the output to give a sense of scale
+                    # The result string contains the matches in a code block
+                    match_count = (
+                        result.count("\n") - 2
+                    )  # Subtracting for the markdown block markers
+                    if match_count < 0:
+                        match_count = 0
+                    ui_summaries.append(f"✅ Matches found for '{pattern}'.")
+
+            ui_message = "\n\n".join(ui_summaries)
+            coder.io.tool_output(ui_message)
 
         return final_message
