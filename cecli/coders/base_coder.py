@@ -157,6 +157,7 @@ class Coder:
     last_user_message = ""
     uuid = ""
     model_kwargs = {}
+    cost_multiplier = 1
 
     # Task coordination state variables
     input_running = False
@@ -1579,6 +1580,18 @@ class Coder:
         while True:
             self.reflected_message = None
             self.tool_reflection = False
+
+            if float(self.total_cost) > self.cost_multiplier * nested.getter(
+                self.args, "cost_limit", float("inf")
+            ):
+                if await self.io.confirm_ask(
+                    "You have reached your configured cost limit. Continue?",
+                    group_response="Cost Limit",
+                    explicit_yes_required=True,
+                ):
+                    Coder.cost_multiplier += 1
+                else:
+                    return
 
             async for _ in self.send_message(message):
                 pass

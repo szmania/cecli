@@ -261,6 +261,12 @@ def get_parser(default_config_files, git_root):
         help="Maximum number of retries a model gets on malformed outputs (default: 3)",
     )
     group.add_argument(
+        "--cost-limit",
+        type=float,
+        default=None,
+        help="Cost limit per session, exceeding this forces prompt confirmation (default: None)",
+    )
+    group.add_argument(
         "--file-diffs",
         action=argparse.BooleanOptionalAction,
         default=True,
