@@ -46,11 +46,11 @@ class AgentCoder(Coder):
     def __init__(self, *args, **kwargs):
         self.recently_removed = {}
         self.tool_usage_history = []
-        self.tool_usage_retries = 10
+        self.tool_usage_retries = 20
         self.last_round_tools = []
         self.tool_call_vectors = []
         self.tool_similarity_threshold = 0.90
-        self.max_tool_vector_history = 10
+        self.max_tool_vector_history = 20
         self.read_tools = {
             "command",
             "commandinteractive",
@@ -867,66 +867,91 @@ I will proceed based on the tool results and updated context.""")
     def _get_repetitive_tools(self):
         """
         Identifies repetitive tool usage patterns from rounds of tool calls.
-
-        This method uses similarity-based detection:
-        1. If the last round contained a write tool, it assumes progress and returns no repetitive tools.
-        2. It checks for similarity-based repetition using cosine similarity on tool call strings.
-
-        It avoids flagging repetition if a "write" tool was used recently,
-        as that suggests progress is being made.
         """
         history_len = len(self.tool_usage_history)
         if history_len < 5:
             return set()
+
         similarity_repetitive_tools = self._get_repetitive_tools_by_similarity()
+
         if self.last_round_tools:
             last_round_has_write = any(
                 tool.lower() in self.write_tools for tool in self.last_round_tools
             )
             if last_round_has_write:
-                self.tool_usage_history = []
-                # Filter similarity_repetitive_tools to only include tools in read_tools or write_tools
-                filtered_similarity_tools = {
-                    tool
-                    for tool in similarity_repetitive_tools
-                    if tool.lower() in self.read_tools or tool.lower() in self.write_tools
-                }
-                return filtered_similarity_tools if len(filtered_similarity_tools) else set()
-        # Filter similarity_repetitive_tools to only include tools in read_tools or write_tools
-        filtered_similarity_tools = {
+                # Remove half of the history when a write tool is used
+                half = len(self.tool_usage_history) // 2
+                self.tool_usage_history = self.tool_usage_history[half:]
+                self.tool_call_vectors = self.tool_call_vectors[half:]
+
+        # Filter to only include tools in read_tools or write_tools
+        return {
             tool
             for tool in similarity_repetitive_tools
             if tool.lower() in self.read_tools or tool.lower() in self.write_tools
         }
-        if filtered_similarity_tools:
-            return filtered_similarity_tools
-        return set()
 
     def _get_repetitive_tools_by_similarity(self):
         """
-        Identifies repetitive tool usage patterns using cosine similarity on tool call strings.
-
-        This method checks if the latest tool calls are highly similar (>0.99 threshold)
-        to historical tool calls using bigram vector similarity.
-
-        Returns:
-            set: Set of tool names that are repetitive based on similarity
+        Identifies repetitive tool usage patterns using cosine similarity and windowed patterns.
         """
         if not self.tool_usage_history or len(self.tool_call_vectors) < 2:
             return set()
+
+        repetitive_tools = set()
         latest_vector = self.tool_call_vectors[-1]
+        similarity_triggered = False
+
+        # Store similarity scores by index (similarity between latest vector and each historical vector)
+        similarity_scores = []
+
+        # 1. Similarity-based detection
         for i, historical_vector in enumerate(self.tool_call_vectors[:-1]):
             similarity = cosine_similarity(latest_vector, historical_vector)
-            if similarity >= self.tool_similarity_threshold:
+            similarity_scores.append(similarity)
+
+            # Flag immediately if similarity is very high (> 0.99)
+            if similarity > 0.99:
                 if i < len(self.tool_usage_history):
-                    tool_name = self.tool_usage_history[i]
-                    # Only return tools that are in read_tools or write_tools
-                    if (
-                        tool_name.lower() in self.read_tools
-                        or tool_name.lower() in self.write_tools
-                    ):
-                        return {tool_name}
-        return set()
+                    repetitive_tools.add(self.tool_usage_history[i])
+
+            # Standard similarity threshold triggers windowed check
+            elif similarity >= self.tool_similarity_threshold:
+                similarity_triggered = True
+
+        # 2. Windowed pattern detection (window size 3)
+        # Only runs if similarity threshold was met or high similarity was found
+        if similarity_triggered or repetitive_tools:
+            window_size = 3
+            if len(self.tool_usage_history) >= window_size * 2:
+                latest_window = tuple(self.tool_usage_history[-window_size:])
+                latest_window_vectors = self.tool_call_vectors[-window_size:]
+
+                for i in range(len(self.tool_usage_history) - (window_size * 2) + 1):
+                    historical_window = tuple(self.tool_usage_history[i : i + window_size])
+                    historical_window_vectors = self.tool_call_vectors[i : i + window_size]
+
+                    if latest_window == historical_window:
+                        # Check if at least one tool in the window has similarity above threshold
+                        # We compare each tool in the historical window with its counterpart in the latest window
+                        window_has_high_similarity = False
+                        for j in range(window_size):
+                            # Compare historical tool at position i+j with latest tool at position -window_size+j
+                            hist_idx = i + j
+                            latest_idx = -window_size + j
+
+                            if hist_idx < len(self.tool_call_vectors) and latest_idx < 0:
+                                similarity = cosine_similarity(
+                                    historical_window_vectors[j], latest_window_vectors[j]
+                                )
+                                if similarity >= self.tool_similarity_threshold:
+                                    window_has_high_similarity = True
+                                    break
+
+                        if window_has_high_similarity:
+                            repetitive_tools.update(latest_window)
+
+        return repetitive_tools
 
     def _generate_tool_context(self, repetitive_tools):
         """
@@ -947,8 +972,8 @@ I will proceed based on the tool results and updated context.""")
         context_parts.append("## Recent Tool Usage History")
 
         if len(self.tool_usage_history) > 10:
-            recent_history = self.tool_usage_history[-10:]
-            context_parts.append("(Showing last 10 tools)")
+            recent_history = self.tool_usage_history[-20:]
+            context_parts.append("(Showing last 20 tools)")
         else:
             recent_history = self.tool_usage_history
         for i, tool in enumerate(recent_history, 1):
@@ -973,7 +998,7 @@ I will proceed based on the tool results and updated context.""")
                     self.model_kwargs["temperature"] = min(temperature + 0.1, 2)
                     self.model_kwargs["frequency_penalty"] = min(freq_penalty + 0.1, 1)
 
-                if random.random() < 0.25:
+                if random.random() < 0.2:
                     self.model_kwargs["temperature"] = min(
                         (
                             1
@@ -984,21 +1009,21 @@ I will proceed based on the tool results and updated context.""")
                     )
                     self.model_kwargs["frequency_penalty"] = min(0, max(freq_penalty - 0.15, 0))
 
-            # One tenth of the time, just straight reset the randomness
-            if random.random() < 0.1:
+            # One twentieth of the time, just straight reset the randomness
+            if random.random() < 0.05:
                 self.model_kwargs = {}
 
-            if self.turn_count - self._last_repetitive_warning_turn > 2:
+            if self.turn_count - self._last_repetitive_warning_turn > 1:
                 self._last_repetitive_warning_turn = self.turn_count
                 self._last_repetitive_warning_severity += 1
 
             repetition_warning = f"""
 ## Repetition Detected: Strategy Adjustment Required
-I have detected repetitive usage of the following tools: {', '.join([f'`{t}`' for t in repetitive_tools])}.
-**Constraint:** Do not repeat the exact same parameters for these tools in your next turn.
+You have been using the following tools repetitively: {', '.join([f'`{t}`' for t in repetitive_tools])}.
+**Constraint:** Do not repeat the same parameters for these tools in your next turns. Try something different.
             """
 
-            if self._last_repetitive_warning_severity > 2:
+            if self._last_repetitive_warning_severity > 5:
                 self._last_repetitive_warning_severity = 0
 
                 fruit = random.choice(
@@ -1056,6 +1081,9 @@ Prioritize editing or verification over further exploration.
             context_parts.append(repetition_warning)
         else:
             self.model_kwargs = {}
+            self._last_repetitive_warning_severity = min(
+                self._last_repetitive_warning_severity - 1, 0
+            )
 
         context_parts.append("</context>")
         return "\n".join(context_parts)
