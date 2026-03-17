@@ -5,7 +5,7 @@
 set -e  # Exit on error
 
 # Default values
-BASE_NAME="cecli-base-d-big-3"
+BASE_NAME="cecli-little-guys-d6"
 EDIT_FORMAT="diff"
 MAP_TOKENS="512"
 THREADS="1"
@@ -21,14 +21,15 @@ SLEEP_BETWEEN=30  # Seconds to sleep between runs
 #    "openrouter/minimax/minimax-m2.1"
 #    "openrouter/qwen/qwen3-vl-235b-a22b-thinking"
 MODELS=(
-#    "openrouter/deepseek/deepseek-v3.2-exp"
-    "openrouter/moonshotai/kimi-k2.5"
-    "openrouter/openai/gpt-oss-120b"
-    "openrouter/openai/gpt-5.2"   
-    "openrouter/google/gemini-3-flash-preview"
-    "openrouter/google/gemini-3-pro-preview"
+#    "openrouter/qwen/qwen3.5-35b-a3b"
+#    "openrouter/xiaomi/mimo-v2-flash"
+#    "openrouter/moonshotai/kimi-k2.5"
+#    "openrouter/minimax/minimax-m2.5"       
     "openrouter/anthropic/claude-haiku-4.5"
-    "openrouter/anthropic/claude-sonnet-4.5" 
+    "openrouter/openai/gpt-oss-120b"
+    "openrouter/openai/gpt-5-mini"
+    "openrouter/google/gemini-3-flash-preview"
+    "openrouter/deepseek/deepseek-v3.2-exp"
 )
 
 # Parse command line arguments
@@ -118,6 +119,7 @@ run_benchmark() {
         --hash-re "$HASH_RE" \
         --num-tests "$NUM_TESTS" \
         --languages "$LANGUAGES" \
+        --tries 2 \
         --exercises-dir "$EXERCISES_DIR"
 
     echo "Benchmark completed: $run_name"

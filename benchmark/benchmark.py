@@ -515,7 +515,8 @@ def load_results(results_dir, stats_languages=None):
                 results["test_cases_total"] = total_cases
             if passed_cases is not None:
                 results["test_cases_passed"] = passed_cases
-
+            if passed_cases is not None and total_cases is not None:
+                results["test_cases_pass_ratio"] = passed_cases / total_cases
             # Update the JSON file immediately to keep data fresh
             fname.write_text(json.dumps(results, indent=4))
             logger.debug(f"Updated {fname} with test case counts")
@@ -583,7 +584,8 @@ def summarize_results(results_dir, verbose, stats_languages=None):
     res.completion_tokens = 0
     res.test_cases_total = 0
     res.test_cases_passed = 0
-
+    res.test_cases_pass_ratio_sum = 0.0
+    res.test_cases_pass_ratio_count = 0
     res.reasoning_effort = None
     res.thinking_tokens = None
     res.map_tokens = None
@@ -621,6 +623,8 @@ def summarize_results(results_dir, verbose, stats_languages=None):
         lang_stats.completion_tokens = 0
         lang_stats.test_cases_total = 0
         lang_stats.test_cases_passed = 0
+        lang_stats.test_cases_pass_ratio_sum = 0.0
+        lang_stats.test_cases_pass_ratio_count = 0
         lang_to_stats[lang] = lang_stats
         lang_to_passed_tests[lang] = [0] * tries
 
@@ -681,6 +685,11 @@ def summarize_results(results_dir, verbose, stats_languages=None):
                 add("test_cases_total", total_cases, res, lang_stats)
             if passed_cases is not None:
                 add("test_cases_passed", passed_cases, res, lang_stats)
+
+            pass_ratio = results.get("test_cases_pass_ratio")
+            if pass_ratio is not None:
+                add("test_cases_pass_ratio_sum", pass_ratio, res, lang_stats)
+                add("test_cases_pass_ratio_count", 1, res, lang_stats)
 
             res.reasoning_effort = results.get("reasoning_effort")
             res.thinking_tokens = results.get("thinking_tokens")
@@ -764,6 +773,12 @@ def summarize_results(results_dir, verbose, stats_languages=None):
         res.test_cases_percentage = 100 * res.test_cases_passed / res.test_cases_total
         print(f"  test_cases_percentage: {res.test_cases_percentage:.1f}")
 
+    if res.test_cases_pass_ratio_count > 0:
+        res.test_cases_pass_ratio_avg = (
+            100 * res.test_cases_pass_ratio_sum / res.test_cases_pass_ratio_count
+        )
+        print(f"  test_cases_pass_ratio_avg: {res.test_cases_pass_ratio_avg:.1f}")
+
     if variants["model"]:
         a_model = set(variants["model"]).pop()
         command = f"cecli --model {a_model}"
@@ -800,6 +815,18 @@ def summarize_results(results_dir, verbose, stats_languages=None):
                 setattr(lang_stats, f"pass_num_{i + 1}", num_passed)
                 pass_rate = 100 * num_passed / float(lang_stats.completed_tests)
                 setattr(lang_stats, f"pass_rate_{i + 1}", pass_rate)
+
+            if lang_stats.test_cases_pass_ratio_count > 0:
+                lang_stats.test_cases_pass_ratio_avg = (
+                    100
+                    * lang_stats.test_cases_pass_ratio_sum
+                    / lang_stats.test_cases_pass_ratio_count
+                )
+            else:
+                lang_stats.test_cases_pass_ratio_avg = 0.0
+
+            del lang_stats.test_cases_pass_ratio_sum
+            del lang_stats.test_cases_pass_ratio_count
 
             # Then format attributes into ready-to-print strings
             for attr in lang_stats.__dict__:
@@ -870,6 +897,11 @@ def summarize_results(results_dir, verbose, stats_languages=None):
     console.rule()
 
     # print(json.dumps(vars(res), indent=4, sort_keys=True))
+    if hasattr(res, "test_cases_pass_ratio_sum"):
+        del res.test_cases_pass_ratio_sum
+    if hasattr(res, "test_cases_pass_ratio_count"):
+        del res.test_cases_pass_ratio_count
+
     return res
 
 
@@ -1156,6 +1188,7 @@ async def run_test_real(
             verbose=verbose,
             yes_always_commands=True,
             max_reflections=0,
+            file_diffs=False,
         ),
         map_mul_no_files=4,
         mcp_manager=None,
