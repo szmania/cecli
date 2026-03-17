@@ -562,34 +562,10 @@ class AgentCoder(Coder):
 
         ConversationChunks.add_readonly_files_messages(self)
         ConversationChunks.add_chat_files_messages(self)
-        ConversationChunks.add_file_context_messages(self)
+        # ConversationChunks.add_file_context_messages(self)
 
         # Add post-message context blocks (priority 250 - between CUR and REMINDER)
         ConversationChunks.add_post_message_context_blocks(self)
-
-        # Handle reminder logic
-        # Only add reminder if it wasn't already added to main_sys (when examples_as_sys_msg is True)
-        if self.gpt_prompts.system_reminder and not (
-            self.main_model.examples_as_sys_msg and self.main_model.reminder == "sys"
-        ):
-            reminder_content = self.fmt_system_prompt(self.gpt_prompts.system_reminder)
-
-            # Calculate token counts to decide whether to add reminder
-            messages = ConversationManager.get_messages_dict()
-            messages_tokens = self.main_model.token_count(messages)
-
-            if messages_tokens is not None:
-                max_input_tokens = self.main_model.info.get("max_input_tokens") or 0
-
-                if not max_input_tokens or messages_tokens < max_input_tokens:
-                    ConversationManager.add_message(
-                        message_dict={
-                            "role": "user",
-                            "content": reminder_content,
-                        },
-                        tag=MessageTag.REMINDER,
-                        mark_for_delete=0,
-                    )
 
         return ConversationManager.get_messages_dict()
 
@@ -1060,7 +1036,7 @@ I have detected repetitive usage of the following tools: {', '.join([f'`{t}`' fo
                 repetition_warning += f"""
 ### CRITICAL: Execution Loop Detected
 You are currently "spinning gears". To break the exploration loop, you must:
-1. **Analyze**: Use the `Thinking` tool to summarize exactly what you have found so far and why you were stuck.
+1. **Analyze**: Use the `Thinking` tool exactly once to summarize what you have found so far and why you were stuck.
 2. **Pivot**: Abandon or modify your current exploration strategy. Try focusing on different files or running tests.
 3. **Reframe**: To ensure your logic reset, include a 2-sentence story about {animal} {verb} {fruit} in your thoughts.
 

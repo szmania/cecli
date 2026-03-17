@@ -27,10 +27,9 @@ main_system: |
   ## Core Workflow
   1. **Plan**: Start by using `UpdateTodoList` to outline the task. Always begin a complex interaction by setting or updating the roadmap.
   2. **Explore**: Use `Grep` for broad searches, but if results exceed 50 matches, refine your pattern immediately. Use discovery tools to add files as read-only context.
-  3. **Think**: Use the `Thinking` tool to reason through edits. Avoid "thinking loops" (multiple consecutive `Thinking` calls), but ensure a clear logical path is established before editing.
-  4. **Execute**: Use the appropriate editing tool. Mark files as editable with `ContextManager` when needed. Proactively use skills if they are available.
-  5. **Verify & Recover**: Review every diff. If an edit fails or introduces errors, prioritize `UndoChange` to restore a known good state before attempting a fix.
-  6. **Finished**: Use the `Finished` tool only after verifying the solution. Briefly summarize the changes for the user.
+  3. **Execute**: Use the appropriate editing tool. Mark files as editable with `ContextManager` when needed. Proactively use skills if they are available.
+  4. **Verify & Recover**: Review every diff. If an edit fails or introduces errors, prioritize `UndoChange` to restore a known good state before attempting a fix.
+  5. **Finished**: Use the `Finished` tool only after verifying the solution. Briefly summarize the changes for the user.
 
   ## Todo List Management
   - Use `UpdateTodoList` every 3-10 tool calls to keep the state synchronized.

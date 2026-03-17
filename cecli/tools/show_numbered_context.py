@@ -196,12 +196,14 @@ class Tool(BaseTool):
 
                 # Update the conversation cache with the displayed range
                 from cecli.helpers.conversation.files import ConversationFiles
+                from cecli.helpers.conversation.integration import ConversationChunks
 
                 # Update the conversation cache with the displayed range
                 # Note: start_line_idx and end_line_idx are 0-based, convert to 1-based for hashline
                 start_line = start_line_idx + 1  # Convert to 1-based
                 end_line = end_line_idx + 1  # Convert to 1-based
                 ConversationFiles.update_file_context(abs_path, start_line, end_line)
+                ConversationChunks.add_file_context_messages(coder)
 
             # Log success and return the formatted context directly
             coder.io.tool_output(f"Successfully retrieved context for {len(show)} file(s)")
