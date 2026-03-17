@@ -971,6 +971,8 @@ class Model(ModelSettings):
                 print(f"{msg_role} ({len(msg_content)}): {msg_trunc}")
         kwargs = dict(model=self.name, stream=stream)
 
+        kwargs["drop_params"] = True
+
         if kwargs["stream"]:
             kwargs["stream_options"] = {"include_usage": True}
 

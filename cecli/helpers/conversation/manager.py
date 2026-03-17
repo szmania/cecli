@@ -624,13 +624,13 @@ class ConversationManager:
                 if not content.strip().startswith('<context name="user_input" from="agent">'):
                     continue
 
-            if role not in ["system"]:
+            if role not in ["system", "user"]:
                 continue
 
             last_message_idx = i
             break
 
-        # Find the second-to-last non-"<context" message with valid role
+        # Find the second-to-last message with valid role
         if last_message_idx >= 0:
             for i in range(last_message_idx - 1, -1, -1):
                 msg = messages_dict[i]
@@ -641,11 +641,7 @@ class ConversationManager:
                 if tool_calls is not None and len(tool_calls):
                     continue
 
-                if isinstance(content, str) and content.strip().startswith("<context"):
-                    if not content.strip().startswith('<context name="user_input" from="agent">'):
-                        continue
-
-                if role not in ["system"]:
+                if role not in ["system", "user"]:
                     continue
 
                 second_last_message_idx = i

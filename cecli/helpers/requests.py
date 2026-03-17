@@ -94,7 +94,6 @@ def concatenate_user_messages(messages):
     if not messages:
         return messages
 
-    # Work backwards from the end
     user_messages_to_concat = []
     i = len(messages) - 1
 
@@ -103,7 +102,9 @@ def concatenate_user_messages(messages):
         role = msg.get("role")
         content = msg.get("content", "")
 
-        # If it's a user message, add it to the collection
+        if isinstance(content, list):
+            break
+
         if role == "user":
             user_messages_to_concat.insert(0, content)  # Insert at beginning to maintain order
             i -= 1
@@ -117,19 +118,26 @@ def concatenate_user_messages(messages):
         # If we hit any other type of message (non-empty assistant, tool, system, etc.), stop
         break
 
-    # If we collected any user messages to concatenate
+        # If we collected any user messages to concatenate
     if user_messages_to_concat:
         # Remove the original user messages (and any skipped empty assistant messages)
         # by keeping only messages up to index i (inclusive)
         result = messages[: i + 1] if i >= 0 else []
 
-        # Add the concatenated user message at the end
-        concatenated_content = "\n".join(user_messages_to_concat)
+        # Helper to extract text from strings or structured content lists
+        def get_text(c):
+            if isinstance(c, str):
+                return c
+            if isinstance(c, list) and len(c) > 0:
+                # Extracts 'text' from the first block if it's a dict
+                return c[0].get("text", "") if isinstance(c[0], dict) else str(c[0])
+            return str(c)
+
+        concatenated_content = "\n".join(get_text(c) for c in user_messages_to_concat)
         result.append({"role": "user", "content": concatenated_content})
 
         return result
 
-    # No user messages to concatenate, return original
     return messages
 
 

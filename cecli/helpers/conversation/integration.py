@@ -73,6 +73,7 @@ class ConversationChunks:
                 tag=MessageTag.REMINDER,
                 hash_key=("main", "system_reminder"),
                 force=True,
+                mark_for_delete=0,
             )
 
     @classmethod
@@ -117,7 +118,7 @@ class ConversationChunks:
             should_clear = True
 
         # Message count-based check (for periodic refresh)
-        if diff_count > 0 and other_count > 0 and diff_count / other_count > 5:
+        if diff_count > 0 and other_count > 0 and diff_count / other_count > 20:
             should_clear = True
 
         if should_clear:
@@ -646,12 +647,14 @@ class ConversationChunks:
                 message_dict=user_msg,
                 tag=MessageTag.FILE_CONTEXTS,
                 hash_key=("file_context_user", file_path),
+                force=True,
             )
 
             ConversationManager.add_message(
                 message_dict=assistant_msg,
                 tag=MessageTag.FILE_CONTEXTS,
                 hash_key=("file_context_assistant", file_path),
+                force=True,
             )
 
     @classmethod

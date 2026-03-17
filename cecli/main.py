@@ -1,4 +1,12 @@
 import os
+import sys
+
+try:
+    if sys.platform == "win32":
+        sys.stdout.reconfigure(encoding="utf-8")
+        sys.stderr.reconfigure(encoding="utf-8")
+except Exception:
+    pass
 
 from cecli.helpers.file_searcher import handle_core_files
 
@@ -10,11 +18,11 @@ try:
 except Exception as e:
     print(e)
     pass
+
 import asyncio
 import json
 import os
 import re
-import sys
 import threading
 import time
 import traceback

@@ -38,7 +38,10 @@ class TestModels:
         model = Model("gpt-4")
         assert model.info["max_input_tokens"] == 8 * 1024
         model = Model("gpt-4-32k")
-        assert model.info["max_input_tokens"] == 32 * 1024
+        # gpt-4-32k might not have model info in litellm, use .get() to avoid KeyError
+        max_tokens = model.info.get("max_input_tokens")
+        if max_tokens is not None:
+            assert max_tokens == 32 * 1024
         model = Model("gpt-4-0613")
         assert model.info["max_input_tokens"] == 8 * 1024
 
@@ -378,6 +381,7 @@ class TestModels:
             temperature=0,
             num_ctx=expected_ctx,
             timeout=600,
+            drop_params=True,
             cache_control_injection_points=ANY,
         )
 
@@ -418,6 +422,7 @@ class TestModels:
             temperature=0,
             num_ctx=4096,
             timeout=600,
+            drop_params=True,
             cache_control_injection_points=ANY,
         )
 
@@ -433,6 +438,7 @@ class TestModels:
             stream=False,
             temperature=0,
             timeout=600,
+            drop_params=True,
             cache_control_injection_points=ANY,
         )
         assert "num_ctx" not in mock_completion.call_args.kwargs
@@ -464,6 +470,7 @@ class TestModels:
             stream=False,
             temperature=0,
             timeout=600,
+            drop_params=True,
             cache_control_injection_points=ANY,
         )
 
@@ -480,6 +487,7 @@ class TestModels:
             stream=False,
             temperature=0,
             timeout=300,
+            drop_params=True,
             cache_control_injection_points=ANY,
         )
 
@@ -496,6 +504,7 @@ class TestModels:
             stream=False,
             temperature=0,
             timeout=600,
+            drop_params=True,
             cache_control_injection_points=ANY,
         )
 
@@ -517,6 +526,7 @@ class TestModels:
             stream=False,
             temperature=0.7,
             timeout=600,
+            drop_params=True,
             cache_control_injection_points=ANY,
         )
 

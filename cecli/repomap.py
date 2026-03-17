@@ -42,18 +42,55 @@ class TagBase(
 
     def __new__(
         cls,
-        rel_fname,
-        fname,
-        line,
-        name,
-        kind,
+        *args,
+        rel_fname=None,
+        fname=None,
+        line=None,
+        name=None,
+        kind=None,
         specific_kind=None,
         start_line=None,
         end_line=None,
         start_byte=None,
         end_byte=None,
     ):
-        # Provide a default value for specific_kind to handle old cached objects
+        # Handle both positional and keyword arguments for backward compatibility
+        # with cached data that might have been created with different versions
+        if args:
+            # Positional arguments provided
+            if len(args) >= 1:
+                rel_fname = args[0]
+            if len(args) >= 2:
+                fname = args[1]
+            if len(args) >= 3:
+                line = args[2]
+            if len(args) >= 4:
+                name = args[3]
+            if len(args) >= 5:
+                kind = args[4]
+            if len(args) >= 6:
+                specific_kind = args[5]
+            if len(args) >= 7:
+                start_line = args[6]
+            if len(args) >= 8:
+                end_line = args[7]
+            if len(args) >= 9:
+                start_byte = args[8]
+            if len(args) >= 10:
+                end_byte = args[9]
+
+        # Provide default values for backward compatibility
+        if specific_kind is None:
+            specific_kind = kind
+        if start_line is None:
+            start_line = line
+        if end_line is None:
+            end_line = line
+        if start_byte is None:
+            start_byte = 0
+        if end_byte is None:
+            end_byte = 0
+
         return super(TagBase, cls).__new__(
             cls,
             rel_fname,
@@ -168,6 +205,7 @@ class RepoMap:
         self.root = repo_root or os.getcwd()
 
         # Allow opting into an in-memory tags cache to avoid disk/SQLite locks
+        self.use_memory_cache = use_memory_cache
         if use_memory_cache:
             self.TAGS_CACHE = dict()
         else:
