@@ -100,6 +100,9 @@ class YamlHelpFormatter(argparse.HelpFormatter):
 # config file. Keys for all APIs can be stored in a .env file
 # https://cecli.dev/docs/config/dotenv.html
 
+# workspace-paths:
+#   - /path/to/shared/workspace
+#   - another/workspace
 """
 
     def _format_action(self, action):

@@ -393,6 +393,25 @@ def get_parser(default_config_files, git_root):
     )
 
     ##########
+    group = parser.add_argument_group("Workspace settings")
+    # Custom handling for workspace-paths environment variable
+    workspace_paths_env = os.environ.get("CECLI_WORKSPACE_PATHS")
+    if workspace_paths_env:
+        # Split by colon or semicolon for path separation
+        workspace_paths_default = [
+            p.strip() for p in workspace_paths_env.replace(";", ":").split(":") if p.strip()
+        ]
+    else:
+        workspace_paths_default = []
+    group.add_argument(
+        "--workspace-paths",
+        action="append",
+        metavar="WORKSPACE_PATH",
+        help="Specify additional workspace directories (can be used multiple times)",
+        default=workspace_paths_default,
+    )
+
+    ##########
     group = parser.add_argument_group("Security Settings")
     group.add_argument(
         "--security-config",

@@ -1080,6 +1080,11 @@ async def main_async(argv=None, input=None, output=None, force_git_root=None, re
                     f" {', '.join(loaded_hooks)}"
                 )
 
+        # Initialize workspace paths configuration
+        workspace_paths = args.workspace_paths if hasattr(args, "workspace_paths") and args.workspace_paths else []
+        if args.verbose and workspace_paths:
+            io.tool_output(f"Additional workspace paths configured: {workspace_paths}")
+
         coder = await Coder.create(
             main_model=main_model,
             edit_format=args.edit_format,
@@ -1123,6 +1128,7 @@ async def main_async(argv=None, input=None, output=None, force_git_root=None, re
             repomap_in_memory=args.map_memory_cache,
             linear_output=args.linear_output,
             security_config=args.security_config,
+            workspace_paths=workspace_paths,
         )
         if args.show_model_warnings and not suppress_pre_init:
             problem = await models.sanity_check_models(pre_init_io, main_model)
