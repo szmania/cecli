@@ -44,7 +44,7 @@ class AgentCoder(Coder):
     hashlines = True
 
     def __init__(self, *args, **kwargs):
-        self.workspace_paths = kwargs.pop("workspace_paths", [])
+        super().__init__(*args, **kwargs)
         self.recently_removed = {}
         self.tool_usage_history = []
         self.tool_usage_retries = 20
