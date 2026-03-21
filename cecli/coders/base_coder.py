@@ -324,6 +324,7 @@ class Coder:
         repomap_in_memory=False,
         linear_output=False,
         security_config=None,
+        workspace_paths=None,
         uuid="",
     ):
         # initialize from args.map_cache_dir
