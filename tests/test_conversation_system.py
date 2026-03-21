@@ -6,10 +6,10 @@ import pytest
 
 from cecli.helpers.conversation import (
     BaseMessage,
+    ConversationChunks,
     ConversationFiles,
     ConversationManager,
     MessageTag,
-    initialize_conversation_system,
 )
 from cecli.io import InputOutput
 
@@ -123,7 +123,7 @@ class TestConversationManager:
         self.test_coder = TestCoder()
 
         # Initialize conversation system
-        initialize_conversation_system(self.test_coder)
+        ConversationChunks.initialize_conversation_system(self.test_coder)
         yield
         ConversationManager.reset()
 
@@ -487,7 +487,7 @@ class TestConversationManager:
         coder = TestCoder()
 
         # Initialize conversation system
-        initialize_conversation_system(coder)
+        ConversationChunks.initialize_conversation_system(coder)
 
         # Add messages with different tags
         ConversationManager.add_message(
@@ -523,7 +523,7 @@ class TestConversationManager:
         # Create a test coder with add_cache_headers = False (default)
         coder_false = TestCoder()
         coder_false.add_cache_headers = False
-        initialize_conversation_system(coder_false)
+        ConversationChunks.initialize_conversation_system(coder_false)
 
         # Add some messages
         ConversationManager.add_message(
@@ -560,7 +560,7 @@ class TestConversationManager:
 
         coder_true = TestCoder()
         coder_true.add_cache_headers = True
-        initialize_conversation_system(coder_true)
+        ConversationChunks.initialize_conversation_system(coder_true)
 
         # Add the same messages
         ConversationManager.add_message(
@@ -631,7 +631,7 @@ class TestConversationFiles:
         self.test_coder = TestCoder()
 
         # Initialize conversation system
-        initialize_conversation_system(self.test_coder)
+        ConversationChunks.initialize_conversation_system(self.test_coder)
         yield
         ConversationFiles.reset()
 
