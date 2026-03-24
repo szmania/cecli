@@ -1596,6 +1596,7 @@ class Coder:
 
         while True:
             self.reflected_message = None
+            self.empty_response = False
             self.tool_reflection = False
 
             if float(self.total_cost) > self.cost_multiplier * (
@@ -1615,18 +1616,21 @@ class Coder:
 
             await self.hot_reload()
 
-            if not self.reflected_message:
-                await self.auto_save_session(force=True)
-                break
+            if not self.empty_response:
+                if not self.reflected_message:
+                    await self.auto_save_session(force=True)
+                    break
 
-            if self.num_reflections >= self.max_reflections:
-                self.io.tool_warning(f"Only {self.max_reflections} reflections allowed, stopping.")
-                break
+                if self.num_reflections >= self.max_reflections:
+                    self.io.tool_warning(
+                        f"Only {self.max_reflections} reflections allowed, stopping."
+                    )
+                    break
 
-            self.num_reflections += 1
+                self.num_reflections += 1
 
-            if self.tool_reflection:
-                self.num_reflections -= 1
+                if self.tool_reflection:
+                    self.num_reflections -= 1
 
             if self.reflected_message is True:
                 message = None
@@ -3118,6 +3122,7 @@ class Coder:
             await asyncio.sleep(4)
             self._has_empty_reflected = True
             self.reflected_message = True
+            self.empty_response = True
         else:
             self._has_empty_reflected = False
 

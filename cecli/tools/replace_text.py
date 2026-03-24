@@ -172,10 +172,16 @@ class Tool(BaseTool):
 
                     # Apply all operations in batch
                     try:
-                        new_content, _, _ = apply_hashline_operations(
+                        new_content, successful_ops, failed_ops = apply_hashline_operations(
                             original_content=original_content,
                             operations=operations,
                         )
+
+                        if len(failed_ops):
+                            for failed_op in failed_ops:
+                                op_index = failed_op["index"]
+                                op_error = failed_op["error"]
+                                all_failed_edits.append(f"Edit {op_index + 1}: {str(op_error)}")
                     except Exception as e:
                         # If batch operation fails, mark all operations as failed
                         for edit_index, _ in file_edits:

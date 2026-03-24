@@ -98,7 +98,7 @@ class Tool(BaseTool):
                 file_path = show_op.get("file_path")
                 start_pattern = show_op.get("start_pattern")
                 end_pattern = show_op.get("end_pattern")
-                padding = show_op.get("padding", 5)
+                padding = max(int(show_op.get("padding", 5)), 5)
 
                 if file_path is None:
                     raise ToolError(
@@ -151,6 +151,17 @@ class Tool(BaseTool):
                     else:
                         end_indices = [i for i, line in enumerate(lines) if end_pattern in line]
 
+                    if len(start_indices) > 5:
+                        raise ToolError(
+                            f"Start pattern search term '{start_pattern}' too broad. Be more"
+                            " specific."
+                        )
+
+                    if len(end_indices) > 5:
+                        raise ToolError(
+                            f"End pattern search term'{end_pattern}' too broad. Be more specific."
+                        )
+
                     best_pair = None
                     min_dist = float("inf")
 
@@ -165,8 +176,10 @@ class Tool(BaseTool):
                         raise ToolError(
                             f"Start pattern '{start_pattern}' not found in {file_path}."
                         )
+
                     if not end_indices:
                         raise ToolError(f"End pattern '{end_pattern}' not found in {file_path}.")
+
                     if best_pair is None:
                         raise ToolError(
                             f"End pattern '{end_pattern}' not found after start pattern in"
