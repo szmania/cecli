@@ -23,7 +23,11 @@ class Tool(BaseTool):
                 " used for start_pattern and end_pattern to represent the first and last lines of"
                 " the file respectively. Never use hashlines as the start_pattern and end_pattern"
                 " values. These values must be lines from the content of the file."
-                " It is usually best to use method or function names as start_patterns."
+                " They should not contain newlines."
+                " Avoid using generic keywords."
+                " Do not use the same pattern for the start_pattern and end_pattern."
+                " It is usually best to use function names and other block identifiers as "
+                " start_patterns and end_patterns."
             ),
             "parameters": {
                 "type": "object",

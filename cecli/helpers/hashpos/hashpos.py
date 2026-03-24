@@ -80,7 +80,7 @@ class HashPos:
                     # Use the actual coprime period for the circular logic
                     dist = min(dist, self.PERIOD - dist)
 
-                    if dist <= 30:
+                    if dist <= 5:
                         content_matches.append((dist, i))
 
         if perfect_matches:
