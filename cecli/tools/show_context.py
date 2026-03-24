@@ -157,11 +157,11 @@ class Tool(BaseTool):
                             " it again. Be more specific."
                         )
 
-                    if len(end_indices) > 5:
-                        raise ToolError(
-                            f"End pattern '{end_text}' too broad. Do not search for it"
-                            " again. Be more specific."
-                        )
+                    # if len(end_indices) > 5:
+                    #     raise ToolError(
+                    #         f"End pattern '{end_text}' too broad. Do not search for it"
+                    #         " again. Be more specific."
+                    #     )
 
                     best_pair = None
                     min_dist = float("inf")
