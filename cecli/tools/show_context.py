@@ -153,13 +153,13 @@ class Tool(BaseTool):
 
                     if len(start_indices) > 5:
                         raise ToolError(
-                            f"Start pattern search term '{start_text}' too broad. Do not search for"
+                            f"Start pattern '{start_text}' too broad. Do not search for"
                             " it again. Be more specific."
                         )
 
                     if len(end_indices) > 5:
                         raise ToolError(
-                            f"End pattern search term'{end_text}' too broad. Do not search for it"
+                            f"End pattern '{end_text}' too broad. Do not search for it"
                             " again. Be more specific."
                         )
 
