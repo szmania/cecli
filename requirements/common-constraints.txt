@@ -532,7 +532,9 @@ typer==0.20.0
     # via -r requirements/requirements-dev.in
 typing-extensions==4.15.0
     # via
+    #   aiosignal
     #   aiosqlite
+    #   anyio
     #   beautifulsoup4
     #   huggingface-hub
     #   llama-index-core
@@ -542,8 +544,11 @@ typing-extensions==4.15.0
     #   pydantic
     #   pydantic-core
     #   pyee
+    #   pytest-asyncio
+    #   referencing
     #   sentence-transformers
     #   sqlalchemy
+    #   starlette
     #   textual
     #   torch
     #   typer
