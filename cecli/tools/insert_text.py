@@ -72,6 +72,8 @@ class Tool(BaseTool):
             raise ToolError(
                 "Please call `ShowContext` first to make sure edits are appropriately scoped"
             )
+        else:
+            coder.edit_allowed = False
 
         tool_name = "InsertText"
         try:
@@ -88,6 +90,7 @@ class Tool(BaseTool):
                     text=content,
                 )
             except Exception as e:
+                coder.edit_allowed = True
                 raise ToolError(f"Hashline insertion failed: {str(e)}")
 
             # Check if any changes were made
@@ -123,7 +126,6 @@ class Tool(BaseTool):
             )
 
             coder.files_edited_by_tools.add(rel_path)
-            coder.edit_allowed = False
 
             # 5. Format and return result
             success_message = f"Inserted content at {start_line} in {file_path}"

@@ -88,6 +88,8 @@ class Tool(BaseTool):
             raise ToolError(
                 "Please call `ShowContext` first to make sure edits are appropriately scoped"
             )
+        else:
+            coder.edit_allowed = False
 
         tool_name = "ReplaceText"
         try:
@@ -241,10 +243,9 @@ class Tool(BaseTool):
 
             # 4. Check if any edits succeeded overall
             if total_successful_edits == 0:
+                coder.edit_allowed = True
                 error_msg = "No edits were successfully applied:\n" + "\n".join(all_failed_edits)
                 raise ToolError(error_msg)
-            else:
-                coder.edit_allowed = False
 
             # 5. Handle dry run overall
             if dry_run:
