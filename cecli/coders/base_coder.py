@@ -2146,6 +2146,9 @@ class Coder:
                 return False
         return True
 
+    def get_active_model_name(self):
+        return self.main_model.name
+
     async def send_message(self, inp):
         # Notify IO that LLM processing is starting
         self.io.llm_started()
@@ -2175,7 +2178,8 @@ class Coder:
         self.multi_response_content = ""
         if self.show_pretty():
             spinner_text = (
-                f"Waiting for {self.main_model.name} • ${self.format_cost(self.total_cost)} session"
+                f"Waiting for {self.get_active_model_name()} •"
+                f" ${self.format_cost(self.total_cost)} session"
             )
             self.io.start_spinner(spinner_text)
 
