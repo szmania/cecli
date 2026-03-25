@@ -99,6 +99,10 @@ class AgentCoder(Coder):
         if not model:
             if self.main_model.agent_model and self.main_model.agent_model is not self.main_model:
                 model = self.main_model.agent_model
+                if self.io.spinner_task and not self.io.spinner_task.done():
+                    self.io.spinner_text = (
+                        f"Waiting for {model.name} • ${self.format_cost(self.total_cost)} session"
+                    )
             else:
                 model = self.main_model
         async for chunk in super().send(messages, model, functions, tools):
