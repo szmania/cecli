@@ -95,7 +95,6 @@ class AgentCoder(Coder):
         ToolRegistry.build_registry(agent_config=self.agent_config)
         super().__init__(*args, **kwargs)
 
-
     async def send(self, messages, model=None, functions=None, tools=None):
         if not model:
             if self.main_model.agent_model and self.main_model.agent_model is not self.main_model:
