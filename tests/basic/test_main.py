@@ -1373,7 +1373,7 @@ def test_mcp_servers_parsing(dummy_io, git_temp_dir, mocker):
     mcp_file = Path("mcp_servers.json")
     mcp_content = {"mcpServers": {"git": {"command": "uvx", "args": ["mcp-server-git"]}}}
     mcp_file.write_text(json.dumps(mcp_content))
-    main(["--mcp-servers-file", str(mcp_file), "--exit", "--yes-always"], **dummy_io)
+    main(["--mcp-servers-files", str(mcp_file), "--exit", "--yes-always"], **dummy_io)
     mock_coder_create.assert_called_once()
     _, kwargs = mock_coder_create.call_args
 
@@ -1384,7 +1384,7 @@ def test_mcp_servers_parsing(dummy_io, git_temp_dir, mocker):
 
 
 def test_mcp_servers_file_multiple(dummy_io, git_temp_dir, mocker):
-    mocker.patch("cecli.mcp.server.McpServer.start", new_callable=AsyncMock)
+    mocker.patch("cecli.mcp.server.McpServer.connect", new_callable=AsyncMock)
     mock_coder_create = mocker.patch("cecli.coders.Coder.create")
     mock_coder_instance = MagicMock()
     mock_coder_instance.mcp_manager = False
@@ -1401,9 +1401,9 @@ def test_mcp_servers_file_multiple(dummy_io, git_temp_dir, mocker):
 
     main(
         [
-            "--mcp-servers-file",
+            "--mcp-servers-files",
             str(mcp_file1),
-            "--mcp-servers-file",
+            "--mcp-servers-files",
             str(mcp_file2),
             "--exit",
             "--yes-always",
