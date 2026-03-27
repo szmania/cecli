@@ -9,7 +9,6 @@ import pytest
 from cecli.coders import Coder
 from cecli.coders.wholefile_coder import WholeFileCoder
 from cecli.dump import dump  # noqa: F401
-from cecli.helpers.conversation import ConversationService
 from cecli.io import InputOutput
 
 
@@ -21,13 +20,15 @@ class TestWholeFileCoder:
         os.chdir(self.tempdir)
         self.GPT35 = gpt35_model
         # Reset conversation system before each test
-        ConversationService.get_chunks(self.tempdir).reset()
+        # Note: We can't reset here because we don't have a coder object yet
+        # ConversationService.get_chunks(self.tempdir).reset()
         yield
 
         os.chdir(self.original_cwd)
         shutil.rmtree(self.tempdir, ignore_errors=True)
         # Reset conversation system after each test
-        ConversationService.get_chunks(self.tempdir).reset()
+        # Note: We can't reset here because we don't have a coder object
+        # ConversationService.get_chunks(self.tempdir).reset()
 
     async def test_no_files(self):
         # Initialize WholeFileCoder with the temporary directory

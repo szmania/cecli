@@ -38,6 +38,7 @@ class AgentCoder(Coder):
     prompt_format = "agent"
     context_management_enabled = True
     hashlines = True
+    stop_on_empty = False
 
     def __init__(self, *args, **kwargs):
         self.recently_removed = {}

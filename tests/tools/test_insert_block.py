@@ -51,6 +51,7 @@ class DummyCoder:
         self.files_edited_by_tools = set()
         self.abs_read_only_fnames = set()
         self.abs_fnames = set()
+        self.edit_allowed = True
 
     def abs_root_path(self, file_path):
         path = Path(file_path)
@@ -79,10 +80,10 @@ def test_position_top_succeeds_with_no_patterns(coder_with_file):
     hashed_content = hashline(content)
     lines = hashed_content.splitlines()
     line1_hashline = lines[0]  # Index 0 is line 1
-    # HashPos format: [{4-char-hash}]content
-    # Extract hash fragment from [hash]content format
-    hash_fragment = line1_hashline[1:5]  # Characters after '[' and before ']'
-    start_line = f"[{hash_fragment}]"
+    # HashPos format: {4-char-hash}::content
+    # Extract hash fragment from {hash}::content format
+    hash_fragment = line1_hashline.split("::", 1)[0]  # Everything before "::"
+    start_line = hash_fragment  # Just the hash fragment, no brackets
 
     result = insert_text.Tool.execute(
         coder,
@@ -122,10 +123,10 @@ def test_trailing_newline_preservation(coder_with_file):
     hashed_content = hashline(content)
     lines = hashed_content.splitlines()
     line1_hashline = lines[0]  # Index 0 is line 1
-    # HashPos format: [{4-char-hash}]content
-    # Extract hash fragment from [hash]content format
-    hash_fragment = line1_hashline[1:5]  # Characters after '[' and before ']'
-    start_line = f"[{hash_fragment}]"
+    # HashPos format: {4-char-hash}::content
+    # Extract hash fragment from {hash}::content format
+    hash_fragment = line1_hashline.split("::", 1)[0]  # Everything before "::"
+    start_line = hash_fragment  # Just the hash fragment, no brackets
 
     insert_text.Tool.execute(
         coder,
@@ -155,11 +156,10 @@ def test_no_trailing_newline_preservation(coder_with_file):
     hashed_content = hashline(content)
     lines = hashed_content.splitlines()
     line1_hashline = lines[0]  # Index 0 is line 1
-    # HashPos format: [{4-char-hash}]content
-    # Extract hash fragment from [hash]content format
-    hash_fragment = line1_hashline[1:5]  # Characters after '[' and before ']'
-    start_line = f"[{hash_fragment}]"
-
+    # HashPos format: {4-char-hash}::content
+    # Extract hash fragment from {hash}::content format
+    hash_fragment = line1_hashline.split("::", 1)[0]  # Everything before "::"
+    start_line = hash_fragment  # Just the hash fragment, no brackets
     insert_text.Tool.execute(
         coder,
         file_path="example.txt",
@@ -182,13 +182,12 @@ def test_line_number_beyond_file_length_appends(coder_with_file):
     content = file_path.read_text()
     hashed_content = hashline(content)
     # Extract hash fragment for line 2
-    # HashPos format: [{4-char-hash}]content
+    # HashPos format: {4-char-hash}::content
     lines = hashed_content.splitlines()
     line2_hashline = lines[1]  # Index 1 is line 2 (0-indexed)
-    # Extract hash fragment from [hash]content format
-    hash_fragment = line2_hashline[1:5]  # Characters after '[' and before ']'
-    start_line = f"[{hash_fragment}]"
-
+    # Extract hash fragment from {hash}::content format
+    hash_fragment = line2_hashline.split("::", 1)[0]  # Everything before "::"
+    start_line = hash_fragment  # Just the hash fragment, no brackets
     result = insert_text.Tool.execute(
         coder,
         file_path="example.txt",
@@ -212,10 +211,10 @@ def test_line_number_beyond_file_length_appends_no_trailing_newline(coder_with_f
     # Extract hash fragment for line 2
     lines = hashed_content.splitlines()
     line2_hashline = lines[1]  # Index 1 is line 2 (0-indexed)
-    # HashPos format: [{4-char-hash}]content
-    # Extract hash fragment from [hash]content format
-    hash_fragment = line2_hashline[1:5]  # Characters after '[' and before ']'
-    start_line = f"[{hash_fragment}]"
+    # HashPos format: {4-char-hash}::content
+    # Extract hash fragment from {hash}::content format
+    hash_fragment = line2_hashline.split("::", 1)[0]  # Everything before "::"
+    start_line = hash_fragment  # Just the hash fragment, no brackets
 
     insert_text.Tool.execute(
         coder,

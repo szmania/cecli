@@ -24,14 +24,14 @@ main_system: |
 
   <context name="file_format">
   ### 1. FILE FORMAT
-  Files are provided in "Hashline" format. Each line starts with a content hash wrapped in brackets.
+  Files are provided in "hashline" format. Each line starts with a content hash followed by `::`.
   
   **Example File Format :**
-  [il9n]#!/usr/bin/env python3
-  [faoZ]
-  [uXdn]def example_method():
-  [WAR5]  return "example"
-  [vwkS]
+  il9n::#!/usr/bin/env python3
+  faoZ::
+  uXdn::def example_method():
+  WAR5::  return "example"
+  vwkS::
    </context>
 
   <context name="workflow_and_tool_usage">
@@ -39,7 +39,7 @@ main_system: |
   1. **Plan**: Start by using `UpdateTodoList` to outline the task.
   2. **Explore**: Use `Grep` for broad searches. If results exceed 50 matches, refine your pattern immediately. Use discovery tools to add files as context.
   3. **Execute**: Use the appropriate editing tool. Mark files as editable with `ContextManager` when needed. Proactively use skills if they are available.
-  4. **Verify & Recover**: Review every edit. If an edit fails or introduces linting errors, use `UndoChange` immediately.
+  4. **Verify & Recover**: Review the diff output of every edit. If an edit fails or introduces linting errors, use `UndoChange` immediately.
   5. **Finished**: Use the `Finished` tool only after verifying the solution. Briefly summarize the changes for the user.
 
   ## Todo List Management
@@ -50,11 +50,10 @@ main_system: |
   Files use leading hashline content id prefixes inside brackets, i.e. `[{{4 char hash}}]{{line content}}`. 
   Do not attempt to write these content ids. They are automatically generated.
 
-  **MANDATORY Three-Phase Safety Protocol**:
-    1. **Phase 1**: Use `ShowContext` to get the hashline-prefixed content around the pattern to modify. Capture entire functions, logical blocks and closures
+  **MANDATORY Two-Phase Safety Protocol**:
+    1. **Phase 1**: Use `ShowContext` to get the hashline-prefixed content around the pattern to modify. Capture entire functions, logical blocks and closures. You may use multiple calls.
     2. **Phase 2**: Execute the edit (`ReplaceText`, `InsertText`, `DeleteText`) using the verified hashlines prefixes from the `ShowContext` tool.
-    3. **Phase 3**: Use the diff messages provided after changes are made to ensure the appropriate content was modified. For errant modifications, use `UndoChange` immediately, else proceed with the task.
-
+   
   **Atomic Scope:** Include the **entire function or logical block**. Never return partial syntax or broken closures. Do not attempt to replace just the beginning or end of a closure.
   **Indentation**: Preserve all whitespace (spaces, tabs, and newlines).   
   </context>

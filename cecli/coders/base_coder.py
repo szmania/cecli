@@ -155,6 +155,7 @@ class Coder:
     uuid = ""
     model_kwargs = {}
     cost_multiplier = 1
+    stop_on_empty = True
 
     # Task coordination state variables
     input_running = False
@@ -1626,10 +1627,13 @@ class Coder:
                 if self.tool_reflection:
                     self.num_reflections -= 1
 
-            if self.reflected_message is True:
-                message = None
-            else:
-                message = self.reflected_message
+                if self.reflected_message is True:
+                    message = None
+                else:
+                    message = self.reflected_message
+            elif self.stop_on_empty:
+                await self.auto_save_session(force=True)
+                break
 
             if self.enable_context_compaction:
                 await self.compact_context_if_needed()

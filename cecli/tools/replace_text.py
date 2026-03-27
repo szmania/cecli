@@ -63,7 +63,6 @@ class Tool(BaseTool):
                         "description": "Array of edits to apply.",
                     },
                     "change_id": {"type": "string"},
-                    "dry_run": {"type": "boolean", "default": False},
                 },
                 "required": ["edits"],
             },
@@ -76,7 +75,6 @@ class Tool(BaseTool):
         coder,
         edits=None,
         change_id=None,
-        dry_run=False,
         **kwargs,
     ):
         """
@@ -158,17 +156,11 @@ class Tool(BaseTool):
                                 "replace_text": edit_replace_text,
                             }
                             file_metadata.append(metadata)
-                            file_successful_edits += 1
 
                         except Exception as e:
                             # Record failed edit but continue with others
                             file_failed_edits.append(f"Edit {edit_index + 1}: {str(e)}")
                             continue
-
-                    # Check if any edits succeeded for this file
-                    if file_successful_edits == 0:
-                        all_failed_edits.extend(file_failed_edits)
-                        continue
 
                     # Apply all operations in batch
                     try:
@@ -177,38 +169,26 @@ class Tool(BaseTool):
                             operations=operations,
                         )
 
+                        file_successful_edits += len(successful_ops)
+
                         if len(failed_ops):
                             for failed_op in failed_ops:
                                 op_index = failed_op["index"]
                                 op_error = failed_op["error"]
-                                all_failed_edits.append(f"Edit {op_index + 1}: {str(op_error)}")
+                                file_failed_edits.append(f"Edit {op_index + 1}: {str(op_error)}")
                     except Exception as e:
                         # If batch operation fails, mark all operations as failed
                         for edit_index, _ in file_edits:
-                            all_failed_edits.append(f"Edit {edit_index + 1}: {str(e)}")
+                            file_failed_edits.append(f"Edit {edit_index + 1}: {str(e)}")
                         continue
+
+                    all_failed_edits.extend(file_failed_edits)
 
                     # Check if any changes were made for this file
-                    if original_content == new_content:
-                        all_failed_edits.extend(file_failed_edits)
+                    if original_content == new_content or file_successful_edits == 0:
                         continue
 
-                    # Handle dry run
-                    if dry_run:
-                        all_results.append(
-                            {
-                                "file_path": file_path_key,
-                                "successful_edits": file_successful_edits,
-                                "failed_edits": file_failed_edits,
-                                "dry_run": True,
-                            }
-                        )
-                        total_successful_edits += file_successful_edits
-                        all_failed_edits.extend(file_failed_edits)
-                        files_processed += 1
-                        continue
-
-                    # Apply Change (Not dry run)
+                    # Apply Change
                     metadata = {
                         "edits": file_metadata,
                         "total_edits": file_successful_edits,
@@ -252,23 +232,6 @@ class Tool(BaseTool):
                 coder.edit_allowed = True
                 error_msg = "No edits were successfully applied:\n" + "\n".join(all_failed_edits)
                 raise ToolError(error_msg)
-
-            # 5. Handle dry run overall
-            if dry_run:
-                dry_run_message = (
-                    f"Dry run: Would apply {len(edits)} edits across {len(edits_by_file)} files "
-                    f"({total_successful_edits} would succeed, {len(all_failed_edits)} would fail)."
-                )
-                if all_failed_edits:
-                    dry_run_message += "\nFailed edits:\n" + "\n".join(all_failed_edits)
-
-                return format_tool_result(
-                    coder,
-                    tool_name,
-                    "",
-                    dry_run=True,
-                    dry_run_message=dry_run_message,
-                )
 
             # 6. Format and return result
             # Log failed edit messages to console for visibility
