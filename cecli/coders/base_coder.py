@@ -1810,7 +1810,6 @@ class Coder:
                 # Replace current CUR messages with the summary in ConversationManager
                 ConversationService.get_manager(self).clear_tag(MessageTag.CUR)
 
-                # Keep the first message (user's initial input) if it exists
                 if self.last_user_message:
                     ConversationService.get_manager(self).add_message(
                         message_dict={
@@ -1848,6 +1847,25 @@ class Coder:
                     tag=MessageTag.CUR,
                     force=True,
                 )
+
+                # Find the last assistant messages in the current conversation
+                latest_messages = []
+
+                # Search from the end to find the most recent assistant messages
+                for msg in reversed(cur_messages):
+                    latest_messages.append(msg)
+
+                    if msg["role"] == "assistant":
+                        break
+
+                for msg in reversed(latest_messages):
+                    ConversationService.get_manager(self).add_message(
+                        message_dict={
+                            "role": msg["role"],
+                            "content": msg["content"],
+                        },
+                        tag=MessageTag.CUR,
+                    )
 
             self.io.tool_output("...chat history compacted.")
             self.io.update_spinner(self.io.last_spinner_text)
