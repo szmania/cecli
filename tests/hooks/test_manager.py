@@ -7,8 +7,8 @@ import pytest
 from cecli.hooks import BaseHook, HookManager, HookType
 
 
-class TestHook(BaseHook):
-    """Test hook for unit testing."""
+class MockHook(BaseHook):
+    """Mock hook for unit testing."""
 
     type = HookType.START
 
@@ -17,8 +17,8 @@ class TestHook(BaseHook):
         return True
 
 
-class TestPreToolHook(BaseHook):
-    """Test hook for pre_tool type."""
+class MockPreToolHook(BaseHook):
+    """Mock hook for pre_tool type."""
 
     type = HookType.PRE_TOOL
 
@@ -47,7 +47,7 @@ class TestHookManager:
 
     def test_register_hook(self):
         """Test hook registration."""
-        hook = TestHook(name="test_hook")
+        hook = MockHook(name="test_hook")
         self.manager.register_hook(hook)
 
         assert self.manager.hook_exists("test_hook") is True
@@ -56,8 +56,8 @@ class TestHookManager:
 
     def test_register_duplicate_hook(self):
         """Test duplicate hook registration fails."""
-        hook1 = TestHook(name="test_hook")
-        hook2 = TestHook(name="test_hook")  # Same name
+        hook1 = MockHook(name="test_hook")
+        hook2 = MockHook(name="test_hook")  # Same name
 
         self.manager.register_hook(hook1)
 
@@ -66,9 +66,9 @@ class TestHookManager:
 
     def test_get_hooks(self):
         """Test getting hooks by type."""
-        hook1 = TestHook(name="hook1", priority=10)
-        hook2 = TestHook(name="hook2", priority=5)  # Higher priority
-        hook3 = TestPreToolHook(name="hook3", priority=10)
+        hook1 = MockHook(name="hook1", priority=10)
+        hook2 = MockHook(name="hook2", priority=5)  # Higher priority
+        hook3 = MockPreToolHook(name="hook3", priority=10)
 
         self.manager.register_hook(hook1)
         self.manager.register_hook(hook2)
@@ -93,9 +93,9 @@ class TestHookManager:
 
     def test_get_all_hooks(self):
         """Test getting all hooks grouped by type."""
-        hook1 = TestHook(name="hook1")
-        hook2 = TestHook(name="hook2")
-        hook3 = TestPreToolHook(name="hook3")
+        hook1 = MockHook(name="hook1")
+        hook2 = MockHook(name="hook2")
+        hook3 = MockPreToolHook(name="hook3")
 
         self.manager.register_hook(hook1)
         self.manager.register_hook(hook2)
@@ -110,7 +110,7 @@ class TestHookManager:
 
     def test_hook_exists(self):
         """Test checking if hook exists."""
-        hook = TestHook(name="test_hook")
+        hook = MockHook(name="test_hook")
 
         assert self.manager.hook_exists("test_hook") is False
 
@@ -121,7 +121,7 @@ class TestHookManager:
 
     def test_enable_disable_hook(self):
         """Test enabling and disabling hooks."""
-        hook = TestHook(name="test_hook", enabled=False)
+        hook = MockHook(name="test_hook", enabled=False)
         self.manager.register_hook(hook)
 
         # Initially disabled
@@ -163,8 +163,8 @@ class TestHookManager:
         self.manager._state_file = state_file
 
         # Create and register hooks
-        hook1 = TestHook(name="hook1", enabled=True)
-        hook2 = TestHook(name="hook2", enabled=False)
+        hook1 = MockHook(name="hook1", enabled=True)
+        hook2 = MockHook(name="hook2", enabled=False)
 
         self.manager.register_hook(hook1)
         self.manager.register_hook(hook2)
@@ -188,8 +188,8 @@ class TestHookManager:
         new_manager._state_file = state_file
 
         # Register hooks with new manager
-        new_hook1 = TestHook(name="hook1", enabled=False)  # Default disabled
-        new_hook2 = TestHook(name="hook2", enabled=True)  # Default enabled
+        new_hook1 = MockHook(name="hook1", enabled=False)  # Default disabled
+        new_hook2 = MockHook(name="hook2", enabled=True)  # Default enabled
 
         new_manager.register_hook(new_hook1)
         new_manager.register_hook(new_hook2)
@@ -202,8 +202,8 @@ class TestHookManager:
 
     def test_clear(self):
         """Test clearing all hooks."""
-        hook1 = TestHook(name="hook1")
-        hook2 = TestHook(name="hook2")
+        hook1 = MockHook(name="hook1")
+        hook2 = MockHook(name="hook2")
 
         self.manager.register_hook(hook1)
         self.manager.register_hook(hook2)
