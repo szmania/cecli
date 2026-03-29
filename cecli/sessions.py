@@ -229,10 +229,14 @@ class SessionManager:
                     session_data.get("model", self.coder.args.model),
                     weak_model=session_data.get("weak_model", self.coder.args.weak_model),
                     editor_model=session_data.get("editor_model", self.coder.args.editor_model),
+                    agent_model=session_data.get("agent_model", self.coder.args.agent_model),
                     editor_edit_format=session_data.get(
                         "editor_edit_format", self.coder.args.editor_edit_format
                     ),
+                    io=self.io,
                     verbose=self.coder.args.verbose,
+                    retries=self.coder.main_model.retries,
+                    debug=self.coder.main_model.debug,
                 )
 
             # Load settings

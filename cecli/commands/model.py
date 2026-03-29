@@ -22,11 +22,7 @@ class ModelCommand(BaseCommand):
 
         model = models.Model(
             model_name,
-            editor_model=coder.main_model.editor_model.name,
-            weak_model=coder.main_model.weak_model.name,
-            io=io,
-            retries=coder.main_model.retries,
-            debug=coder.main_model.debug,
+            from_model=coder.main_model,
         )
         await models.sanity_check_models(io, model)
 

@@ -314,21 +314,38 @@ class Model(ModelSettings):
     def __init__(
         self,
         model,
-        weak_model=None,
-        editor_model=None,
-        agent_model=None,
-        editor_edit_format=None,
-        verbose=False,
-        io=None,
-        override_kwargs=None,
-        retries=None,
-        debug=False,
+        from_model=None,
+        **kwargs,
     ):
         provided_model = model or ""
         if isinstance(provided_model, Model):
             provided_model = provided_model.name
         elif not isinstance(provided_model, str):
             provided_model = str(provided_model)
+
+        io = kwargs.get("io", nested.getter(from_model, "io", None))
+        verbose = kwargs.get("verbose", nested.getter(from_model, "verbose", False))
+        override_kwargs = kwargs.get(
+            "override_kwargs", nested.getter(from_model, "override_kwargs", None)
+        )
+        retries = kwargs.get("retries", nested.getter(from_model, "retries", None))
+        debug = kwargs.get("debug", nested.getter(from_model, "debug", False))
+
+        if kwargs.get("sub_models", True):
+            agent_model = kwargs.get("agent_model", nested.getter(from_model, "agent_model", None))
+            weak_model = kwargs.get("weak_model", nested.getter(from_model, "weak_model", None))
+            editor_model = kwargs.get(
+                "editor_model", nested.getter(from_model, "editor_model", None)
+            )
+            editor_edit_format = kwargs.get(
+                "editor_edit_format", nested.getter(from_model, "editor_edit_format", None)
+            )
+        else:
+            agent_model = kwargs.get("agent_model", None)
+            weak_model = kwargs.get("weak_model", None)
+            editor_model = kwargs.get("editor_model", None)
+            editor_edit_format = kwargs.get("editor_edit_format", None)
+
         self.io = io
         self.verbose = verbose
         self.override_kwargs = override_kwargs or {}
@@ -576,8 +593,8 @@ class Model(ModelSettings):
         self.copy_paste_mode = True
         self.copy_paste_transport = transport
 
-    def get_weak_model(self, provided_weak_model):
-        if provided_weak_model is False:
+    def get_weak_model(self, provided_model):
+        if provided_model is False:
             self.weak_model = self
             self.weak_model_name = None
             return
@@ -585,23 +602,23 @@ class Model(ModelSettings):
             self.weak_model = self
             self.weak_model_name = None
             return
-        if isinstance(provided_weak_model, Model):
-            self.weak_model = provided_weak_model
-            self.weak_model_name = provided_weak_model.name
+        if isinstance(provided_model, Model):
+            self.weak_model = provided_model
+            self.weak_model_name = provided_model.name
             return
-        if provided_weak_model:
-            self.weak_model_name = provided_weak_model
+        if provided_model:
+            self.weak_model_name = provided_model
         if not self.weak_model_name:
             self.weak_model = self
             return
         if self.weak_model_name == self.name:
             self.weak_model = self
             return
-        self.weak_model = Model(self.weak_model_name, weak_model=False, io=self.io)
+        self.weak_model = Model(self.weak_model_name, from_model=self, sub_model=False)
         return self.weak_model
 
-    def get_agent_model(self, provided_weak_model):
-        if provided_weak_model is False:
+    def get_agent_model(self, provided_model):
+        if provided_model is False:
             self.agent_model = self
             self.agent_model_name = None
             return
@@ -609,45 +626,45 @@ class Model(ModelSettings):
             self.agent_model = self
             self.agent_model_name = None
             return
-        if isinstance(provided_weak_model, Model):
-            self.agent_model = provided_weak_model
-            self.agent_model_name = provided_weak_model.name
+        if isinstance(provided_model, Model):
+            self.agent_model = provided_model
+            self.agent_model_name = provided_model.name
             return
-        if provided_weak_model:
-            self.agent_model_name = provided_weak_model
+        if provided_model:
+            self.agent_model_name = provided_model
         if not self.agent_model_name:
             self.agent_model = self
             return
         if self.agent_model_name == self.name:
             self.agent_model = self
             return
-        self.agent_model = Model(self.agent_model_name, agent_model=False, io=self.io)
+        self.agent_model = Model(self.agent_model_name, from_model=self, sub_model=False)
         return self.agent_model
 
-    def commit_message_models(self):
-        return [self.weak_model, self]
-
-    def get_editor_model(self, provided_editor_model, editor_edit_format):
+    def get_editor_model(self, provided_model, editor_edit_format):
         if self.copy_paste_transport == "clipboard":
-            provided_editor_model = False
+            provided_model = False
             self.editor_model_name = self.name
             self.editor_model = self
-        if isinstance(provided_editor_model, Model):
-            self.editor_model = provided_editor_model
-            self.editor_model_name = provided_editor_model.name
-        elif provided_editor_model:
-            self.editor_model_name = provided_editor_model
+        if isinstance(provided_model, Model):
+            self.editor_model = provided_model
+            self.editor_model_name = provided_model.name
+        elif provided_model:
+            self.editor_model_name = provided_model
         if editor_edit_format:
             self.editor_edit_format = editor_edit_format
         if not self.editor_model_name or self.editor_model_name == self.name:
             self.editor_model = self
         else:
-            self.editor_model = Model(self.editor_model_name, editor_model=False, io=self.io)
+            self.editor_model = Model(self.editor_model_name, from_model=self, sub_model=False)
         if not self.editor_edit_format:
             self.editor_edit_format = self.editor_model.edit_format
             if self.editor_edit_format in ("diff", "whole", "diff-fenced"):
                 self.editor_edit_format = "editor-" + self.editor_edit_format
         return self.editor_model
+
+    def commit_message_models(self):
+        return [self.weak_model, self]
 
     def _ensure_extra_params_dict(self):
         if self.extra_params is None:

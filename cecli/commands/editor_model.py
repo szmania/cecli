@@ -26,12 +26,8 @@ class EditorModelCommand(BaseCommand):
         # Create a new model with the same main model and editor model, but updated editor model
         model = models.Model(
             coder.main_model.name,
+            from_model=coder.main_model,
             editor_model=model_name,
-            weak_model=coder.main_model.weak_model.name,
-            agent_model=coder.main_model.agent_model.name,
-            io=io,
-            retries=coder.main_model.retries,
-            debug=coder.main_model.debug,
         )
         await models.sanity_check_models(io, model)
 

@@ -26,11 +26,8 @@ class WeakModelCommand(BaseCommand):
         # Create a new model with the same main model and editor model, but updated weak model
         model = models.Model(
             coder.main_model.name,
-            editor_model=coder.main_model.editor_model.name,
+            from_model=coder.main_model,
             weak_model=model_name,
-            io=io,
-            retries=coder.main_model.retries,
-            debug=coder.main_model.debug,
         )
         await models.sanity_check_models(io, model)
 
