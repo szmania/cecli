@@ -1,3 +1,9 @@
+---
+parent: Usage
+nav_order: 850
+description: Session management utilities to save and load work across multiple application runs
+---
+
 # Session Management
 
 cecli provides session management commands that allow you to save, load, and manage your chat sessions. This is particularly useful for:

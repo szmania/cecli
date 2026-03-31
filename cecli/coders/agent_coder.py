@@ -15,11 +15,7 @@ from cecli import utils
 from cecli.change_tracker import ChangeTracker
 from cecli.helpers import nested
 from cecli.helpers.background_commands import BackgroundCommandManager
-from cecli.helpers.conversation import ConversationChunks
-
-# All conversation functions are now available via ConversationChunks class
-from cecli.helpers.conversation.manager import ConversationManager
-from cecli.helpers.conversation.tags import MessageTag
+from cecli.helpers.conversation import ConversationService, MessageTag
 from cecli.helpers.similarity import (
     cosine_similarity,
     create_bigram_vector,
@@ -42,6 +38,7 @@ class AgentCoder(Coder):
     prompt_format = "agent"
     context_management_enabled = True
     hashlines = True
+    stop_on_empty = False
 
     def __init__(self, *args, **kwargs):
         self.recently_removed = {}
@@ -49,7 +46,7 @@ class AgentCoder(Coder):
         self.tool_usage_retries = 20
         self.last_round_tools = []
         self.tool_call_vectors = []
-        self.tool_similarity_threshold = 0.90
+        self.tool_similarity_threshold = 0.95
         self.max_tool_vector_history = 20
         self.read_tools = {
             "command",
@@ -60,17 +57,17 @@ class AgentCoder(Coder):
             "viewfileswithsymbol",
             "grep",
             "listchanges",
-            "shownumberedcontext",
+            "showcontext",
             "thinking",
             "updatetodolist",
         }
         self.write_tools = {
             "deletetext",
-            "indenttext",
             "inserttext",
             "replacetext",
             "undochange",
         }
+        self.edit_allowed = False
         self.max_tool_calls = 10000
         self.large_file_token_threshold = 8192
         self.skills_manager = None
@@ -243,10 +240,15 @@ class AgentCoder(Coder):
 
     async def _execute_local_tool_calls(self, tool_calls_list):
         tool_responses = []
+        used_write_tool = False
+
         for tool_call in tool_calls_list:
             tool_name = tool_call.function.name
             result_message = ""
             try:
+                if tool_name.lower() in self.write_tools:
+                    used_write_tool = True
+
                 args_string = tool_call.function.arguments.strip()
                 parsed_args_list = []
 
@@ -268,14 +270,14 @@ class AgentCoder(Coder):
                         except json.JSONDecodeError as e:
                             self.model_kwargs = {}
                             self.io.tool_warning(
-                                f"Could not parse JSON chunk for tool {tool_name}: {chunk}"
+                                f"Malformed JSON arguments in tool {tool_name}: {chunk}"
                             )
                             tool_responses.append(
                                 {
                                     "role": "tool",
                                     "tool_call_id": tool_call.id,
                                     "content": (
-                                        f"Could not parse JSON chunk for tool {tool_name}: {str(e)}"
+                                        f"Malformed JSON arguments in tool {tool_name}: {str(e)}"
                                     ),
                                 }
                             )
@@ -335,6 +337,31 @@ class AgentCoder(Coder):
             tool_responses.append(
                 {"role": "tool", "tool_call_id": tool_call.id, "content": result_message}
             )
+
+        if self.auto_lint and used_write_tool and not self.edit_allowed:
+            edited = list(self.files_edited_by_tools)
+            lint_errors = self.lint_edited(edited, show_output=False)
+            self.lint_outcome = not lint_errors
+
+            if lint_errors:
+                lint_errors = lint_errors.replace(
+                    "# Fix any linting errors below, if possible.",
+                    "# Fix any linting errors below, if possible and then continue with your task.",
+                    1,
+                )
+                ConversationService.get_manager(self).add_message(
+                    message_dict=dict(role="user", content=lint_errors),
+                    tag=MessageTag.CUR,
+                    hash_key=("lint_errors", "agent"),
+                    promotion=ConversationService.get_manager(self).DEFAULT_TAG_PROMOTION_VALUE,
+                    mark_for_demotion=1,
+                    force=True,
+                )
+            else:
+                ConversationService.get_manager(self).remove_message_by_hash_key(
+                    ("lint_errors", "agent")
+                )
+
         return tool_responses
 
     async def _execute_mcp_tool(self, server, tool_name, params):
@@ -412,7 +439,7 @@ class AgentCoder(Coder):
                 if block_type in self.allowed_context_blocks:
                     block_content = self._generate_context_block(block_type)
                     if block_content:
-                        self.context_block_tokens[block_type] = self.main_model.token_count(
+                        self.context_block_tokens[block_type] = self.get_active_model().token_count(
                             block_content
                         )
             self.tokens_calculated = True
@@ -538,37 +565,37 @@ class AgentCoder(Coder):
         # Choose appropriate fence based on file content
         self.choose_fence()
 
-        ConversationChunks.initialize_conversation_system(self)
-        # Decrement mark_for_delete values before adding new messages
-        ConversationManager.decrement_mark_for_delete()
+        ConversationService.get_chunks(self).initialize_conversation_system()
 
         # Clean up ConversationFiles and remove corresponding messages
-        ConversationChunks.cleanup_files(self)
+        ConversationService.get_chunks(self).cleanup_files()
 
         # Add reminder message with list of readonly and editable files
-        ConversationChunks.add_file_list_reminder(self)
+        ConversationService.get_chunks(self).add_file_list_reminder()
 
         # Add system messages (including examples and reminder)
-        ConversationChunks.add_system_messages(self)
+        ConversationService.get_chunks(self).add_system_messages()
 
         # Add static context blocks (priority 50 - between SYSTEM and EXAMPLES)
-        ConversationChunks.add_static_context_blocks(self)
+        ConversationService.get_chunks(self).add_static_context_blocks()
+
+        # Add rules messages
+        ConversationService.get_chunks(self).add_rules_messages()
 
         # Handle file messages using conversation module helper methods
         # These methods will add messages to ConversationManager
-        ConversationChunks.add_repo_map_messages(self)
+        ConversationService.get_chunks(self).add_repo_map_messages()
 
         # Add pre-message context blocks (priority 125 - between REPO and READONLY_FILES)
-        ConversationChunks.add_pre_message_context_blocks(self)
+        ConversationService.get_chunks(self).add_pre_message_context_blocks()
 
-        ConversationChunks.add_readonly_files_messages(self)
-        ConversationChunks.add_chat_files_messages(self)
-        # ConversationChunks.add_file_context_messages(self)
+        ConversationService.get_chunks(self).add_readonly_files_messages()
+        ConversationService.get_chunks(self).add_chat_files_messages()
 
         # Add post-message context blocks (priority 250 - between CUR and REMINDER)
-        ConversationChunks.add_post_message_context_blocks(self)
+        ConversationService.get_chunks(self).add_post_message_context_blocks()
 
-        return ConversationManager.get_messages_dict()
+        return ConversationService.get_manager(self).get_messages_dict()
 
     def get_context_summary(self):
         """
@@ -584,7 +611,7 @@ class AgentCoder(Coder):
                 self._calculate_context_block_tokens()
             result = '<context name="context_summary" from="agent">\n'
             result += "## Current Context Overview\n\n"
-            max_input_tokens = self.main_model.info.get("max_input_tokens") or 0
+            max_input_tokens = self.get_active_model().info.get("max_input_tokens") or 0
             if max_input_tokens:
                 result += f"Model context limit: {max_input_tokens:,} tokens\n\n"
             total_file_tokens = 0
@@ -598,7 +625,7 @@ class AgentCoder(Coder):
                     rel_fname = self.get_rel_fname(fname)
                     content = self.io.read_text(fname)
                     if content is not None:
-                        tokens = self.main_model.token_count(content)
+                        tokens = self.get_active_model().token_count(content)
                         total_file_tokens += tokens
                         editable_tokens += tokens
                         size_indicator = (
@@ -622,7 +649,7 @@ class AgentCoder(Coder):
                     rel_fname = self.get_rel_fname(fname)
                     content = self.io.read_text(fname)
                     if content is not None:
-                        tokens = self.main_model.token_count(content)
+                        tokens = self.get_active_model().token_count(content)
                         total_file_tokens += tokens
                         readonly_tokens += tokens
                         size_indicator = (
@@ -726,6 +753,12 @@ class AgentCoder(Coder):
         # Ensure we call base implementation to trigger execution of all tools (native + extracted)
         return await super().process_tool_calls(tool_call_response)
 
+    def get_active_model(self):
+        if self.main_model.agent_model:
+            return self.main_model.agent_model
+
+        return self.main_model
+
     async def reply_completed(self):
         """Process the completed response from the LLM.
 
@@ -797,7 +830,7 @@ class AgentCoder(Coder):
         if tool_calls_found and self.num_reflections < self.max_reflections:
             self.tool_call_count = 0
             self.files_added_in_exploration = set()
-            cur_messages = ConversationManager.get_messages_dict(MessageTag.CUR)
+            cur_messages = ConversationService.get_manager(self).get_messages_dict(MessageTag.CUR)
             original_question = "Please continue your exploration and provide a final answer."
             if cur_messages:
                 for msg in reversed(cur_messages):
@@ -831,38 +864,6 @@ I will proceed based on the tool results and updated context.""")
     async def hot_reload(self):
         if self.hot_reload_enabled:
             self.skills_manager.hot_reload()
-
-    async def _execute_tool_with_registry(self, norm_tool_name, params):
-        """
-        Execute a tool using the tool registry.
-
-        Args:
-            norm_tool_name: Normalized tool name (lowercase)
-            params: Dictionary of parameters
-
-        Returns:
-            str: Result message
-        """
-        if norm_tool_name in ToolRegistry.get_registered_tools():
-            tool_module = ToolRegistry.get_tool(norm_tool_name)
-            try:
-                result = tool_module.process_response(self, params)
-                if asyncio.iscoroutine(result):
-                    result = await result
-                return result
-            except Exception as e:
-                self.io.tool_error(f"""Error during {norm_tool_name} execution: {e}
-{traceback.format_exc()}""")
-                return f"Error executing {norm_tool_name}: {str(e)}"
-        if self.mcp_tools:
-            for server_name, server_tools in self.mcp_tools:
-                if any(t.get("function", {}).get("name") == norm_tool_name for t in server_tools):
-                    server = self.mcp_manager.get_server(server_name)
-                    if server:
-                        return await self._execute_mcp_tool(server, norm_tool_name, params)
-                    else:
-                        return f"Error: Could not find server instance for {server_name}"
-        return f"Error: Unknown tool name '{norm_tool_name}'"
 
     def _get_repetitive_tools(self):
         """
@@ -979,14 +980,23 @@ I will proceed based on the tool results and updated context.""")
         for i, tool in enumerate(recent_history, 1):
             context_parts.append(f"{i}. {tool}")
 
+        if not self.edit_allowed:
+            context_parts.append("\n\n")
+            context_parts.append("## File Editing Tools Disabled")
+            context_parts.append(
+                "File editing tools are currently disabled.Use `ShowContext` to determine the"
+                " current hashline prefixes needed to perform an edit and activate them when you"
+                " are ready to edit a file."
+            )
+
         context_parts.append("\n\n")
         if repetitive_tools:
             if not self.model_kwargs:
                 self.model_kwargs = {
                     "temperature": (
                         1
-                        if isinstance(self.main_model.use_temperature, bool)
-                        else float(self.main_model.use_temperature)
+                        if isinstance(self.get_active_model().use_temperature, bool)
+                        else float(self.get_active_model().use_temperature)
                     ) + 0.1,
                     "frequency_penalty": 0.2,
                     "presence_penalty": 0.1,
@@ -1002,13 +1012,14 @@ I will proceed based on the tool results and updated context.""")
                     self.model_kwargs["temperature"] = min(
                         (
                             1
-                            if isinstance(self.main_model.use_temperature, bool)
-                            else float(self.main_model.use_temperature)
+                            if isinstance(self.get_active_model().use_temperature, bool)
+                            else float(self.get_active_model().use_temperature)
                         ),
                         max(temperature - 0.15, 1),
                     )
                     self.model_kwargs["frequency_penalty"] = min(0, max(freq_penalty - 0.15, 0))
 
+            self.model_kwargs["temperature"] = min(self.model_kwargs["temperature"], 1)
             # One twentieth of the time, just straight reset the randomness
             if random.random() < 0.05:
                 self.model_kwargs = {}
@@ -1018,9 +1029,9 @@ I will proceed based on the tool results and updated context.""")
                 self._last_repetitive_warning_severity += 1
 
             repetition_warning = f"""
-## Repetition Detected: Strategy Adjustment Required
+## Repetition Detected
 You have been using the following tools repetitively: {', '.join([f'`{t}`' for t in repetitive_tools])}.
-**Constraint:** Do not repeat the same parameters for these tools in your next turns. Try something different.
+Do not repeat the same parameters for these tools in your next turns. Prioritize editing.
             """
 
             if self._last_repetitive_warning_severity > 5:
@@ -1069,13 +1080,11 @@ You have been using the following tools repetitively: {', '.join([f'`{t}`' for t
                 )
 
                 repetition_warning += f"""
-### CRITICAL: Execution Loop Detected
-You are currently "spinning gears". To break the exploration loop, you must:
-1. **Analyze**: Use the `Thinking` tool exactly once to summarize what you have found so far and why you were stuck.
-2. **Pivot**: Abandon or modify your current exploration strategy. Try focusing on different files or running tests.
-3. **Reframe**: To ensure your logic reset, include a 2-sentence story about {animal} {verb} {fruit} in your thoughts.
-
-Prioritize editing or verification over further exploration.
+## CRITICAL: Execution Loop Detected
+You may be stuck in a cycle. To break the exploration loop and continue making progress, please do the following:
+1. **Analyze**: Summarize your findings. Describe how you can stop repeating yourself and make progress.
+2. **Reframe**: To help with creativity, include a 2-sentence story about {animal} {verb} {fruit} in your thoughts.
+3. **Pivot**: Modify your current exploration strategy. Try alternative methods. Prioritize editing.
                 """
 
             context_parts.append(repetition_warning)
@@ -1097,8 +1106,8 @@ Prioritize editing or verification over further exploration.
                 context_parts = [
                     '<context name="tool_usage_history" from="agent">',
                     "A file was just edited.",
-                    "Make sure that something of value was done.",
-                    "Do not just leave placeholder or sub content.",
+                    "Review the diff to make sure that something of value was done.",
+                    "Do not just leave placeholder content or partial implementations.",
                     "</context>",
                 ]
                 return "\n".join(context_parts)
@@ -1132,7 +1141,7 @@ Prioritize editing or verification over further exploration.
             if content is None:
                 return f"Error reading file: {file_path}"
             if self.context_management_enabled:
-                file_tokens = self.main_model.token_count(content)
+                file_tokens = self.get_active_model().token_count(content)
                 if file_tokens > self.large_file_token_threshold:
                     self.io.tool_output(
                         f"⚠️ '{file_path}' is very large ({file_tokens} tokens). Use"
@@ -1165,11 +1174,16 @@ Prioritize editing or verification over further exploration.
         This clearly delineates user input from other sections in the context window.
         """
         inp = await super().preproc_user_input(inp)
-        if inp and not inp.startswith('<context name="user_input" from="agent">'):
-            inp = f'<context name="user_input" from="agent">\n{inp}\n</context>'
+        inp = self.wrap_user_input(inp)
 
         self.agent_finished = False
         self.turn_count = 0
+        return inp
+
+    def wrap_user_input(self, inp):
+        if inp and not inp.startswith('<context name="user_input" from="agent">'):
+            inp = f'<context name="user_input" from="agent">\n{inp}\n</context>'
+
         return inp
 
     def get_directory_structure(self):

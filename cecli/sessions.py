@@ -6,11 +6,7 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 from cecli import models
-from cecli.helpers.conversation import (
-    ConversationFiles,
-    ConversationManager,
-    MessageTag,
-)
+from cecli.helpers.conversation import ConversationService, MessageTag
 
 
 class SessionManager:
@@ -143,9 +139,6 @@ class SessionManager:
             self.io.tool_warning(f"Could not read todo list file: {e}")
 
         # Get CUR and DONE messages from ConversationManager
-        cur_messages = ConversationManager.get_messages_dict(MessageTag.CUR)
-        done_messages = ConversationManager.get_messages_dict(MessageTag.DONE)
-
         return {
             "version": 1,
             "session_name": session_name,
@@ -156,8 +149,12 @@ class SessionManager:
             "editor_edit_format": self.coder.main_model.editor_edit_format,
             "edit_format": self.coder.edit_format,
             "chat_history": {
-                "done_messages": done_messages,
-                "cur_messages": cur_messages,
+                "done_messages": ConversationService.get_manager(self.coder).get_messages_dict(
+                    MessageTag.DONE
+                ),
+                "cur_messages": ConversationService.get_manager(self.coder).get_messages_dict(
+                    MessageTag.CUR
+                ),
             },
             "files": {
                 "editable": editable_files,
@@ -232,10 +229,14 @@ class SessionManager:
                     session_data.get("model", self.coder.args.model),
                     weak_model=session_data.get("weak_model", self.coder.args.weak_model),
                     editor_model=session_data.get("editor_model", self.coder.args.editor_model),
+                    agent_model=session_data.get("agent_model", self.coder.args.agent_model),
                     editor_edit_format=session_data.get(
                         "editor_edit_format", self.coder.args.editor_edit_format
                     ),
+                    io=self.io,
                     verbose=self.coder.args.verbose,
+                    retries=self.coder.main_model.retries,
+                    debug=self.coder.main_model.debug,
                 )
 
             # Load settings
@@ -261,8 +262,8 @@ class SessionManager:
                     self.io.tool_warning(f"Could not restore todo list: {e}")
 
             # Clear CUR and DONE messages from ConversationManager
-            ConversationManager.reset()
-            ConversationFiles.reset()
+            ConversationService.get_manager(self.coder).reset()
+            ConversationService.get_files(self.coder).reset()
             self.coder.format_chat_chunks()
 
             # Load chat history
@@ -273,13 +274,13 @@ class SessionManager:
             # Add messages to ConversationManager (source of truth)
             # Add done messages
             for msg in done_messages:
-                ConversationManager.add_message(
+                ConversationService.get_manager(self.coder).add_message(
                     message_dict=msg,
                     tag=MessageTag.DONE,
                 )
             # Add current messages
             for msg in cur_messages:
-                ConversationManager.add_message(
+                ConversationService.get_manager(self.coder).add_message(
                     message_dict=msg,
                     tag=MessageTag.CUR,
                 )

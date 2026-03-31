@@ -13,3 +13,5 @@ cogapp
 semver
 codespell
 uv
+memray
+objgraph

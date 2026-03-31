@@ -71,13 +71,16 @@ async def launch_tui(coder, output_queue, input_queue, args):
     Returns:
         Exit code from TUI
     """
-    worker = CoderWorker(coder, output_queue, input_queue)
-    app = TUI(worker, output_queue, input_queue, args)
+    try:
+        worker = CoderWorker(coder, output_queue, input_queue)
+        app = TUI(worker, output_queue, input_queue, args)
 
-    # Set weak reference to TUI app on the coder instance
-    coder.tui = weakref.ref(app)
+        # Set weak reference to TUI app on the coder instance
+        coder.tui = weakref.ref(app)
 
-    return_code = await app.run_async()
+        return_code = await app.run_async()
 
-    worker.stop()
-    return return_code if return_code else 0
+        return return_code if return_code else 0
+    finally:
+        if worker:
+            worker.stop()

@@ -4,6 +4,7 @@ from cecli.helpers.hashline import (
     HashlineError,
     apply_hashline_operations,
     get_hashline_diff,
+    strip_hashline,
 )
 from cecli.tools.utils.base_tool import BaseTool
 from cecli.tools.utils.helpers import (
@@ -27,7 +28,7 @@ class Tool(BaseTool):
                 " multiple files. Each edit must include its own file_path. Use hashline ranges"
                 " with the start_line and end_line parameters with format"
                 ' "{4 char hash}" (without the braces). For empty files, use "@000" as the hashline'
-                " reference."
+                " references."
             ),
             "parameters": {
                 "type": "object",
@@ -62,7 +63,6 @@ class Tool(BaseTool):
                         "description": "Array of edits to apply.",
                     },
                     "change_id": {"type": "string"},
-                    "dry_run": {"type": "boolean", "default": False},
                 },
                 "required": ["edits"],
             },
@@ -75,13 +75,20 @@ class Tool(BaseTool):
         coder,
         edits=None,
         change_id=None,
-        dry_run=False,
         **kwargs,
     ):
         """
         Replace text in one or more files. Can handle single edit or array of edits across multiple files.
         Each edit object must include its own file_path.
         """
+
+        if not coder.edit_allowed:
+            raise ToolError(
+                "Please call `ShowContext` first to make sure edits are appropriately scoped"
+            )
+        else:
+            coder.edit_allowed = False
+
         tool_name = "ReplaceText"
         try:
             # 1. Validate edits parameter
@@ -149,51 +156,41 @@ class Tool(BaseTool):
                                 "replace_text": edit_replace_text,
                             }
                             file_metadata.append(metadata)
-                            file_successful_edits += 1
 
-                        except (ToolError, HashlineError) as e:
+                        except Exception as e:
                             # Record failed edit but continue with others
                             file_failed_edits.append(f"Edit {edit_index + 1}: {str(e)}")
                             continue
 
-                    # Check if any edits succeeded for this file
-                    if file_successful_edits == 0:
-                        all_failed_edits.extend(file_failed_edits)
-                        continue
-
                     # Apply all operations in batch
                     try:
-                        new_content, _, _ = apply_hashline_operations(
+                        new_content, successful_ops, failed_ops = apply_hashline_operations(
                             original_content=original_content,
                             operations=operations,
                         )
-                    except (ToolError, HashlineError) as e:
+
+                        if new_content != original_content:
+                            file_successful_edits += len(successful_ops)
+                        else:
+                            raise ToolError("Invalid Edit - Source Not Modified")
+
+                        if len(failed_ops):
+                            for failed_op in failed_ops:
+                                op_index = failed_op["index"]
+                                op_error = failed_op["error"]
+                                file_failed_edits.append(f"Edit {op_index + 1}: {str(op_error)}")
+                    except Exception as e:
                         # If batch operation fails, mark all operations as failed
                         for edit_index, _ in file_edits:
-                            all_failed_edits.append(f"Edit {edit_index + 1}: {str(e)}")
-                        continue
+                            file_failed_edits.append(f"Edit {edit_index + 1}: {str(e)}")
+
+                    all_failed_edits.extend(file_failed_edits)
 
                     # Check if any changes were made for this file
-                    if original_content == new_content:
-                        all_failed_edits.extend(file_failed_edits)
+                    if original_content == new_content or file_successful_edits == 0:
                         continue
 
-                    # Handle dry run
-                    if dry_run:
-                        all_results.append(
-                            {
-                                "file_path": file_path_key,
-                                "successful_edits": file_successful_edits,
-                                "failed_edits": file_failed_edits,
-                                "dry_run": True,
-                            }
-                        )
-                        total_successful_edits += file_successful_edits
-                        all_failed_edits.extend(file_failed_edits)
-                        files_processed += 1
-                        continue
-
-                    # Apply Change (Not dry run)
+                    # Apply Change
                     metadata = {
                         "edits": file_metadata,
                         "total_edits": file_successful_edits,
@@ -226,7 +223,7 @@ class Tool(BaseTool):
                     all_failed_edits.extend(file_failed_edits)
                     files_processed += 1
 
-                except ToolError as e:
+                except Exception as e:
                     # Record all edits for this file as failed
                     for edit_index, _ in file_edits:
                         all_failed_edits.append(f"Edit {edit_index + 1}: {str(e)}")
@@ -234,25 +231,9 @@ class Tool(BaseTool):
 
             # 4. Check if any edits succeeded overall
             if total_successful_edits == 0:
+                coder.edit_allowed = True
                 error_msg = "No edits were successfully applied:\n" + "\n".join(all_failed_edits)
                 raise ToolError(error_msg)
-
-            # 5. Handle dry run overall
-            if dry_run:
-                dry_run_message = (
-                    f"Dry run: Would apply {len(edits)} edits across {len(edits_by_file)} files "
-                    f"({total_successful_edits} would succeed, {len(all_failed_edits)} would fail)."
-                )
-                if all_failed_edits:
-                    dry_run_message += "\nFailed edits:\n" + "\n".join(all_failed_edits)
-
-                return format_tool_result(
-                    coder,
-                    tool_name,
-                    "",
-                    dry_run=True,
-                    dry_run_message=dry_run_message,
-                )
 
             # 6. Format and return result
             # Log failed edit messages to console for visibility
@@ -299,7 +280,11 @@ class Tool(BaseTool):
     @classmethod
     def format_output(cls, coder, mcp_server, tool_response):
         color_start, color_end = color_markers(coder)
-        params = json.loads(tool_response.function.arguments)
+
+        try:
+            params = json.loads(tool_response.function.arguments)
+        except json.JSONDecodeError:
+            coder.io.tool_error("Invalid Tool JSON")
 
         tool_header(coder=coder, mcp_server=mcp_server, tool_response=tool_response)
 
@@ -338,11 +323,11 @@ class Tool(BaseTool):
                         if original_content is not None:
                             # Generate diff using get_hashline_diff
                             diff_output = get_hashline_diff(
-                                original_content=original_content,
+                                original_content=strip_hashline(original_content),
                                 start_line_hash=start_line,
                                 end_line_hash=end_line,
                                 operation="replace",
-                                text=replace_text,
+                                text=strip_hashline(replace_text),
                             )
                     except HashlineError as e:
                         # If hashline verification fails, show the error

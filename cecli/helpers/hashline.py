@@ -1308,11 +1308,11 @@ def apply_hashline_operations(
                         hashed_lines, start_hash_fragment, start_line_num_str
                     )
 
-                    if found_start is None:
-                        # Fall back to fragment matching if exact match fails
-                        found_start = find_hashline_by_fragment(
-                            hashed_lines, start_hash_fragment, start_line_num
-                        )
+                    # if found_start is None:
+                    #    # Fall back to fragment matching if exact match fails
+                    #    found_start = find_hashline_by_fragment(
+                    #        hashed_lines, start_hash_fragment, start_line_num
+                    #    )
 
                     if found_start is None:
                         raise HashlineError(
@@ -1363,7 +1363,7 @@ def apply_hashline_operations(
                     )
                 except Exception as e:
                     raise HashlineError(
-                        f"Could not resolve hash range {start_hash}-{end_hash}: {str(e)}"
+                        f"Could not resolve hash range {start_hash}...{end_hash}: {str(e)}"
                     )
 
         except Exception as e:
@@ -1468,7 +1468,11 @@ def apply_hashline_operations(
     result = strip_hashline(result_with_hashes)
 
     # Respect original trailing newline
-    if not original_content.endswith("\n") and result.endswith("\n"):
+    if original_content.endswith("\n") and result and not result.endswith("\n"):
+        # Original ends with newline but result doesn't - add one
+        result += "\n"
+    elif not original_content.endswith("\n") and result.endswith("\n"):
+        # Original doesn't end with newline but result does - remove it
         result = result[:-1]
 
     return result, successful_ops, failed_ops

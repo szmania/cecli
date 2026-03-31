@@ -3,7 +3,7 @@ from typing import List
 import cecli.models as models
 from cecli.commands.utils.base_command import BaseCommand
 from cecli.commands.utils.helpers import format_command_result
-from cecli.helpers.conversation import ConversationManager
+from cecli.helpers.conversation import ConversationService
 
 
 class WeakModelCommand(BaseCommand):
@@ -26,11 +26,8 @@ class WeakModelCommand(BaseCommand):
         # Create a new model with the same main model and editor model, but updated weak model
         model = models.Model(
             coder.main_model.name,
-            editor_model=coder.main_model.editor_model.name,
+            from_model=coder.main_model,
             weak_model=model_name,
-            io=io,
-            retries=coder.main_model.retries,
-            debug=coder.main_model.debug,
         )
         await models.sanity_check_models(io, model)
 
@@ -64,8 +61,7 @@ class WeakModelCommand(BaseCommand):
             temp_coder = await Coder.create(**new_kwargs)
 
             # Re-initialize ConversationManager with temp coder
-            ConversationManager.initialize(
-                temp_coder,
+            ConversationService.get_manager(temp_coder).initialize(
                 reset=True,
                 reformat=True,
                 preserve_tags=True,
@@ -81,8 +77,7 @@ class WeakModelCommand(BaseCommand):
                 coder.coder_commit_hashes = temp_coder.coder_commit_hashes
 
                 # Clear manager and restore original state
-                ConversationManager.initialize(
-                    original_coder,
+                ConversationService.get_manager(original_coder).initialize(
                     reset=True,
                     reformat=True,
                     preserve_tags=True,

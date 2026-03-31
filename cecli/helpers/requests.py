@@ -78,12 +78,11 @@ def thought_signature(model, messages):
 
 
 def concatenate_user_messages(messages):
-    """Concatenate user messages at the end of the array separated by assistant "(empty response)" messages.
+    """Concatenate user messages separated by assistant "(empty response)" messages.
 
-    This function works backwards from the end of the messages array, collecting
-    user messages until it encounters an assistant message that is not "(empty response)",
-    a tool message, or a system message. All collected user messages are concatenated
-    into a single user message at the end, and the original user messages are removed.
+    This function iterates through the messages array, collecting sequences of
+    user messages and assistant "(empty response)" messages. All collected user
+    messages in a sequence are concatenated into a single user message.
 
     Args:
         messages: List of message dictionaries
@@ -94,57 +93,42 @@ def concatenate_user_messages(messages):
     if not messages:
         return messages
 
+    result = []
     user_messages_to_concat = []
-    i = len(messages) - 1
 
-    while i >= 0:
-        msg = messages[i]
+    def get_text(c):
+        if isinstance(c, str):
+            return c
+        if isinstance(c, list) and len(c) > 0:
+            return c[0].get("text", "") if isinstance(c[0], dict) else str(c[0])
+        return str(c)
+
+    def flush_user_messages():
+        if user_messages_to_concat:
+            concatenated_content = "\n".join(get_text(c) for c in user_messages_to_concat)
+            result.append({"role": "user", "content": concatenated_content})
+            user_messages_to_concat.clear()
+
+    for msg in messages:
         role = msg.get("role")
         content = msg.get("content", "")
 
-        if isinstance(content, list):
-            break
-
-        if role == "user":
-            user_messages_to_concat.insert(0, content)  # Insert at beginning to maintain order
-            i -= 1
+        if role == "user" and not isinstance(content, list):
+            user_messages_to_concat.append(content)
+        elif role == "assistant" and content == "(empty response)":
             continue
+        else:
+            flush_user_messages()
+            result.append(msg)
 
-        # If it's an assistant message with "(empty response)", skip it and continue backwards
-        if role == "assistant" and content == "(empty response)":
-            i -= 1
-            continue
-
-        # If we hit any other type of message (non-empty assistant, tool, system, etc.), stop
-        break
-
-        # If we collected any user messages to concatenate
-    if user_messages_to_concat:
-        # Remove the original user messages (and any skipped empty assistant messages)
-        # by keeping only messages up to index i (inclusive)
-        result = messages[: i + 1] if i >= 0 else []
-
-        # Helper to extract text from strings or structured content lists
-        def get_text(c):
-            if isinstance(c, str):
-                return c
-            if isinstance(c, list) and len(c) > 0:
-                # Extracts 'text' from the first block if it's a dict
-                return c[0].get("text", "") if isinstance(c[0], dict) else str(c[0])
-            return str(c)
-
-        concatenated_content = "\n".join(get_text(c) for c in user_messages_to_concat)
-        result.append({"role": "user", "content": concatenated_content})
-
-        return result
-
-    return messages
+    flush_user_messages()
+    return result
 
 
 def model_request_parser(model, messages):
     messages = thought_signature(model, messages)
     messages = remove_empty_tool_calls(messages)
+    messages = concatenate_user_messages(messages)
     messages = ensure_alternating_roles(messages)
     messages = add_reasoning_content(messages)
-    messages = concatenate_user_messages(messages)
     return messages

@@ -6,28 +6,28 @@ has_children: true
 ---
 
 
-# cecli LLM Leaderboards
+# LLM Leaderboards
 
 cecli excels with LLMs skilled at writing and *editing* code,
 and uses benchmarks to
 evaluate an LLM's ability to follow instructions and edit code successfully without
 human intervention.
-[cecli's polyglot benchmark](https://cecli.dev/2024/12/21/polyglot.html#the-polyglot-benchmark) tests LLMs on 225 challenging Exercism coding exercises across C++, Go, Java, JavaScript, Python, and Rust.
+[Aider's polyglot benchmark](https://cecli.dev/2024/12/21/polyglot.html#the-polyglot-benchmark) tests LLMs on 225 challenging Exercism coding exercises across C++, Go, Java, JavaScript, Python, and Rust.
 
 <h2 id="leaderboard-title">cecli polyglot coding leaderboard</h2>
 
 <div id="controls-container" style="display: flex; align-items: center; width: 100%; max-width: 800px; margin: 10px auto; gap: 10px; box-sizing: border-box; padding: 0 5px; position: relative;">
-  <input type="text" id="editSearchInput" placeholder="Search..." style="flex-grow: 1; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
-  <div id="view-mode-toggle" style="display: inline-flex; border: 1px solid #ccc; border-radius: 4px;">
+  <input type="text" id="editSearchInput" placeholder="Search..." style="flex-grow: 1; padding: 8px; border: 1px solid var(--gray); border-radius: 4px;">
+  <div id="view-mode-toggle" style="display: inline-flex; border: 1px solid var(--gray); border-radius: 4px;">
     <button id="mode-view-btn" class="mode-button active" data-mode="view" style="padding: 8px 8px; border: none; border-radius: 3px 0 0 3px; cursor: pointer; font-size: 14px; line-height: 1.5; min-width: 50px;">View</button>
-    <button id="mode-select-btn" class="mode-button" data-mode="select" style="padding: 8px 8px; border: none; background-color: #f8f9fa; border-radius: 0; cursor: pointer; border-left: 1px solid #ccc; font-size: 14px; line-height: 1.5; min-width: 50px;">Select</button>
-    <button id="mode-detail-btn" class="mode-button" data-mode="detail" style="padding: 8px 8px; border: none; background-color: #f8f9fa; border-radius: 0 3px 3px 0; cursor: pointer; border-left: 1px solid #ccc; font-size: 14px; line-height: 1.5; min-width: 50px;">Detail</button>
+    <button id="mode-select-btn" class="mode-button" data-mode="select" style="padding: 8px 8px; border: none; background-color: rgba(173, 181, 189, 0.2); border-radius: 0; cursor: pointer; border-left: 1px solid var(--gray); font-size: 14px; line-height: 1.5; min-width: 50px;">Select</button>
+    <button id="mode-detail-btn" class="mode-button" data-mode="detail" style="padding: 8px 8px; border: none; background-color: rgba(173, 181, 189, 0.2); border-radius: 0 3px 3px 0; cursor: pointer; border-left: 1px solid var(--gray); font-size: 14px; line-height: 1.5; min-width: 50px;">Detail</button>
   </div>
-<button id="close-controls-btn" style="width: 18px; height: 18px; padding: 0; border: 1px solid #ddd; border-radius: 50%; background-color: transparent; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 12px; margin-left: 4px; color: #999;">×</button>
+<button id="close-controls-btn" style="width: 18px; height: 18px; padding: 0; border: 1px solid var(--gray); border-radius: 50%; background-color: transparent; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 12px; margin-left: 4px; color: var(--gray);">×</button>
 </div>
 
 <table style="width: 100%; max-width: 800px; margin: auto; border-collapse: collapse; box-shadow: 0 2px 4px rgba(0,0,0,0.1); font-size: 14px;">
-  <thead style="background-color: #f2f2f2;">
+  <thead>
     <tr>
       <th style="padding: 8px; width: 40px; text-align: center; vertical-align: middle;">
         <input type="checkbox" id="select-all-checkbox" style="display: none; cursor: pointer; vertical-align: middle;">
@@ -35,7 +35,6 @@ human intervention.
       <th style="padding: 8px; text-align: left;">Model</th>
       <th style="padding: 8px; text-align: center; width: 25%">Percent correct</th>
       <th style="padding: 8px; text-align: center; width: 25%">Cost</th>
-      <th style="padding: 8px; text-align: left;" class="col-command">Command</th>
       <th style="padding: 8px; text-align: center; width: 10%" class="col-conform">Correct edit format</th>
       <th style="padding: 8px; text-align: left; width: 10%" class="col-edit-format">Edit Format</th>
     </tr>
@@ -68,13 +67,12 @@ human intervention.
           {% assign rounded_cost = row.total_cost | times: 1.0 | round: 2 %}
           <span>{% if row.total_cost == 0 or rounded_cost == 0.00 %}{% else %}${{ rounded_cost }}{% endif %}</span>
         </td>
-        <td style="padding: 8px;" class="col-command"><span><code>{{ row.command }}</code></span></td>
         <td style="padding: 8px; text-align: center;" class="col-conform"><span>{{ row.percent_cases_well_formed }}%</span></td>
         <td style="padding: 8px;" class="col-edit-format"><span>{{ row.edit_format }}</span></td>
       </tr>
-      <tr class="details-row" id="details-{{ row_index }}" style="display: none; background-color: #f9f9f9;">
-        <td colspan="7" style="padding: 15px; border-bottom: 1px solid #ddd;">
-          <ul style="margin: 0; padding-left: 20px; list-style: none; border-bottom: 1px solid #ddd;">
+      <tr class="details-row" id="details-{{ row_index }}" style="display: none;">
+        <td colspan="7" style="padding: 15px; border-bottom: 1px solid var(--gray);">
+          <ul style="margin: 0; padding-left: 20px; list-style: none; border-bottom: 1px solid var(--gray);">
             {% for pair in row %}
               {% if pair[1] != "" and pair[1] != nil %}
                 <li><strong>
@@ -100,13 +98,13 @@ human intervention.
     margin-bottom: 20px; /* Add space below the title */
   }
   tr.selected {
-    color: #0056b3;
+    color: var(--primary);
   }
   table {
     table-layout: fixed;
   }
   thead {
-    border-top: 1px solid #ddd; /* Add top border to header */
+    border-top: 1px solid var(--gray); /* Add top border to header */
   }
   td, th {
     border: none; /* Remove internal cell borders */
@@ -148,7 +146,7 @@ human intervention.
 
   #editSearchInput, #view-mode-select {
     padding: 8px 12px; /* Consistent padding */
-    border: 1px solid #ccc; /* Slightly softer border */
+    border: 1px solid var(--gray); /* Slightly softer border */
     border-radius: 4px;
     font-size: 14px; /* Match table font size */
     height: 38px; /* Match height */
@@ -171,7 +169,7 @@ human intervention.
     transform: translateY(10px);
     height: 8px; /* Short tick */
     width: 1px;
-    background-color: rgba(170, 170, 170, 0.5); 
+    background-color: rgba(173, 181, 189, 0.5);
     z-index: 2; /* Above the bar but below the text */
   }
   .bar-viz {
@@ -198,20 +196,20 @@ human intervention.
      top: 50%; /* Center vertically */
      transform: translateY(-50%); /* Adjust vertical centering */
      z-index: 3; /* Ensure text is above everything else */
-     background-color: rgba(255, 255, 255, 0.7); /* Semi-transparent white background */
+     background-color: rgba(18, 18, 18, 0.7); /* Semi-transparent dark background */
      padding: 0 4px; /* Add padding around the text */
      border-radius: 3px; /* Rounded corners for the text background */
      font-size: 14px; /* Adjust font size for the numbers */
   }
   .toggle-details {
-    color: #888; /* Make toggle symbol more subtle */
+    color: var(--gray); /* Make toggle symbol more subtle */
     transition: color 0.2s; /* Smooth transition on hover */
   }
 
 
   /* Style for selected rows */
   tr.row-selected > td {
-    background-color: #e7f3ff; /* Example light blue highlight */
+    background-color: rgba(76, 110, 245, 0.2); /* Example light blue highlight */
   }
 
   /* Ensure checkbox is vertically aligned if needed */
@@ -238,21 +236,21 @@ human intervention.
     white-space: nowrap; /* Prevent text wrapping */
   }
   .mode-button:not(.active) {
-    background-color: #f8f9fa; /* Light grey background */
-    color: #495057; /* Dark grey text */
+    background-color: rgba(173, 181, 189, 0.2); /* Light grey background */
+    color: var(--gray); /* Dark grey text */
   }
   .mode-button:not(.active):hover {
-    background-color: #e2e6ea; /* Slightly darker grey on hover */
+    background-color: rgba(173, 181, 189, 0.4); /* Slightly darker grey on hover */
   }
 
   /* Style for highlighted rows in view mode */
   tr.view-highlighted > td {
-    background-color: #fffef5; /* Very light yellow/cream */
+    background-color: rgba(255, 254, 245, 0.1); /* Very light yellow/cream */
     /* Border moved to specific cell below */
   }
   /* Apply border and adjust padding ONLY for the first *visible* cell (Model name) in view mode */
   tr.view-highlighted > td:nth-child(2) {
-     border-left: 4px solid #ffc107; /* Warning yellow border */
+     border-left: 4px solid rgba(255, 193, 7, 0.7); /* Warning yellow border */
      /* Original padding is 8px. Subtract border width. */
      padding-left: 4px;
   }

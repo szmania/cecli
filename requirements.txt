@@ -453,12 +453,16 @@ truststore==0.10.4
 typing-extensions==4.15.0
     # via
     #   -c requirements/common-constraints.txt
+    #   aiosignal
+    #   anyio
     #   beautifulsoup4
     #   huggingface-hub
     #   mcp
     #   openai
     #   pydantic
     #   pydantic-core
+    #   referencing
+    #   starlette
     #   textual
     #   typing-inspection
 typing-inspection==0.4.2

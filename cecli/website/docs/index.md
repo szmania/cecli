@@ -2,9 +2,9 @@
 nav_exclude: true
 ---
 
-# cecli Documentation
+# Documentation
 
-cecli is AI pair programming in your terminal. This documentation will help you get the most out of cecli.
+This documentation will help you get the most out of cecli.
 
 <div class="toc">
 {% assign pages_list = site.html_pages | sort: "nav_order" %}

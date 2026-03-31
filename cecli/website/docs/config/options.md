@@ -648,16 +648,6 @@ Aliases:
   - `--message-file MESSAGE_FILE`
   - `-f MESSAGE_FILE`
 
-### `--gui`
-Run cecli in your browser (default: False)  
-Default: False  
-Environment variable: `CECLI_GUI`  
-Aliases:
-  - `--gui`
-  - `--no-gui`
-  - `--browser`
-  - `--no-browser`
-
 ### `--copy-paste`
 Enable automatic copy/paste of chat between cecli and web UI (default: False)  
 Default: False  

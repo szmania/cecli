@@ -15,18 +15,17 @@ def test_hashline_basic():
     lines = result.splitlines()
     assert len(lines) == 3
 
-    # Check each line has the format "[{4-char-hash}]content" (new HashPos format)
+    # Check each line has the format "{4-char-hash}::content" (new HashPos format)
     for i, line in enumerate(lines, start=1):
-        # Format should be "[{4-char-hash}]content"
-        assert line.startswith("[")
-        assert line[5] == "]"  # 4-char hash + 1 for opening bracket
-        # Extract hash fragment
-        hash_fragment = line[1:5]
+        # Format should be "{4-char-hash}::content"
+        assert "::" in line
+        # Extract hash fragment (everything before "::")
+        hash_fragment = line.split("::", 1)[0]
         # Check hash fragment is 4 characters
         assert len(hash_fragment) == 4
-        # Check all hash characters are valid base64 (A-Z, a-z, 0-9, -, _, @)
+        # Check all hash characters are valid base64 (A-Z, a-z, 0-9, ~, _, @)
         for char in hash_fragment:
-            assert char in "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_@"
+            assert char in "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789~_@"
 
 
 def test_hashline_with_start_line():
@@ -36,22 +35,18 @@ def test_hashline_with_start_line():
 
     lines = result.splitlines()
     assert len(lines) == 2
-    # Check format is [{4-char-hash}]content (new HashPos format)
+    # Check format is {4-char-hash}::content (new HashPos format)
     # Note: start_line parameter is ignored by HashPos but kept for compatibility
     for line in lines:
-        # Format should be "[{4-char-hash}]content"
-        assert line.startswith("[")
-        assert line[5] == "]"  # 4-char hash + 1 for opening bracket
-        # Extract hash fragment
-        hash_fragment = line[1:5]
+        # Format should be "{4-char-hash}::content"
+        assert "::" in line
+        # Extract hash fragment (everything before "::")
+        hash_fragment = line.split("::", 1)[0]
         # Check hash fragment is 4 characters
         assert len(hash_fragment) == 4
-        # Check all hash characters are valid base64 (A-Z, a-z, 0-9, -, _, @)
+        # Check all hash characters are valid base64 (A-Z, a-z, 0-9, ~, _, @)
         for char in hash_fragment:
-            assert char in "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_@"
-
-
-def test_hashline_empty_string():
+            assert char in "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789~_@"
     """Test hashline with empty string."""
     result = hashline("")
     assert result == ""
@@ -63,46 +58,43 @@ def test_hashline_single_line():
     result = hashline(text)
     lines = result.splitlines()
     assert len(lines) == 1
-    # Check format is [{4-char-hash}]content (new HashPos format)
+    # Check format is {4-char-hash}::content (new HashPos format)
     line = lines[0]
-    assert line.startswith("[")
-    assert line[5] == "]"  # 4-char hash + 1 for opening bracket
-    assert line.endswith("]Single line")
-    # Extract hash fragment
-    hash_fragment = line[1:5]
+    assert "::" in line
+    # Extract hash fragment (everything before "::")
+    hash_fragment = line.split("::", 1)[0]
     # Check hash fragment is 4 characters
     assert len(hash_fragment) == 4
-    # Check all hash characters are valid base64 (A-Z, a-z, 0-9, -, _, @)
+    # Check all hash characters are valid base64 (A-Z, a-z, 0-9, ~, _, @)
     for char in hash_fragment:
-        assert char in "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_@"
+        assert char in "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789~_@"
 
 
 def test_hashline_preserves_newlines():
     """Test that hashline preserves newline characters."""
     text = "Line 1\nLine 2\n"
     result = hashline(text)
-    # HashPos format: [{4-char-hash}]content on each line
+    # HashPos format: {4-char-hash}::content on each line
     # The result should have hashes on each line but no trailing newline
     lines = result.splitlines()
     assert len(lines) == 2
     # Check each line has the correct format
     for line in lines:
-        assert line.startswith("[")
-        assert line[5] == "]"  # 4-char hash + 1 for opening bracket
-        # Extract hash fragment
-        hash_fragment = line[1:5]
+        assert "::" in line
+        # Extract hash fragment (everything before "::")
+        hash_fragment = line.split("::", 1)[0]
         assert len(hash_fragment) == 4
-        # Check all hash characters are valid base64 (A-Z, a-z, 0-9, -, _, @)
+        # Check all hash characters are valid base64 (A-Z, a-z, 0-9, ~, _, @)
         for char in hash_fragment:
-            assert char in "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_@"
+            assert char in "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789~_@"
     # HashPos doesn't preserve trailing newlines in the formatted output
     # The splitlines() above verifies we have the right number of lines
 
 
 def test_strip_hashline_basic():
     """Test basic strip_hashline functionality."""
-    # Create a hashline-formatted text with correct HashPos format: [{4-char-hash}]content
-    text = "[abcd]Hello\n[efgh]World\n[ijkl]Test"
+    # Create a hashline-formatted text with correct HashPos format: {4-char-hash}::content
+    text = "abcd::Hello\nefgh::World\nijkl::Test"
     stripped = strip_hashline(text)
     assert stripped == "Hello\nWorld\nTest"
 
@@ -111,24 +103,24 @@ def test_strip_hashline_with_negative_line_numbers():
     """Test strip_hashline with negative line numbers."""
     # HashPos format doesn't support negative line numbers in the prefix
     # Test with standard HashPos format
-    text = "[abcd]Hello\n[efgh]World\n[ijkl]Test"
+    text = "abcd::Hello\nefgh::World\nijkl::Test"
     stripped = strip_hashline(text)
     assert stripped == "Hello\nWorld\nTest"
 
 
 def test_strip_hashline_mixed_lines():
     """Test strip_hashline with mixed hashline and non-hashline lines."""
-    # HashPos format: [{4-char-hash}]content
+    # HashPos format: {4-char-hash}::content
     # Plain lines without hashes should be left unchanged
-    text = "[abcd]Hello\nPlain line\n[efgh]World"
+    text = "abcd::Hello\nPlain line\nefgh::World"
     stripped = strip_hashline(text)
     assert stripped == "Hello\nPlain line\nWorld"
 
 
 def test_strip_hashline_preserves_newlines():
     """Test that strip_hashline preserves newline characters."""
-    # HashPos format: [{4-char-hash}]content
-    text = "[abcd]Line 1\n[efgh]Line 2\n"
+    # HashPos format: {4-char-hash}::content
+    text = "abcd::Line 1\nefgh::Line 2\n"
     stripped = strip_hashline(text)
     # strip_hashline should preserve newlines
     assert stripped == "Line 1\nLine 2\n"
@@ -177,14 +169,14 @@ def test_hashline_different_inputs():
 
 def test_parse_hashline():
     """Test parse_hashline function."""
-    # Test basic parsing (HashPos format: [{4-char-hash}])
-    hash_fragment, line_num_str, line_num = parse_hashline("[abcd]")
+    # Test basic parsing (HashPos format: {4-char-hash})
+    hash_fragment, line_num_str, line_num = parse_hashline("abcd")
     assert hash_fragment == "abcd"
     assert line_num_str is None  # HashPos doesn't include line numbers
     assert line_num is None
 
     # Test with content after hash
-    hash_fragment, line_num_str, line_num = parse_hashline("[efgh]Hello World")
+    hash_fragment, line_num_str, line_num = parse_hashline("efgh::Hello World")
     assert hash_fragment == "efgh"
     assert line_num_str is None
     assert line_num is None

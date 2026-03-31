@@ -135,7 +135,6 @@ nav {
 
 .hero {
     padding: 80px 0;
-    background: linear-gradient(135deg, rgba(20, 176, 20, 0.15) 0%, rgba(20, 176, 20, 0.1) 25%, rgba(201, 214, 255, 0.7) 50%, rgba(179, 198, 255, 0.8) 75%, rgba(163, 189, 255, 0.9) 100%);
     position: relative;
     overflow: hidden;
 }
@@ -413,7 +412,6 @@ code, pre, .code-block {
 }
 
 .testimonial-card {
-    background: linear-gradient(135deg, rgba(20, 176, 20, 0.05) 0%, rgba(76, 110, 245, 0.15) 100%);
     border-radius: 8px;
     padding: 30px;
     box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
@@ -461,7 +459,6 @@ code, pre, .code-block {
 
 .testimonial-card:hover {
     box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
-    background: linear-gradient(135deg, rgba(76, 110, 245, 0.12) 0%, rgba(20, 176, 20, 0.08) 50%, rgba(76, 110, 245, 0.2) 100%);
 }
 
 .testimonial-author {

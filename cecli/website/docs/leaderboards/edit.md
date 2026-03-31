@@ -1,5 +1,5 @@
 ---
-parent: cecli LLM Leaderboards
+parent: LLM Leaderboards
 highlight_image: /assets/leaderboard.jpg
 nav_order: 50
 description: Quantitative benchmark of basic LLM code editing skill.
@@ -21,10 +21,10 @@ This measures the LLM's coding ability, and whether it can
 write new code that integrates into existing code.
 The model also has to successfully apply all its changes to the source file without human intervention.
 
-<input type="text" id="editSearchInput" placeholder="Search..." style="width: 100%; max-width: 800px; margin: 10px auto; padding: 8px; display: block; border: 1px solid #ddd; border-radius: 4px;">
+<input type="text" id="editSearchInput" placeholder="Search..." style="width: 100%; max-width: 800px; margin: 10px auto; padding: 8px; display: block; border: 1px solid var(--gray); border-radius: 4px;">
 
 <table style="width: 100%; max-width: 800px; margin: auto; border-collapse: collapse; box-shadow: 0 2px 4px rgba(0,0,0,0.1); font-size: 14px;">
-  <thead style="background-color: #f2f2f2;">
+  <thead>
     <tr>
       <th style="padding: 8px; text-align: left;">Model</th>
       <th style="padding: 8px; text-align: center;">Percent completed correctly</th>
@@ -36,7 +36,7 @@ The model also has to successfully apply all its changes to the source file with
   <tbody>
     {% assign edit_sorted = site.data.edit_leaderboard | sort: 'pass_rate_2' | reverse %}
     {% for row in edit_sorted %}
-      <tr style="border-bottom: 1px solid #ddd;">
+      <tr>
         <td style="padding: 8px;">{{ row.model }}</td>
         <td style="padding: 8px; text-align: center;">{{ row.pass_rate_2 }}%</td>
         <td style="padding: 8px; text-align: center;">{{ row.percent_cases_well_formed }}%</td>
@@ -57,7 +57,7 @@ The model also has to successfully apply all its changes to the source file with
 </script>
 <style>
   tr.selected {
-    color: #0056b3;
+    color: var(--primary);
   }
   table {
     table-layout: fixed;

@@ -28,6 +28,8 @@ class BaseMessage:
     priority: int = field(default=0)
     timestamp: int = field(default_factory=lambda: time.monotonic_ns())
     mark_for_delete: Optional[int] = field(default=None)
+    mark_for_demotion: Optional[int] = field(default=None)
+    promotion: Optional[int] = field(default=None)
     hash_key: Optional[Tuple[str, ...]] = field(default=None)
     message_id: Optional[str] = field(default=None)
 
@@ -109,6 +111,17 @@ class BaseMessage:
             result["tool_calls"] = self._transform_message(result["tool_calls"])
 
         return result
+
+    def is_promoted(self) -> bool:
+        """
+        Returns True if mark_for_demotion < 0.
+
+        Returns:
+            Whether the message should use its promotion priority
+        """
+        if self.mark_for_demotion is None:
+            return False
+        return self.mark_for_demotion >= 0
 
     def is_expired(self) -> bool:
         """

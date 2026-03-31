@@ -41,11 +41,7 @@ from cecli import __version__, models, urls, utils
 from cecli.commands import Commands, SwitchCoderSignal
 from cecli.exceptions import LiteLLMExceptions
 from cecli.helpers import command_parser, coroutines, nested, responses
-from cecli.helpers.conversation import (
-    ConversationChunks,
-    ConversationManager,
-    MessageTag,
-)
+from cecli.helpers.conversation import ConversationService, MessageTag
 from cecli.helpers.profiler import TokenProfiler
 from cecli.history import ChatSummary
 from cecli.hooks import HookIntegration
@@ -110,6 +106,7 @@ class Coder:
     abs_fnames = None
     abs_read_only_fnames = None
     abs_read_only_stubs_fnames = None
+    abs_rules_fnames = None
     repo = None
     last_coder_commit_hash = None
     coder_edited_files = None
@@ -158,6 +155,7 @@ class Coder:
     uuid = ""
     model_kwargs = {}
     cost_multiplier = 1
+    stop_on_empty = True
 
     # Task coordination state variables
     input_running = False
@@ -218,6 +216,7 @@ class Coder:
                 read_only_stubs_fnames=list(
                     from_coder.abs_read_only_stubs_fnames
                 ),  # Copy read-only stubs
+                rules_fnames=list(from_coder.abs_rules_fnames),  # Copy read-only stubs
                 done_messages=[],
                 cur_messages=[],
                 coder_commit_hashes=from_coder.coder_commit_hashes,
@@ -283,6 +282,7 @@ class Coder:
         add_gitignore_files=False,
         read_only_fnames=None,
         read_only_stubs_fnames=None,
+        rules_fnames=None,
         show_diffs=False,
         auto_commits=True,
         dirty_commits=True,
@@ -388,19 +388,24 @@ class Coder:
         self.message_tokens_received = 0
 
         self.token_profiler = TokenProfiler(
-            enable_printing=getattr(args, "show_speed", False) if args else False
+            enable_printing=nested.getter(self.args, "show_speed", False)
         )
         self.verbose = verbose
         self.abs_fnames = set()
         self.abs_read_only_fnames = set()
         self.add_gitignore_files = add_gitignore_files
         self.abs_read_only_stubs_fnames = set()
+        self.abs_rules_fnames = set()
 
         self.io = io
         self.io.coder = weakref.ref(self)
 
-        self.manual_copy_paste = getattr(main_model, "copy_paste_transport", "api") == "clipboard"
-        self.copy_paste_mode = getattr(main_model, "copy_paste_mode", False) or auto_copy_context
+        self.manual_copy_paste = (
+            nested.getter(main_model, "copy_paste_transport", "api") == "clipboard"
+        )
+        self.copy_paste_mode = (
+            nested.getter(main_model, "copy_paste_mode", False) or auto_copy_context
+        )
 
         self.shell_commands = []
         self.partial_response_tool_calls = []
@@ -419,18 +424,20 @@ class Coder:
 
         # Set the reasoning tag name based on model settings or default
         self.reasoning_tag_name = (
-            self.main_model.reasoning_tag if self.main_model.reasoning_tag else REASONING_TAG
+            self.get_active_model().reasoning_tag
+            if self.get_active_model().reasoning_tag
+            else REASONING_TAG
         )
 
         self.stream = stream and main_model.streaming and not self.manual_copy_paste
 
-        if cache_prompts and self.main_model.cache_control:
+        if cache_prompts and self.get_active_model().cache_control:
             self.add_cache_headers = True
 
         self.show_diffs = show_diffs
 
         # Initialize conversation system if enabled
-        ConversationChunks.initialize_conversation_system(self)
+        ConversationService.get_chunks(self).initialize_conversation_system()
 
         self.commands = commands or Commands(self.io, self, args=args)
         self.commands.coder = self
@@ -504,21 +511,30 @@ class Coder:
                         f"Error: Read-only (stub) file {fname} does not exist. Skipping."
                     )
 
+        if rules_fnames:
+            self.abs_rules_fnames = set()
+            for fname in rules_fnames:
+                abs_fname = self.abs_root_path(fname)
+                if os.path.exists(abs_fname):
+                    self.abs_rules_fnames.add(abs_fname)
+                else:
+                    self.io.tool_warning(f"Error: Rules file {fname} does not exist. Skipping.")
+
         if map_tokens is None:
             use_repo_map = main_model.use_repo_map
             map_tokens = 1024
         else:
             use_repo_map = map_tokens > 0
 
-        max_inp_tokens = self.main_model.info.get("max_input_tokens") or 0
+        max_inp_tokens = self.get_active_model().info.get("max_input_tokens") or 0
 
-        has_map_prompt = hasattr(self, "gpt_prompts") and self.gpt_prompts.repo_content_prefix
+        has_map_prompt = nested.getter(self, "gpt_prompts.repo_content_prefix")
 
         if use_repo_map and self.repo and has_map_prompt:
             self.repo_map = RepoMap(
                 map_tokens,
                 self.map_cache_dir,
-                self.main_model,
+                self.get_active_model(),
                 io,
                 self.gpt_prompts.repo_content_prefix,
                 self.verbose,
@@ -532,8 +548,8 @@ class Coder:
             )
 
         self.summarizer = summarizer or ChatSummary(
-            [self.main_model.weak_model, self.main_model],
-            self.main_model.max_chat_history_tokens,
+            [self.get_active_model().weak_model, self.get_active_model()],
+            self.get_active_model().max_chat_history_tokens,
         )
 
         self.summarizer_thread = None
@@ -631,12 +647,12 @@ class Coder:
     @property
     def done_messages(self):
         """Get DONE messages from ConversationManager."""
-        return ConversationManager.get_messages_dict(MessageTag.DONE)
+        return ConversationService.get_manager(self).get_messages_dict(MessageTag.DONE)
 
     @property
     def cur_messages(self):
         """Get CUR messages from ConversationManager."""
-        return ConversationManager.get_messages_dict(MessageTag.CUR)
+        return ConversationService.get_manager(self).get_messages_dict(MessageTag.CUR)
 
     def get_announcements(self):
         lines = []
@@ -708,7 +724,7 @@ class Coder:
             if map_tokens > 0:
                 refresh = self.repo_map.refresh
                 lines.append(f"Repo-map: using {map_tokens} tokens, {refresh} refresh")
-                max_map_tokens = self.main_model.get_repo_map_tokens() * 2
+                max_map_tokens = self.get_active_model().get_repo_map_tokens() * 2
                 if map_tokens > max_map_tokens:
                     lines.append(
                         f"Warning: map-tokens > {max_map_tokens} is not recommended. Too much"
@@ -729,7 +745,7 @@ class Coder:
             rel_fname = self.get_rel_fname(fname)
             lines.append(f"Added {rel_fname} to the chat (read-only stub).")
 
-        if ConversationManager.get_messages_dict(MessageTag.DONE):
+        if ConversationService.get_manager(self).get_messages_dict(MessageTag.DONE):
             lines.append("Restored previous conversation history.")
 
         if self.io.multiline_mode and not self.args.tui:
@@ -890,7 +906,7 @@ class Coder:
                     # Apply context management if enabled for large files
                     if self.context_management_enabled:
                         # Calculate tokens for this file
-                        file_tokens = self.main_model.token_count(content)
+                        file_tokens = self.get_active_model().token_count(content)
 
                         if file_tokens > self.large_file_token_threshold:
                             # Instead of truncating, show the file's definitions/structure
@@ -958,7 +974,7 @@ class Coder:
                 # Apply context management if enabled for large files (same as get_files_content)
                 if self.context_management_enabled:
                     # Calculate tokens for this file
-                    file_tokens = self.main_model.token_count(content)
+                    file_tokens = self.get_active_model().token_count(content)
 
                     if file_tokens > self.large_file_token_threshold:
                         # Instead of truncating, show the file's definitions/structure
@@ -1004,7 +1020,7 @@ class Coder:
     def get_cur_message_text(self):
         text = ""
         # Get CUR messages from ConversationManager
-        cur_messages = ConversationManager.get_messages_dict(MessageTag.CUR)
+        cur_messages = ConversationService.get_manager(self).get_messages_dict(MessageTag.CUR)
         for msg in cur_messages:
             # For some models the content is None if the message
             # contains tool calls.
@@ -1169,13 +1185,15 @@ class Coder:
             return None
 
     def get_images_message(self, fnames):
-        supports_images = self.main_model.info.get("supports_vision")
-        supports_pdfs = self.main_model.info.get("supports_pdf_input") or self.main_model.info.get(
-            "max_pdf_size_mb"
-        )
+        supports_images = self.get_active_model().info.get("supports_vision")
+        supports_pdfs = self.get_active_model().info.get(
+            "supports_pdf_input"
+        ) or self.get_active_model().info.get("max_pdf_size_mb")
 
         # https://github.com/BerriAI/litellm/pull/6928
-        supports_pdfs = supports_pdfs or "claude-3-5-sonnet-20241022" in self.main_model.name
+        supports_pdfs = (
+            supports_pdfs or "claude-3-5-sonnet-20241022" in self.get_active_model().name
+        )
 
         if not (supports_images or supports_pdfs):
             return []
@@ -1208,9 +1226,7 @@ class Coder:
 
             if content:
                 # Register image file with ConversationFiles for tracking
-                from cecli.helpers.conversation.files import ConversationFiles
-
-                ConversationFiles.add_image_file(fname)
+                ConversationService.get_files(self).add_image_file(fname)
 
                 messages.append({"role": "user", "content": content, "image_file": fname})
 
@@ -1524,7 +1540,9 @@ class Coder:
         all_read_only_fnames = self.abs_read_only_fnames | self.abs_read_only_stubs_fnames
         all_read_only_files = [self.get_rel_fname(fname) for fname in all_read_only_fnames]
         all_files = sorted(set(inchat_files + all_read_only_files))
-        edit_format = "" if self.edit_format == self.main_model.edit_format else self.edit_format
+        edit_format = (
+            "" if self.edit_format == self.get_active_model().edit_format else self.edit_format
+        )
 
         return await self.io.get_input(
             self.root,
@@ -1557,6 +1575,9 @@ class Coder:
 
         return inp
 
+    def wrap_user_input(self, inp):
+        return inp
+
     async def run_one(self, user_message, preproc):
         self.init_before_message()
 
@@ -1579,6 +1600,7 @@ class Coder:
 
         while True:
             self.reflected_message = None
+            self.empty_response = False
             self.tool_reflection = False
 
             if float(self.total_cost) > self.cost_multiplier * (
@@ -1598,23 +1620,29 @@ class Coder:
 
             await self.hot_reload()
 
-            if not self.reflected_message:
+            if not self.empty_response:
+                if not self.reflected_message:
+                    await self.auto_save_session(force=True)
+                    break
+
+                if self.num_reflections >= self.max_reflections:
+                    self.io.tool_warning(
+                        f"Only {self.max_reflections} reflections allowed, stopping."
+                    )
+                    break
+
+                self.num_reflections += 1
+
+                if self.tool_reflection:
+                    self.num_reflections -= 1
+
+                if self.reflected_message is True:
+                    message = None
+                else:
+                    message = self.reflected_message
+            elif self.stop_on_empty:
                 await self.auto_save_session(force=True)
                 break
-
-            if self.num_reflections >= self.max_reflections:
-                self.io.tool_warning(f"Only {self.max_reflections} reflections allowed, stopping.")
-                break
-
-            self.num_reflections += 1
-
-            if self.tool_reflection:
-                self.num_reflections -= 1
-
-            if self.reflected_message is True:
-                message = None
-            else:
-                message = self.reflected_message
 
             if self.enable_context_compaction:
                 await self.compact_context_if_needed()
@@ -1708,11 +1736,9 @@ class Coder:
 
         # Check if combined messages exceed the token limit,
         # Get messages from ConversationManager
-        # Get messages from ConversationManager
-        done_messages = ConversationManager.get_messages_dict(MessageTag.DONE)
-        cur_messages = ConversationManager.get_messages_dict(MessageTag.CUR)
-        diff_messages = ConversationManager.get_messages_dict(MessageTag.DIFFS)
-
+        done_messages = ConversationService.get_manager(self).get_messages_dict(MessageTag.DONE)
+        cur_messages = ConversationService.get_manager(self).get_messages_dict(MessageTag.CUR)
+        diff_messages = ConversationService.get_manager(self).get_messages_dict(MessageTag.DIFFS)
         # Exclude first cur_message since that's the user's initial input
         done_tokens = self.summarizer.count_tokens(done_messages)
         cur_tokens = self.summarizer.count_tokens(cur_messages[1:] if len(cur_messages) > 1 else [])
@@ -1748,15 +1774,15 @@ class Coder:
                     raise ValueError("Summarization returned an empty result.")
 
                 # Replace old DONE messages with the summary in ConversationManager
-                ConversationManager.clear_tag(MessageTag.DONE)
-                ConversationManager.add_message(
+                ConversationService.get_manager(self).clear_tag(MessageTag.DONE)
+                ConversationService.get_manager(self).add_message(
                     message_dict={
                         "role": "user",
                         "content": summary_text,
                     },
                     tag=MessageTag.DONE,
                 )
-                ConversationManager.add_message(
+                ConversationService.get_manager(self).add_message(
                     message_dict={
                         "role": "assistant",
                         "content": (
@@ -1785,11 +1811,10 @@ class Coder:
                     raise ValueError("Summarization of current messages returned an empty result.")
 
                 # Replace current CUR messages with the summary in ConversationManager
-                ConversationManager.clear_tag(MessageTag.CUR)
+                ConversationService.get_manager(self).clear_tag(MessageTag.CUR)
 
-                # Keep the first message (user's initial input) if it exists
                 if self.last_user_message:
-                    ConversationManager.add_message(
+                    ConversationService.get_manager(self).add_message(
                         message_dict={
                             "role": "user",
                             "content": self.last_user_message,
@@ -1798,7 +1823,7 @@ class Coder:
                     )
 
                 # Add the summary conversation
-                ConversationManager.add_message(
+                ConversationService.get_manager(self).add_message(
                     message_dict={
                         "role": "assistant",
                         "content": "Ok. I am awaiting your summary of our goals to proceed.",
@@ -1806,14 +1831,14 @@ class Coder:
                     tag=MessageTag.CUR,
                     force=True,
                 )
-                ConversationManager.add_message(
+                ConversationService.get_manager(self).add_message(
                     message_dict={
                         "role": "user",
                         "content": f"Here is a summary of our current goals:\n{cur_summary_text}",
                     },
                     tag=MessageTag.CUR,
                 )
-                ConversationManager.add_message(
+                ConversationService.get_manager(self).add_message(
                     message_dict={
                         "role": "assistant",
                         "content": (
@@ -1826,18 +1851,34 @@ class Coder:
                     force=True,
                 )
 
+                # Find the last assistant messages in the current conversation
+                latest_messages = []
+
+                # Search from the end to find the most recent assistant messages
+                for msg in reversed(cur_messages):
+                    latest_messages.append(msg)
+
+                    if msg["role"] == "assistant":
+                        break
+
+                for msg in reversed(latest_messages):
+                    ConversationService.get_manager(self).add_message(
+                        message_dict={
+                            "role": msg["role"],
+                            "content": msg["content"],
+                        },
+                        tag=MessageTag.CUR,
+                    )
+
             self.io.tool_output("...chat history compacted.")
             self.io.update_spinner(self.io.last_spinner_text)
 
             # Clear all diff and file context messages
-            ConversationManager.clear_tag(MessageTag.DIFFS)
-            ConversationManager.clear_tag(MessageTag.FILE_CONTEXTS)
+            ConversationService.get_manager(self).clear_tag(MessageTag.DIFFS)
+            ConversationService.get_manager(self).clear_tag(MessageTag.FILE_CONTEXTS)
 
             # Reset ConversationFiles cache entirely
-            from cecli.helpers.conversation.files import ConversationFiles
-
-            ConversationFiles.clear_file_cache()
-
+            ConversationService.get_files(self).clear_file_cache()
         except Exception as e:
             self.io.tool_warning(f"Context compaction failed: {e}")
             self.io.tool_warning("Proceeding with full history for now.")
@@ -1973,15 +2014,14 @@ class Coder:
         final_reminders = []
 
         lazy_prompt = ""
-        if self.main_model.lazy:
+        if self.get_active_model().lazy:
             lazy_prompt = self.gpt_prompts.lazy_prompt
             final_reminders.append(lazy_prompt)
 
         overeager_prompt = ""
-        if self.main_model.overeager:
+        if self.get_active_model().overeager:
             overeager_prompt = self.gpt_prompts.overeager_prompt
             final_reminders.append(overeager_prompt)
-
         user_lang = self.get_user_language()
         if user_lang:
             final_reminders.append(f"Reply in {user_lang}.\n")
@@ -2037,31 +2077,30 @@ class Coder:
         # Choose appropriate fence based on file content
         self.choose_fence()
 
-        ConversationChunks.initialize_conversation_system(self)
-
-        # Decrement mark_for_delete values before adding new messages
-        ConversationManager.decrement_mark_for_delete()
+        ConversationService.get_chunks(self).initialize_conversation_system()
 
         # Clean up ConversationFiles and remove corresponding messages
-        ConversationChunks.cleanup_files(self)
+        ConversationService.get_chunks(self).cleanup_files()
 
         # Add reminder message with list of readonly and editable files
-        ConversationChunks.add_file_list_reminder(self)
+        ConversationService.get_chunks(self).add_file_list_reminder()
 
         # Add system messages (system prompt, examples, reminder)
-        ConversationChunks.add_system_messages(self)
+        ConversationService.get_chunks(self).add_system_messages()
 
-        # Add repository map messages (they add themselves via add_repo_map_messages)
-        ConversationChunks.add_repo_map_messages(self)
+        # Add rules messages
+        ConversationService.get_chunks(self).add_rules_messages()
 
-        # Add read-only file messages (they add themselves via add_readonly_files_messages)
-        ConversationChunks.add_readonly_files_messages(self)
+        # Add repository map messages
+        ConversationService.get_chunks(self).add_repo_map_messages()
 
-        # Add chat and edit file messages (they add themselves via add_chat_files_messages)
-        ConversationChunks.add_chat_files_messages(self)
+        # Add read-only file messages
+        ConversationService.get_chunks(self).add_readonly_files_messages()
+        # Add chat and edit file messages
+        ConversationService.get_chunks(self).add_chat_files_messages()
 
         # Return formatted messages for LLM
-        return ConversationManager.get_messages_dict()
+        return ConversationService.get_manager(self).get_messages_dict()
 
     def format_messages(self):
         chunks = self.format_chat_chunks()
@@ -2096,13 +2135,13 @@ class Coder:
                 self.warming_pings_left -= 1
                 self.next_cache_warm = time.time() + delay
 
-                kwargs = dict(self.main_model.extra_params) or dict()
+                kwargs = dict(self.get_active_model().extra_params) or dict()
                 kwargs["max_tokens"] = 1
 
                 try:
                     completion = litellm.completion(
-                        model=self.main_model.name,
-                        messages=self.cache_warming_chunks.cacheable_messages(),
+                        model=self.get_active_model().name,
+                        messages=ConversationService.get_manager(self).get_messages_dict(),
                         stream=False,
                         **kwargs,
                     )
@@ -2125,13 +2164,13 @@ class Coder:
 
     async def check_tokens(self, messages):
         """Check if the messages will fit within the model's token limits."""
-        input_tokens = self.main_model.token_count(messages)
-        max_input_tokens = self.main_model.info.get("max_input_tokens") or 0
+        input_tokens = self.get_active_model().token_count(messages)
+        max_input_tokens = self.get_active_model().info.get("max_input_tokens") or 0
 
         if max_input_tokens and input_tokens >= max_input_tokens:
             self.io.tool_error(
                 f"Your estimated chat context of {input_tokens:,} tokens exceeds the"
-                f" {max_input_tokens:,} token limit for {self.main_model.name}!"
+                f" {max_input_tokens:,} token limit for {self.get_active_model().name}!"
             )
             self.io.tool_output("To reduce the chat context:")
             self.io.tool_output("- Use /drop to remove unneeded files from the chat")
@@ -2146,21 +2185,29 @@ class Coder:
                 return False
         return True
 
+    def get_active_model(self):
+        return self.main_model
+
     async def send_message(self, inp):
         # Notify IO that LLM processing is starting
         self.io.llm_started()
 
         if inp:
             # Make sure current coder actually has control of conversation system
-            ConversationChunks.initialize_conversation_system(self)
+            ConversationService.get_chunks(self).initialize_conversation_system()
             self.format_chat_chunks()
 
             # Always add user message to conversation manager
-            ConversationManager.add_message(
+            ConversationService.get_manager(self).add_message(
                 message_dict=dict(role="user", content=inp),
                 tag=MessageTag.CUR,
                 hash_key=("user_message", inp, str(time.monotonic_ns())),
+                promotion=ConversationService.get_manager(self).DEFAULT_TAG_PROMOTION_VALUE,
+                mark_for_demotion=1,
             )
+
+        ConversationService.get_manager(self).decrement_message_markers()
+        import asyncio
 
         loop = asyncio.get_running_loop()
         result = await loop.run_in_executor(None, self.format_messages)
@@ -2175,10 +2222,10 @@ class Coder:
         self.multi_response_content = ""
         if self.show_pretty():
             spinner_text = (
-                f"Waiting for {self.main_model.name} • ${self.format_cost(self.total_cost)} session"
+                f"Waiting for {self.get_active_model().name} •"
+                f" ${self.format_cost(self.total_cost)} session"
             )
             self.io.start_spinner(spinner_text)
-
             if self.stream:
                 self.mdstream = True
             else:
@@ -2233,7 +2280,7 @@ class Coder:
                     break
                 except FinishReasonLength:
                     # We hit the output limit!
-                    if not self.main_model.info.get("supports_assistant_prefill"):
+                    if not self.get_active_model().info.get("supports_assistant_prefill"):
                         exhausted = True
                         break
 
@@ -2267,24 +2314,24 @@ class Coder:
         self.io.tool_output()
         self.show_usage_report()
         await self.add_assistant_reply_to_cur_messages()
-
         if exhausted:
-            cur_messages = ConversationManager.get_messages_dict(MessageTag.CUR)
+            cur_messages = ConversationService.get_manager(self).get_messages_dict(MessageTag.CUR)
             if cur_messages and cur_messages[-1]["role"] == "user":
                 # Always add to conversation manager
-                ConversationManager.add_message(
+                ConversationService.get_manager(self).add_message(
                     message_dict=dict(
                         role="assistant",
                         content="FinishReasonLength exception: you sent too many tokens",
                     ),
                     tag=MessageTag.CUR,
                     force=True,
+                    promotion=ConversationService.get_manager(self).DEFAULT_TAG_PROMOTION_VALUE,
+                    mark_for_demotion=1,
                 )
 
             await self.show_exhausted_error()
             self.num_exhausted_context_windows += 1
             return
-
         if self.partial_response_function_call:
             args = self.parse_partial_args()
             if args:
@@ -2298,19 +2345,23 @@ class Coder:
 
         if interrupted:
             # Always add to conversation manager
-            ConversationManager.add_message(
+            ConversationService.get_manager(self).add_message(
                 message_dict=dict(role="user", content="^C KeyboardInterrupt"),
                 tag=MessageTag.CUR,
                 force=True,
+                promotion=ConversationService.get_manager(self).DEFAULT_TAG_PROMOTION_VALUE,
+                mark_for_demotion=1,
             )
 
             # Always add assistant response to conversation manager
-            ConversationManager.add_message(
+            ConversationService.get_manager(self).add_message(
                 message_dict=dict(
                     role="assistant", content="I see that you interrupted my previous reply."
                 ),
                 tag=MessageTag.CUR,
                 force=True,
+                promotion=ConversationService.get_manager(self).DEFAULT_TAG_PROMOTION_VALUE,
+                mark_for_demotion=1,
             )
 
             return
@@ -2339,7 +2390,7 @@ class Coder:
                     tool_call_response, a, b = self.consolidate_chunks()
                     if await self.process_tool_calls(tool_call_response):
                         self.num_tool_calls += 1
-                        self.reflected_message = True
+                        self.reflected_message = self.reflected_message or True
                         return
             except Exception as e:
                 self.io.tool_error(f"Error processing tool calls: {str(e)}")
@@ -2370,16 +2421,19 @@ class Coder:
 
         shared_output = await self.run_shell_commands()
         if shared_output:
-            ConversationManager.add_message(
+            ConversationService.get_manager(self).add_message(
                 message_dict=dict(role="user", content=shared_output),
                 tag=MessageTag.CUR,
                 force=True,  # Force update existing message
+                promotion=ConversationService.get_manager(self).DEFAULT_TAG_PROMOTION_VALUE,
+                mark_for_demotion=1,
             )
-
-            ConversationManager.add_message(
+            ConversationService.get_manager(self).add_message(
                 message_dict=dict(role="assistant", content="Ok"),
                 tag=MessageTag.CUR,
                 force=True,  # Force update existing message
+                promotion=ConversationService.get_manager(self).DEFAULT_TAG_PROMOTION_VALUE,
+                mark_for_demotion=1,
             )
 
         if edited and self.auto_test and self.test_cmd:
@@ -2455,10 +2509,12 @@ class Coder:
 
                 # Add all tool responses
                 for tool_response in tool_responses:
-                    ConversationManager.add_message(
+                    ConversationService.get_manager(self).add_message(
                         message_dict=tool_response,
                         tag=MessageTag.CUR,
                         hash_key=(tool_response["tool_call_id"], str(time.monotonic_ns())),
+                        promotion=ConversationService.get_manager(self).DEFAULT_TAG_PROMOTION_VALUE,
+                        mark_for_demotion=1,
                     )
 
                 return True
@@ -2575,7 +2631,7 @@ class Coder:
                                     parsed_args_list.append(json.loads(chunk))
                                 except json.JSONDecodeError:
                                     self.io.tool_warning(
-                                        "Could not parse JSON chunk for tool"
+                                        "Malformed JSON arguments in tool"
                                         f" {tool_call.function.name}: {chunk}"
                                     )
                                     continue
@@ -2739,16 +2795,16 @@ class Coder:
     async def show_exhausted_error(self):
         output_tokens = 0
         if self.partial_response_content:
-            output_tokens = self.main_model.token_count(self.partial_response_content)
-        max_output_tokens = self.main_model.info.get("max_output_tokens") or 0
+            output_tokens = self.get_active_model().token_count(self.partial_response_content)
+        max_output_tokens = self.get_active_model().info.get("max_output_tokens") or 0
 
         messages = self.format_messages()
         if hasattr(messages, "all_messages"):
             # Old system: messages is a ChatChunks object
             messages = messages.all_messages()
         # New system: messages is already a list
-        input_tokens = self.main_model.token_count(messages)
-        max_input_tokens = self.main_model.info.get("max_input_tokens") or 0
+        input_tokens = self.get_active_model().token_count(messages)
+        max_input_tokens = self.get_active_model().info.get("max_input_tokens") or 0
 
         total_tokens = input_tokens + output_tokens
 
@@ -2767,7 +2823,7 @@ class Coder:
             tot_err = " -- possibly exhausted context window!"
 
         res = ["", ""]
-        res.append(f"Model {self.main_model.name} has hit a token limit!")
+        res.append(f"Model {self.get_active_model().name} has hit a token limit!")
         res.append("Token counts below are approximate.")
         res.append("")
         res.append(f"Input tokens: ~{input_tokens:,} of {max_input_tokens:,}{inp_err}")
@@ -2779,7 +2835,7 @@ class Coder:
             res.append("To reduce output tokens:")
             res.append("- Ask for smaller changes in each request.")
             res.append("- Break your code into smaller source files.")
-            if "diff" not in self.main_model.edit_format:
+            if "diff" not in self.get_active_model().edit_format:
                 res.append("- Use a stronger model that can return diffs.")
 
         if input_tokens >= max_input_tokens or total_tokens >= max_input_tokens:
@@ -2794,7 +2850,7 @@ class Coder:
         self.io.tool_error(res)
         await self.io.offer_url(urls.token_limits)
 
-    def lint_edited(self, fnames):
+    def lint_edited(self, fnames, show_output=True):
         res = ""
         for fname in fnames:
             if not fname:
@@ -2806,7 +2862,7 @@ class Coder:
                 res += errors
                 res += "\n"
 
-        if res:
+        if res and show_output:
             self.io.tool_warning(res)
 
         return res
@@ -2861,10 +2917,12 @@ class Coder:
                 self.io.tool_warning("Execution stopped by end message hook")
                 return
 
-            ConversationManager.add_message(
+            ConversationService.get_manager(self).add_message(
                 message_dict=msg,
                 tag=MessageTag.CUR,
                 hash_key=("assistant_message", str(msg), str(time.monotonic_ns())),
+                promotion=ConversationService.get_manager(self).DEFAULT_TAG_PROMOTION_VALUE,
+                mark_for_demotion=1,
             )
 
     def get_file_mentions(self, content, ignore_current=False):
@@ -2962,7 +3020,7 @@ class Coder:
         self.io.reset_streaming_response()
 
         if not model:
-            model = self.main_model
+            model = self.get_active_model()
 
         self.partial_response_content = ""
         self.partial_response_reasoning_content = ""
@@ -3074,6 +3132,19 @@ class Coder:
             self.io.tool_warning("Empty response received from LLM. Check your provider account?")
 
         self.io.assistant_output(show_resp, pretty=self.show_pretty())
+
+        if (
+            self.edit_format == "agent"
+            and self.stream
+            and not show_resp
+            and nested.getter(self, "_has_empty_reflected")
+        ):
+            await asyncio.sleep(4)
+            self._has_empty_reflected = True
+            self.reflected_message = True
+            self.empty_response = True
+        else:
+            self._has_empty_reflected = False
 
         if (
             hasattr(completion.choices[0], "finish_reason")
@@ -3414,8 +3485,8 @@ class Coder:
                 self.message_tokens_sent += prompt_tokens
 
         else:
-            prompt_tokens = self.main_model.token_count(messages)
-            completion_tokens = self.main_model.token_count(self.partial_response_content)
+            prompt_tokens = self.get_active_model().token_count(messages)
+            completion_tokens = self.get_active_model().token_count(self.partial_response_content)
             self.message_tokens_sent += prompt_tokens
 
         self.message_tokens_received += completion_tokens
@@ -3431,7 +3502,7 @@ class Coder:
             tokens_report, self.message_tokens_sent, self.message_tokens_received
         )
 
-        if not self.main_model.info.get("input_cost_per_token"):
+        if not self.get_active_model().info.get("input_cost_per_token"):
             self.usage_report = tokens_report
             return
 
@@ -3475,10 +3546,10 @@ class Coder:
     ):
         cost = 0
 
-        input_cost_per_token = self.main_model.info.get("input_cost_per_token") or 0
-        output_cost_per_token = self.main_model.info.get("output_cost_per_token") or 0
+        input_cost_per_token = self.get_active_model().info.get("input_cost_per_token") or 0
+        output_cost_per_token = self.get_active_model().info.get("output_cost_per_token") or 0
         input_cost_per_token_cache_hit = (
-            self.main_model.info.get("input_cost_per_token_cache_hit") or 0
+            self.get_active_model().info.get("input_cost_per_token_cache_hit") or 0
         )
 
         # deepseek
@@ -3526,7 +3597,7 @@ class Coder:
         return cur + new
 
     def get_file_stub(self, fname):
-        return RepoMap.get_file_stub(fname, self.io)
+        return ConversationService.get_files(self).get_file_stub(fname)
 
     def get_rel_fname(self, fname):
         try:
@@ -3674,7 +3745,7 @@ class Coder:
             if is_image_file(fname):
                 continue
             content = self.io.read_text(fname)
-            tokens += self.main_model.token_count(content)
+            tokens += self.get_active_model().token_count(content)
 
         if tokens < warn_number_of_tokens:
             return
@@ -3832,7 +3903,7 @@ class Coder:
 
         if not context:
             context = self.get_context_from_history(
-                ConversationManager.get_messages_dict(MessageTag.CUR)
+                ConversationService.get_manager(self).get_messages_dict(MessageTag.CUR)
             )
 
         try:

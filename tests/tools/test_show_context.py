@@ -4,7 +4,7 @@ from unittest.mock import Mock
 
 import pytest
 
-from cecli.tools import show_numbered_context
+from cecli.tools import show_context
 
 
 class DummyIO:
@@ -25,6 +25,9 @@ class DummyCoder:
         self.root = str(root)
         self.repo = SimpleNamespace(root=str(root))
         self.io = DummyIO()
+        import uuid
+
+        self.uuid = str(uuid.uuid4())  # Generate unique UUID for each instance
 
     def abs_root_path(self, file_path):
         path = Path(file_path)
@@ -47,59 +50,59 @@ def coder_with_file(tmp_path):
 def test_pattern_with_zero_line_number_is_allowed(coder_with_file):
     coder, file_path = coder_with_file
 
-    result = show_numbered_context.Tool.execute(
+    result = show_context.Tool.execute(
         coder,
         show=[
             {
                 "file_path": "example.txt",
-                "pattern": "beta",
-                "line_number": 0,
-                "context_lines": 0,
+                "start_text": "beta",
+                "end_text": "beta",
+                "padding": 0,
             }
         ],
     )
 
     # show_numbered_context now returns a static success message
-    assert "Successfully retrieved context" in result
+    assert "Successfully retrieved most recent context" in result
     coder.io.tool_error.assert_not_called()
 
 
 def test_empty_pattern_uses_line_number(coder_with_file):
     coder, file_path = coder_with_file
 
-    result = show_numbered_context.Tool.execute(
+    result = show_context.Tool.execute(
         coder,
         show=[
             {
                 "file_path": "example.txt",
-                "pattern": "",
-                "line_number": 2,
-                "context_lines": 0,
+                "start_text": "beta",
+                "end_text": "beta",
+                "padding": 0,
             }
         ],
     )
 
     # show_numbered_context now returns a static success message
-    assert "Successfully retrieved context" in result
+    assert "Successfully retrieved most recent context" in result
     coder.io.tool_error.assert_not_called()
 
 
 def test_conflicting_pattern_and_line_number_raise(coder_with_file):
     coder, file_path = coder_with_file
 
-    result = show_numbered_context.Tool.execute(
+    # Test that missing start_text raises an error
+    result = show_context.Tool.execute(
         coder,
         show=[
             {
                 "file_path": "example.txt",
-                "pattern": "beta",
-                "line_number": 2,
-                "context_lines": 0,
+                "end_text": "beta",
+                "padding": 0,
             }
         ],
     )
 
-    assert result.startswith("Error: Show operation 1: Provide exactly one of")
+    assert "Provide both 'start_text' and 'end_text'" in result
     coder.io.tool_error.assert_called()
 
 

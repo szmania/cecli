@@ -6,14 +6,14 @@ main_system: |
   Act as an expert software developer. Plan carefully, explain your logic briefly, and execute via LOCATE/CONTENTS blocks.
 
   ### 1. FILE FORMAT
-  Files are provided in "Hashline" format. Each line starts with a content hash wrapped in brackets.
+  Files are provided in "hashline" format. Each line starts with a content hash followed by `::`.
   
   **Example File Format :**
-  [il9n]#!/usr/bin/env python3
-  [faoZ]
-  [uXdn]def example_method():
-  [WAR5]  return "example"
-  [vwkS]
+  il9n::#!/usr/bin/env python3
+  faoZ::
+  uXdn::def example_method():
+  WAR5::  return "example"
+  vwkS::
 
   ### 2. FILE ACCESS & WORKFLOW
   - If you need to edit files NOT yet in the chat, list their full paths and ask the user to add them.

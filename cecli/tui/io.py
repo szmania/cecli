@@ -170,7 +170,7 @@ class TextualInputOutput(InputOutput):
             pretty: Whether to use pretty formatting (unused in TUI, kept for compatibility)
         """
         if not message:
-            return
+            message = "(empty response)"
 
         # Use the streaming path so markdown rendering is applied
         self.output_queue.put({"type": "start_response"})

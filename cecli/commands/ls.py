@@ -33,7 +33,13 @@ class LsCommand(BaseCommand):
             rel_file_path = coder.get_rel_fname(abs_file_path)
             read_only_stub_files.append(rel_file_path)
 
-        if not chat_files and not read_only_files and not read_only_stub_files:
+        # Add rules files
+        rules_files = []
+        for abs_file_path in coder.abs_rules_fnames:
+            rel_file_path = coder.get_rel_fname(abs_file_path)
+            rules_files.append(rel_file_path)
+
+        if not chat_files and not read_only_files and not read_only_stub_files and not rules_files:
             io.tool_output("\nNo files in chat, git repo, or read-only list.")
             return format_command_result(io, "ls", "Listed files")
 
@@ -41,6 +47,11 @@ class LsCommand(BaseCommand):
         #     io.tool_output("Repo files not in the chat:\n")
         # for file in other_files:
         #     io.tool_output(f"  {file}")
+
+        if rules_files:
+            io.tool_output("\nRules files:\n")
+        for file in sorted(rules_files):
+            io.tool_output(f"  {file}")
 
         # Read-only files:
         if read_only_files or read_only_stub_files:
@@ -72,4 +83,5 @@ class LsCommand(BaseCommand):
         help_text += "  - Files in chat (editable)\n"
         help_text += "  - Read-only files (view-only)\n"
         help_text += "  - Read-only stub files (view-only, truncated)\n"
+        help_text += "  - Rules files (reference)\n"
         return help_text

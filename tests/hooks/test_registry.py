@@ -8,8 +8,8 @@ import yaml
 from cecli.hooks import BaseHook, HookManager, HookRegistry, HookType
 
 
-class TestHook(BaseHook):
-    """Test hook for unit testing."""
+class MockHook(BaseHook):
+    """Mock hook for unit testing."""
 
     type = HookType.START
 
@@ -18,8 +18,8 @@ class TestHook(BaseHook):
         return True
 
 
-class AnotherTestHook(BaseHook):
-    """Another test hook."""
+class AnotherMockHook(BaseHook):
+    """Another mock hook."""
 
     type = HookType.END
 

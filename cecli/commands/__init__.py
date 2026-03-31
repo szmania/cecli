@@ -54,6 +54,7 @@ from .remove_mcp import RemoveMcpCommand
 from .remove_skill import RemoveSkillCommand
 from .report import ReportCommand
 from .reset import ResetCommand
+from .rules import RulesCommand
 from .run import RunCommand
 from .save import SaveCommand
 from .save_session import SaveSessionCommand
@@ -129,6 +130,7 @@ CommandRegistry.register(RemoveMcpCommand)
 CommandRegistry.register(RemoveSkillCommand)
 CommandRegistry.register(ReportCommand)
 CommandRegistry.register(ResetCommand)
+CommandRegistry.register(RulesCommand)
 CommandRegistry.register(RunCommand)
 CommandRegistry.register(SaveCommand)
 CommandRegistry.register(SaveSessionCommand)
@@ -203,6 +205,7 @@ __all__ = [
     "RemoveSkillCommand",
     "ReportCommand",
     "ResetCommand",
+    "RulesCommand",
     "RunCommand",
     "SaveCommand",
     "SaveSessionCommand",

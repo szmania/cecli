@@ -48,7 +48,9 @@ class DropCommand(BaseCommand):
                 cls._handle_read_only_files(
                     io, coder, expanded_word, coder.abs_read_only_stubs_fnames, "read-only (stub)"
                 )
-
+                cls._handle_read_only_files(
+                    io, coder, expanded_word, coder.abs_rules_fnames, "rules"
+                )
                 # For editable files, use glob if word contains glob chars, otherwise use substring
                 if any(c in expanded_word for c in "*?[]"):
                     matched_files = cls._glob_filtered_to_repo(coder, expanded_word)
@@ -193,8 +195,13 @@ class DropCommand(BaseCommand):
     def get_completions(cls, io, coder, args) -> List[str]:
         """Get completion options for drop command."""
         # Return files currently in chat
-        files = coder.get_inchat_relative_files()
-        return [cls._quote_fname(fn) for fn in files]
+        files = set(coder.get_inchat_relative_files())
+
+        # Add rules files to completions
+        for abs_rule in coder.abs_rules_fnames:
+            files.add(coder.get_rel_fname(abs_rule))
+
+        return [cls._quote_fname(fn) for fn in sorted(files)]
 
     @classmethod
     def _quote_fname(cls, fname):

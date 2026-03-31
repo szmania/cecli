@@ -6,8 +6,8 @@ import pytest
 from cecli.hooks import BaseHook, CommandHook, HookType
 
 
-class TestHook(BaseHook):
-    """Test hook for unit testing."""
+class MockHook(BaseHook):
+    """Mock hook for unit testing."""
 
     type = HookType.START
 
@@ -16,8 +16,8 @@ class TestHook(BaseHook):
         return True
 
 
-class TestHookWithReturn(BaseHook):
-    """Test hook that returns a specific value."""
+class MockHookWithReturn(BaseHook):
+    """Mock hook that returns a specific value."""
 
     type = HookType.PRE_TOOL
 
@@ -30,8 +30,8 @@ class TestHookWithReturn(BaseHook):
         return self.return_value
 
 
-class TestHookWithException(BaseHook):
-    """Test hook that raises an exception."""
+class MockHookWithException(BaseHook):
+    """Mock hook that raises an exception."""
 
     type = HookType.START
 
@@ -45,7 +45,7 @@ class TestBaseHook:
 
     def test_hook_creation(self):
         """Test basic hook creation."""
-        hook = TestHook(name="test_hook", priority=5, enabled=True)
+        hook = MockHook(name="test_hook", priority=5, enabled=True)
 
         assert hook.name == "test_hook"
         assert hook.priority == 5
@@ -54,8 +54,8 @@ class TestBaseHook:
 
     def test_hook_default_name(self):
         """Test hook uses class name as default."""
-        hook = TestHook()
-        assert hook.name == "TestHook"
+        hook = MockHook()
+        assert hook.name == "MockHook"
 
     def test_hook_validation(self):
         """Test hook type validation."""
@@ -72,10 +72,10 @@ class TestBaseHook:
 
     def test_hook_repr(self):
         """Test hook string representation."""
-        hook = TestHook(name="test_hook", priority=10, enabled=False)
+        hook = MockHook(name="test_hook", priority=10, enabled=False)
         repr_str = repr(hook)
 
-        assert "TestHook" in repr_str
+        assert "MockHook" in repr_str
         assert "name='test_hook'" in repr_str
         assert "type=HookType.START" in repr_str or "type=START" in repr_str
         assert "priority=10" in repr_str
@@ -84,7 +84,7 @@ class TestBaseHook:
     @pytest.mark.asyncio
     async def test_hook_execution(self):
         """Test hook execution."""
-        hook = TestHook()
+        hook = MockHook()
         result = await hook.execute(None, {})
 
         assert result is True
@@ -92,7 +92,7 @@ class TestBaseHook:
     @pytest.mark.asyncio
     async def test_hook_with_return_value(self):
         """Test hook with specific return value."""
-        hook = TestHookWithReturn(return_value=False)
+        hook = MockHookWithReturn(return_value=False)
         result = await hook.execute(None, {})
 
         assert result is False
@@ -100,7 +100,7 @@ class TestBaseHook:
     @pytest.mark.asyncio
     async def test_hook_with_exception(self):
         """Test hook that raises exception."""
-        hook = TestHookWithException()
+        hook = MockHookWithException()
 
         with pytest.raises(ValueError, match="Test exception"):
             await hook.execute(None, {})

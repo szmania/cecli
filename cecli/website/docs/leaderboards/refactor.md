@@ -1,5 +1,5 @@
 ---
-parent: cecli LLM Leaderboards
+parent: LLM Leaderboards
 highlight_image: /assets/leaderboard.jpg
 nav_order: 100
 description: Quantitative benchmark of LLM code refactoring skill.
@@ -14,10 +14,10 @@ The refactoring benchmark requires a large context window to
 work with large source files.
 Therefore, results are available for fewer models.
 
-<input type="text" id="editSearchInput" placeholder="Search..." style="width: 100%; max-width: 800px; margin: 10px auto; padding: 8px; display: block; border: 1px solid #ddd; border-radius: 4px;">
+<input type="text" id="editSearchInput" placeholder="Search..." style="width: 100%; max-width: 800px; margin: 10px auto; padding: 8px; display: block; border: 1px solid var(--gray); border-radius: 4px;">
 
 <table style="width: 100%; max-width: 800px; margin: auto; border-collapse: collapse; box-shadow: 0 2px 4px rgba(0,0,0,0.1); font-size: 14px;">
-  <thead style="background-color: #f2f2f2;">
+  <thead>
     <tr>
       <th style="padding: 8px; text-align: left;">Model</th>
       <th style="padding: 8px; text-align: center;">Percent completed correctly</th>
@@ -29,7 +29,7 @@ Therefore, results are available for fewer models.
   <tbody>
     {% assign refac_sorted = site.data.refactor_leaderboard | sort: 'pass_rate_1' | reverse %}
     {% for row in refac_sorted %}
-      <tr style="border-bottom: 1px solid #ddd;">
+      <tr>
         <td style="padding: 8px;">{{ row.model }}</td>
         <td style="padding: 8px; text-align: center;">{{ row.pass_rate_1 }}%</td>
         <td style="padding: 8px; text-align: center;">{{ row.percent_cases_well_formed }}%</td>

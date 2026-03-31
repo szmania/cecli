@@ -50,11 +50,7 @@ from cecli.coders.base_coder import UnknownEditFormat
 from cecli.commands import Commands, SwitchCoderSignal
 from cecli.deprecated_args import handle_deprecated_model_args
 from cecli.format_settings import format_settings, scrub_sensitive_info
-from cecli.helpers.conversation import (
-    ConversationChunks,
-    ConversationManager,
-    MessageTag,
-)
+from cecli.helpers.conversation import ConversationService, MessageTag
 from cecli.helpers.copypaste import ClipboardWatcher
 from cecli.helpers.file_searcher import generate_search_path_list
 from cecli.history import ChatSummary
@@ -124,7 +120,7 @@ def check_config_files_for_yes(config_files):
 def get_git_root():
     """Try and guess the git repo, since the conf.yml can be at the repo root"""
     try:
-        repo = git.Repo(search_parent_directories=True)
+        repo = git.Repo(search_parent_directories=True, odbt=git.GitCmdObjectDB)
         return repo.working_tree_dir
     except (git.InvalidGitRepositoryError, FileNotFoundError):
         return None
@@ -181,7 +177,7 @@ async def setup_git(git_root, io):
     repo = None
     if git_root:
         try:
-            repo = git.Repo(git_root)
+            repo = git.Repo(git_root, odbt=git.GitCmdObjectDB)
         except ANY_GIT_ERROR:
             pass
     elif cwd == Path.home():
@@ -222,7 +218,7 @@ async def check_gitignore(git_root, io, ask=True):
     if not git_root:
         return
     try:
-        repo = git.Repo(git_root)
+        repo = git.Repo(git_root, odbt=git.GitCmdObjectDB)
         patterns_to_add = []
         if not repo.ignored(".cecli"):
             patterns_to_add.append(".cecli*")
@@ -763,6 +759,15 @@ async def main_async(argv=None, input=None, output=None, force_git_root=None, re
             read_only_fnames.extend(str(f) for f in path.rglob("*") if f.is_file())
         else:
             read_only_fnames.append(str(path))
+    rules_patterns = args.rules or []
+    rules_expanded = utils.expand_glob_patterns(rules_patterns)
+    rules_fnames = []
+    for fn in rules_expanded:
+        path = Path(fn).expanduser().resolve()
+        if path.is_dir():
+            rules_fnames.extend(str(f) for f in path.rglob("*") if f.is_file())
+        else:
+            rules_fnames.append(str(path))
     if len(all_files) > 1:
         good = True
         for fname in all_files:
@@ -1065,8 +1070,17 @@ async def main_async(argv=None, input=None, output=None, force_git_root=None, re
             # Default since some models do not have max_input_tokens specified somehow
             args.context_compaction_max_tokens = 65536
     try:
+        if getattr(args, "mcp_servers_file_deprecated", None):
+            io.tool_warning(
+                "The --mcp-servers-file argument is deprecated and will be removed in a future"
+                " version. Please use --mcp-servers-files instead."
+            )
+            if not args.mcp_servers_files:
+                args.mcp_servers_files = []
+            args.mcp_servers_files.extend(args.mcp_servers_file_deprecated)
+
         mcp_servers = load_mcp_servers(
-            args.mcp_servers, args.mcp_servers_file, io, args.verbose, args.mcp_transport
+            args.mcp_servers, args.mcp_servers_files, io, args.verbose, args.mcp_transport
         )
         mcp_manager = await McpServerManager.from_servers(mcp_servers, io, args.verbose)
         # Load hooks if specified
@@ -1089,6 +1103,7 @@ async def main_async(argv=None, input=None, output=None, force_git_root=None, re
             fnames=fnames,
             read_only_fnames=read_only_fnames,
             read_only_stubs_fnames=[],
+            rules_fnames=rules_fnames,
             show_diffs=args.show_diffs,
             auto_commits=args.auto_commits,
             dirty_commits=args.dirty_commits,
@@ -1198,7 +1213,7 @@ async def main_async(argv=None, input=None, output=None, force_git_root=None, re
     if args.show_repo_map:
         repo_map = coder.get_repo_map()
         if repo_map:
-            repo_string = ConversationChunks.get_repo_map_string(repo_map)
+            repo_string = ConversationService.get_chunks(coder).get_repo_map_string(repo_map)
             pre_init_io.tool_output(repo_string)
         return await graceful_exit(coder)
     if args.apply:
@@ -1306,7 +1321,7 @@ async def main_async(argv=None, input=None, output=None, force_git_root=None, re
                     await coder.mcp_manager.disconnect_server("Local")
 
             for tag in [MessageTag.SYSTEM, MessageTag.EXAMPLES, MessageTag.STATIC]:
-                ConversationManager.clear_tag(tag)
+                ConversationService.get_manager(coder).clear_tag(tag)
 
             coder = await Coder.create(**kwargs)
 
@@ -1474,6 +1489,7 @@ async def graceful_exit(coder=None, exit_code=0):
 
         if coder.mcp_manager and coder.mcp_manager.is_connected:
             await coder.mcp_manager.disconnect_all()
+
     return exit_code
 
 

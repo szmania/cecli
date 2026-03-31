@@ -33,6 +33,8 @@ class Tool(BaseTool):
         Returns a result message.
         """
         # Note: Undo does not have a dry_run parameter as it's inherently about reverting a previous action.
+        coder.edit_allowed = False
+
         try:
             # Validate parameters
             if change_id is None and file_path is None:

@@ -1,5 +1,5 @@
 ---
-parent: cecli LLM Leaderboards
+parent: LLM Leaderboards
 nav_order: 900
 ---
 

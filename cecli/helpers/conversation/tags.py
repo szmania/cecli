@@ -14,6 +14,7 @@ class MessageTag(str, Enum):
     STATIC = "static"
     EXAMPLES = "examples"
     REPO = "repo"
+    RULES = "rules"
     READONLY_FILES = "readonly_files"
     CHAT_FILES = "chat_files"
     EDIT_FILES = "edit_files"
@@ -30,7 +31,8 @@ DEFAULT_TAG_PRIORITY: Dict[MessageTag, int] = {
     MessageTag.SYSTEM: 0,
     MessageTag.STATIC: 50,
     MessageTag.EXAMPLES: 75,
-    MessageTag.REPO: 100,
+    MessageTag.RULES: 100,
+    MessageTag.REPO: 150,
     MessageTag.READONLY_FILES: 200,
     MessageTag.CHAT_FILES: 200,
     MessageTag.EDIT_FILES: 200,
@@ -48,6 +50,7 @@ DEFAULT_TAG_TIMESTAMP_OFFSET: Dict[MessageTag, int] = {
     MessageTag.SYSTEM: 0,
     MessageTag.STATIC: 0,
     MessageTag.EXAMPLES: 0,
+    MessageTag.RULES: 0,
     MessageTag.REPO: 0,
     MessageTag.READONLY_FILES: 0,
     MessageTag.CHAT_FILES: 0,

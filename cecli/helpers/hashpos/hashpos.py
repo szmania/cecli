@@ -4,15 +4,15 @@ import xxhash
 
 
 class HashPos:
-    B64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
+    B64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789~_"
     # The actual coprime period (64 * 63)
     PERIOD = 4032
-    # Regex pattern for HashPos format: [{4-char-hash}]
-    HASH_PREFIX_RE = re.compile(r"^[\[\(\{\|]([0-9a-zA-Z\-_@]{4})[\|\}\)\]]")
-    # Regex for normalization: optional leading bracket, 4 hash chars, then a bracket
-    NORMALIZE_RE = re.compile(r"^[\[\(\{\|]?([0-9a-zA-Z\-_@]{4})[\|\}\)\]]")
+    # Regex pattern for HashPos format: {4-char-hash}::
+    HASH_PREFIX_RE = re.compile(r"^([0-9a-zA-Z\~_@]{4})::")
+    # Regex for normalization: 4 hash chars optionally followed by '::'
+    NORMALIZE_RE = re.compile(r"^([0-9a-zA-Z\~_@]{4})(?:)?::")
     # Regex for a raw 4-character fragment
-    FRAGMENT_RE = re.compile(r"^[0-9a-zA-Z\-_@]{4}$")
+    FRAGMENT_RE = re.compile(r"^[0-9a-zA-Z\~_@]{4}$")
 
     def __init__(self, source_text: str = ""):
         self.lines = source_text.splitlines()
@@ -33,7 +33,9 @@ class HashPos:
     def generate_public_id(self, text: str, line_idx: int) -> str:
         content_bits = self._get_content_bits(text)
         anchor_bits = self._get_anchor_bits(line_idx)
-        packed = (content_bits << 12) | (anchor_bits ^ content_bits)
+        # Apply modular offset to content bits using anchor bits
+        offset_content = (content_bits + anchor_bits) & 0xFFF
+        packed = (offset_content << 12) | anchor_bits
 
         res = ""
         for _ in range(4):
@@ -46,8 +48,10 @@ class HashPos:
         for i, char in enumerate(public_id):
             packed |= self.B64.index(char) << (6 * i)
 
-        content_bits = (packed >> 12) & 0xFFF
-        anchor_bits = (packed & 0xFFF) ^ content_bits
+        offset_content = (packed >> 12) & 0xFFF
+        anchor_bits = packed & 0xFFF
+        # Reverse the modular offset to recover original content bits
+        content_bits = (offset_content - anchor_bits) & 0xFFF
         return content_bits, anchor_bits
 
     def format_content(self, use_private_ids: bool = False, start_line: int = 1) -> str:
@@ -58,16 +62,16 @@ class HashPos:
                 if use_private_ids
                 else self.generate_public_id(line, i + start_line)
             )
-            formatted_lines.append(f"[{prefix}]{line}")
+            formatted_lines.append(f"{prefix}::{line}")
         return "\n".join(formatted_lines)
 
     def resolve_to_lines(self, public_id: str, start_line: int = 1) -> list[int]:
-        target_dna, target_anchor = self.unpack_public_id(public_id)
+        target_content, target_anchor = self.unpack_public_id(public_id)
         content_matches = []
         perfect_matches = []
 
         for i, line in enumerate(self.lines):
-            if self._get_content_bits(line) == target_dna:
+            if self._get_content_bits(line) == target_content:
                 current_anchor = self._get_anchor_bits(i + start_line)
                 if current_anchor == target_anchor:
                     perfect_matches.append(i)
@@ -75,7 +79,9 @@ class HashPos:
                     dist = abs(current_anchor - target_anchor)
                     # Use the actual coprime period for the circular logic
                     dist = min(dist, self.PERIOD - dist)
-                    content_matches.append((dist, i))
+
+                    if dist <= 5:
+                        content_matches.append((dist, i))
 
         if perfect_matches:
             return perfect_matches
@@ -91,7 +97,7 @@ class HashPos:
         1. Resolve all candidates for both IDs.
         2. Find the pair of (start, end) that are logically ordered and
            have the lowest combined distance score.
-        3. Returns (start_index, end_index).
+        3. Returns (start_index, end_index)
         """
         starts = self.resolve_to_lines(start_id)
         ends = self.resolve_to_lines(end_id)
@@ -109,7 +115,8 @@ class HashPos:
                     return s, e
 
         raise ValueError(
-            f"Found matches for {start_id} and {end_id}, but no logically ordered range."
+            f"Found matches for {start_id} and {end_id}, but no logically ordered range or unique"
+            " matches."
         )
 
     @staticmethod
@@ -117,8 +124,8 @@ class HashPos:
         r"""
         Remove HashPos prefixes from the start of every line.
 
-        Removes prefixes that match the pattern: "[{4-char-hash}]"
-        where the hash is exactly 4 characters from the set [0-9a-zA-Z\-_@].
+        Removes prefixes that match the pattern: "{4-char-hash}"
+        where the hash is exactly 4 characters from the set [0-9a-zA-Z\~_@] followed by '::'.
 
         Args:
             text: Input text with HashPos prefixes
@@ -156,10 +163,9 @@ class HashPos:
         """
         Normalize a HashPos string to the 4-character hash fragment.
 
-        Accepts HashPos strings in "[{hash_prefix}]" format, "{hash_prefix}]" format,
-        or a raw "{hash_prefix}" fragment.
+        Accepts HashPos strings in "{hash_prefix}::" format or a raw "{hash_prefix}" fragment.
         Also extracts HashPos from strings that contain content after the HashPos,
-        e.g., "[H7M5]Line 1"
+        e.g., "H7M5::Line 1"
 
         Args:
             hashpos_str: HashPos string in various formats
@@ -185,5 +191,5 @@ class HashPos:
         raise ValueError(
             f"Invalid HashPos format '{hashpos_str}'. "
             r"Expected \"{hash_prefix}\" "
-            r"where hash_prefix is exactly 4 characters from the set [0-9a-zA-Z\-_@]."
+            r"where hash_prefix is exactly 4 characters from the set [0-9a-zA-Z\~_@]."
         )

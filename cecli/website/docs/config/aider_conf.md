@@ -400,9 +400,6 @@ cog.outl("```")
 ## Specify a file containing the message to send the LLM, process reply, then exit (disables chat mode)
 #message-file: xxx
 
-## Run cecli in your browser (default: False)
-#gui: false
-
 ## Enable automatic copy/paste of chat between cecli and web UI (default: False)
 #copy-paste: false
 

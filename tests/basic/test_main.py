@@ -1373,7 +1373,7 @@ def test_mcp_servers_parsing(dummy_io, git_temp_dir, mocker):
     mcp_file = Path("mcp_servers.json")
     mcp_content = {"mcpServers": {"git": {"command": "uvx", "args": ["mcp-server-git"]}}}
     mcp_file.write_text(json.dumps(mcp_content))
-    main(["--mcp-servers-file", str(mcp_file), "--exit", "--yes-always"], **dummy_io)
+    main(["--mcp-servers-files", str(mcp_file), "--exit", "--yes-always"], **dummy_io)
     mock_coder_create.assert_called_once()
     _, kwargs = mock_coder_create.call_args
 
@@ -1381,3 +1381,43 @@ def test_mcp_servers_parsing(dummy_io, git_temp_dir, mocker):
     assert kwargs["mcp_manager"] is not None
     assert len(kwargs["mcp_manager"].servers) > 0
     assert hasattr(kwargs["mcp_manager"].servers[0], "name")
+
+
+def test_mcp_servers_file_multiple(dummy_io, git_temp_dir, mocker):
+    mocker.patch("cecli.mcp.server.McpServer.connect", new_callable=AsyncMock)
+    mock_coder_create = mocker.patch("cecli.coders.Coder.create")
+    mock_coder_instance = MagicMock()
+    mock_coder_instance.mcp_manager = False
+    mock_coder_instance._autosave_future = mock_autosave_future()
+    mock_coder_create.return_value = mock_coder_instance
+
+    mcp_file1 = Path("mcp_servers1.json")
+    mcp_content1 = {"mcpServers": {"server1": {"command": "cmd1"}}}
+    mcp_file1.write_text(json.dumps(mcp_content1))
+
+    mcp_file2 = Path("mcp_servers2.json")
+    mcp_content2 = {"mcpServers": {"server2": {"command": "cmd2"}}}
+    mcp_file2.write_text(json.dumps(mcp_content2))
+
+    main(
+        [
+            "--mcp-servers-files",
+            str(mcp_file1),
+            "--mcp-servers-files",
+            str(mcp_file2),
+            "--exit",
+            "--yes-always",
+        ],
+        **dummy_io,
+    )
+
+    mock_coder_create.assert_called_once()
+    _, kwargs = mock_coder_create.call_args
+
+    assert "mcp_manager" in kwargs
+    mcp_manager = kwargs["mcp_manager"]
+    assert mcp_manager is not None
+    assert len(mcp_manager.servers) == 2
+    server_names = {server.name for server in mcp_manager.servers}
+    assert "server1" in server_names
+    assert "server2" in server_names

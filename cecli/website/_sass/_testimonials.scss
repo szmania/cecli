@@ -11,7 +11,6 @@
 }
 
 .testimonial-card {
-    background: linear-gradient(135deg, rgba(20, 176, 20, 0.1) 0%, rgba(76, 110, 245, 0.2) 100%);
     border-radius: 8px;
     padding: 30px;
     box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
@@ -58,9 +57,7 @@
 }
 
 .testimonial-card:hover {
-    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
-    background: linear-gradient(135deg, rgba(76, 110, 245, 0.12) 0%, rgba(20, 176, 20, 0.08) 50%, rgba(76, 110, 245, 0.2) 100%);
-}
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);}
 
 .testimonial-author {
     font-weight: 600;

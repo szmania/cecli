@@ -58,10 +58,10 @@ Command hooks are simple shell commands. You can use placeholders in the command
 
 | Hook Type | Available Placeholders |
 |-----------|------------------------|
-| `start`, `end` | `{timestamp}`, `{coder_type}` |
-| `on_message`, `end_message` | `{timestamp}`, `{message}`, `{message_length}` |
-| `pre_tool` | `{timestamp}`, `{tool_name}`, `{arg_string}` |
-| `post_tool` | `{timestamp}`, `{tool_name}`, `{arg_string}`, `{output}` |
+| `start`, `end` | `{timestamp}` `{coder_type}` |
+| `on_message` `end_message` | `{timestamp}` `{message}` `{message_length}` |
+| `pre_tool` | `{timestamp}` `{tool_name}` `{arg_string}` |
+| `post_tool` | `{timestamp}` `{tool_name}` `{arg_string}` `{output}` |
 
 ### Example: Aborting Tool Execution
 If a `pre_tool` command hook returns a non-zero exit code, the tool execution will be aborted.

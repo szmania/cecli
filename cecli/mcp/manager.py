@@ -138,7 +138,7 @@ class McpServerManager:
             self._connected_servers.add(server)
             self._log_verbose(f"Connected to MCP server: {name}")
             return True
-        except Exception as e:
+        except (Exception, asyncio.CancelledError) as e:
             if server.name != "unnamed-server":
                 self._log_error(f"Failed to connect to MCP server {name}: {e}")
             return False

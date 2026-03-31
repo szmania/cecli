@@ -121,6 +121,8 @@ body:has(.side-bar):has(.main) {
     }    
 
     .side-bar {
+        background-color: #121212 !important;
+ 
         .site-nav, .site-header, .site-footer {
             width: 100% !important;
         }        
@@ -172,6 +174,16 @@ body:has(.side-bar):has(.main) {
 // Hide blog link in documentation
 .aux-nav-list-item a[href="/blog/"] {
     display: none !important;
+}
+
+th, td {
+    background-color: #121212;
+}
+
+.main-content code {
+    background-color: #1e1e1e;
+    color: inherit !important;
+    padding: 0.25rem;
 }
 
 // ============================================

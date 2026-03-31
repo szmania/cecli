@@ -1,6 +1,6 @@
 ---
 title: Scores by release date
-parent: cecli LLM Leaderboards
+parent: LLM Leaderboards
 nav_order: 200
 ---
 

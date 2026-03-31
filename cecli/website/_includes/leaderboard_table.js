@@ -88,8 +88,8 @@ document.addEventListener('DOMContentLoaded', function() {
     else if (mode === 'detail') activeButton = modeDetailButton;
 
     activeButton.classList.add('active');
-    activeButton.style.backgroundColor = '#e7f3ff'; // Use selected row highlight blue
-    activeButton.style.color = '#495057'; // Use dark text for contrast on light blue
+    activeButton.style.backgroundColor = 'rgba(76, 110, 245, 0.2)'; // Use selected row highlight blue
+    activeButton.style.color = 'var(--gray)'; // Use dark text for contrast on light blue
 
     // Get the first header cell (for the toggle/checkbox column)
     const firstHeaderCell = document.querySelector('table thead th:first-child');
@@ -374,8 +374,8 @@ document.addEventListener('DOMContentLoaded', function() {
         });
         this.classList.add('active');
         // Apply active styles directly as inline styles might interfere
-        this.style.backgroundColor = '#e7f3ff'; // Use selected row highlight blue
-        this.style.color = '#495057'; // Use dark text for contrast on light blue
+        this.style.backgroundColor = 'rgba(76, 110, 245, 0.2)'; // Use selected row highlight blue
+        this.style.color = 'var(--gray)'; // Use dark text for contrast on light blue
 
         // Update table view and apply filters
         updateTableView(newMode);

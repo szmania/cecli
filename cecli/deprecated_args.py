@@ -142,6 +142,17 @@ def add_deprecated_model_args(parser, group):
     )
 
 
+def add_deprecated_mcp_args(parser, group):
+    """Add deprecated mcp arguments to the argparse parser."""
+    group.add_argument(
+        "--mcp-servers-file",
+        help=argparse.SUPPRESS,
+        action="append",
+        dest="mcp_servers_file_deprecated",
+        env_var="CECLI_MCP_SERVERS_FILE",
+    )
+
+
 def handle_deprecated_model_args(args, io):
     """Handle deprecated model shortcut arguments and provide appropriate warnings."""
     # Define model mapping

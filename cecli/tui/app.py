@@ -3,6 +3,7 @@
 import concurrent.futures
 import json
 import queue
+import time
 from functools import lru_cache
 from pathlib import Path
 
@@ -79,7 +80,7 @@ class TUI(App):
             },
         )
 
-        if other.get("use_terminal_background", False):
+        if other.get("use_terminal_background", True):
             patch_textual_strip_render_with_cache()
 
         self.bind(
@@ -307,11 +308,11 @@ class TUI(App):
 
     # ASCII banner for startup
     BANNER = f"""
-[bold {BANNER_COLORS[0]}]   ██████╗███████╗ ██████╗██╗     ██╗[/bold {BANNER_COLORS[0]}]
-[bold {BANNER_COLORS[1]}]  ██╔════╝██╔════╝██╔════╝██║     ██║[/bold {BANNER_COLORS[1]}]
-[bold {BANNER_COLORS[2]}]  ██║     █████╗  ██║     ██║     ██║[/bold {BANNER_COLORS[2]}]
-[bold {BANNER_COLORS[3]}]  ██║     ██╔══╝  ██║     ██║     ██║[/bold {BANNER_COLORS[3]}]
-[bold {BANNER_COLORS[4]}]  ╚██████╗███████╗╚██████╗███████╗██║[/bold {BANNER_COLORS[4]}]
+[bold {BANNER_COLORS[0]}]   ▒▒▒▒▒▒╗▒▒▒▒▒▒▒╗ ▒▒▒▒▒▒╗▒▒╗     ▒▒╗[/bold {BANNER_COLORS[0]}]
+[bold {BANNER_COLORS[1]}]  ▒▒╔════╝▒▒╔════╝▒▒╔════╝▒▒║     ▒▒║[/bold {BANNER_COLORS[1]}]
+[bold {BANNER_COLORS[2]}]  ▒▒║     ▒▒▒▒▒╗  ▒▒║     ▒▒║     ▒▒║[/bold {BANNER_COLORS[2]}]
+[bold {BANNER_COLORS[3]}]  ▒▒║     ▒▒╔══╝  ▒▒║     ▒▒║     ▒▒║[/bold {BANNER_COLORS[3]}]
+[bold {BANNER_COLORS[4]}]  ╚▒▒▒▒▒▒╗▒▒▒▒▒▒▒╗╚▒▒▒▒▒▒╗▒▒▒▒▒▒▒╗▒▒║[/bold {BANNER_COLORS[4]}]
 [bold {BANNER_COLORS[5]}]   ╚═════╝╚══════╝ ╚═════╝╚══════╝╚═╝[/bold {BANNER_COLORS[5]}]
 
 """
@@ -637,9 +638,19 @@ class TUI(App):
         if coder:
             coder.io.start_spinner("Processing...")
 
-        self.update_key_hints(generating=True)
+        if coder and self._currently_generating:
+            from cecli.helpers.conversation import ConversationService, MessageTag
 
-        self.input_queue.put({"text": user_input})
+            ConversationService.get_manager(coder).add_message(
+                message_dict=dict(role="user", content=coder.wrap_user_input(user_input)),
+                tag=MessageTag.CUR,
+                hash_key=("user_message", user_input, str(time.monotonic_ns())),
+                promotion=ConversationService.get_manager(coder).DEFAULT_TAG_PROMOTION_VALUE,
+                mark_for_demotion=1,
+            )
+        else:
+            self.update_key_hints(generating=True)
+            self.input_queue.put({"text": user_input})
 
     def set_input_value(self, text) -> None:
         """Find the input widget and set focus to it."""
@@ -825,7 +836,7 @@ class TUI(App):
         self.input_queue.put({"confirmed": message.result})
 
     # Commands that use path-based completion
-    PATH_COMPLETION_COMMANDS = {"/add", "/read-only", "/read-only-stub", "/load", "/save"}
+    PATH_COMPLETION_COMMANDS = {"/add", "/read-only", "/read-only-stub", "/rules", "/load", "/save"}
 
     def _extract_symbols(self) -> set[str]:
         """Extract code symbols from files in chat using Pygments."""
@@ -956,7 +967,14 @@ class TUI(App):
                 if cmd_part == "/":
                     suggestions = all_commands
                 else:
-                    suggestions = [c for c in all_commands if c.startswith(cmd_part)]
+                    # First get commands that start with the prefix
+                    starts_with = [c for c in all_commands if c.startswith(cmd_part)]
+                    # Then get commands that contain the prefix anywhere (excluding those already matched)
+                    contains = [
+                        c for c in all_commands if cmd_part[1:] in c and not c.startswith(cmd_part)
+                    ]
+
+                    suggestions = starts_with + contains
             else:
                 # Complete command argument
                 # This handles both:
