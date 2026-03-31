@@ -29,11 +29,11 @@ def main():
         lines = hashed_content.splitlines()
         hash_counts = {}
         for line in lines:
-            if "|" in line:
+            if "::" in line:
                 # Extract hash prefix between | characters
-                parts = line.split("|", 2)
+                parts = line.split("::", 1)
                 if len(parts) >= 2:
-                    hash_prefix = parts[1]
+                    hash_prefix = parts[0]
                     hash_counts[hash_prefix] = hash_counts.get(hash_prefix, 0) + 1
 
         # Find duplicates

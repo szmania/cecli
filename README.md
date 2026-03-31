@@ -26,13 +26,7 @@ LLMs are a part of our lives from here on out so join us in learning about and c
 * [Custom System Prompts](https://github.com/dwash96/cecli/blob/main/cecli/website/docs/config/custom-system-prompts.md)
 * [Custom Tools](https://github.com/dwash96/cecli/blob/main/cecli/website/docs/config/agent-mode.md#creating-custom-tools)
 * [Advanced Model Configuration](https://github.com/dwash96/cecli/blob/main/cecli/website/docs/config/model-aliases.md#advanced-model-settings)
-* [Aider Original Documentation (still mostly applies)](https://cecli.dev/)
-
-You can see a selection of the enhancements and updates by comparing the help output:
-
-```bash
-diff -uw --color <(aider --help) <(cecli --help)
-```
+* [Additional Documentation](https://cecli.dev/)
 
 ## Installation Instructions
 This project can be installed using several methods:
@@ -48,7 +42,7 @@ or
 uv pip install --native-tls cecli-dev
 ```
 
-The package exports a `cecli` command that accepts all of Aider's configuration options (and a few more!)
+The package exports a `cecli` command that can start the application
 
 ### Tool Installation
 ```bash
@@ -102,7 +96,7 @@ DEEPSEEK_API_KEY="..."
 
 ### Run Program
 
-If you are in the directory with your .cecli.conf.yml file, then simply running `cecli` or `aider-ce` will start the agent with your configuration. For best results, since terminal emulators can be finicky, we highly suggest running:
+If you are in the directory with your .cecli.conf.yml file, then simply running `cecli` will start the agent with your configuration. For best results, since terminal emulators can be finicky, we highly suggest running:
 
 ```bash
 cecli --terminal-setup
@@ -117,10 +111,12 @@ docker pull dustinwashington/cecli
 docker run \
   -it \
   --user $(id -u):$(id -g) \
-  --volume $(pwd):/app dustinwashington/cecli \
-  --volume $(pwd)/.aider.conf.yml:/.aider.conf.yml \
-  --volume $(pwd)/.aider.env:/.aider/.env \
-  --config /app/.aider.conf.yml
+  --volume $(pwd):/app \
+  --volume $(pwd)/.cecli.conf.yml:/.cecli.conf.yml \
+  --volume $(pwd)/.cecli.env:/.cecli.env \
+  dustinwashington/cecli \
+  --config /.cecli.conf.yml
+  --env-file /.cecli.env
 ```
 
 This command will make sure all commands ran by the coding agent happen in context of the docker container to protect the host file system from any infamous agentic mishap
