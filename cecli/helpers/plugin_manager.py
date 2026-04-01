@@ -37,6 +37,8 @@ def normalize_filename(filename: str) -> str:
     :param filename: Original filename
     :return: Normalized module name
     """
+    if not filename:
+        return ""
     # Remove extension
     name = Path(filename).stem
 
@@ -58,6 +60,8 @@ def load_module(source, module_name=None, reload=False):
     :param module_name: name of module to register in sys.modules
     :return: loaded module
     """
+    if not source:
+        return None
     # Convert to absolute path for cache key
     source_path = Path(source).resolve()
 
