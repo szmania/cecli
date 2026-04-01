@@ -90,7 +90,9 @@ class AgentCoder(Coder):
         self.agent_finished = False
         self.agent_config = self._get_agent_config()
         self._setup_agent()
-        ToolRegistry.build_registry(agent_config=self.agent_config)
+        _, self.loaded_custom_tools = ToolRegistry.build_registry(
+            agent_config=self.agent_config
+        )
         super().__init__(*args, **kwargs)
 
     def _setup_agent(self):
