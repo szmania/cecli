@@ -296,7 +296,7 @@ class AgentCoder(Coder):
                 if norm_tool_name in ToolRegistry.get_registered_tools():
                     tool_module = ToolRegistry.get_tool(norm_tool_name)
                     for params in parsed_args_list:
-                        result = tool_module.process_response(self, params)
+                        result = tool_module.execute(self, **params)
                         if asyncio.iscoroutine(result):
                             tasks.append(result)
                         else:
