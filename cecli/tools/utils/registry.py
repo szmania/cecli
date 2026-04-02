@@ -6,6 +6,7 @@ this provides centralized tool registration, discovery, and filtering
 based on agent configuration.
 """
 
+import traceback
 from pathlib import Path
 from typing import Dict, List, Optional, Set, Type
 
@@ -73,6 +74,7 @@ class ToolRegistry:
                     except Exception as e:
                         # Log error but continue with other files
                         print(f"Error loading tool from {py_file}: {e}")
+                        print(traceback.format_exc())
             else:
                 # If it's a file, try to load it directly
                 if path.exists() and path.suffix == ".py":
@@ -84,6 +86,7 @@ class ToolRegistry:
                                 loaded_custom_tools.append(module.Tool.NORM_NAME)
                     except Exception as e:
                         print(f"Error loading tool from {path}: {e}")
+                        print(traceback.format_exc())
 
         # Get include/exclude lists from config
         tools_includelist = agent_config.get(

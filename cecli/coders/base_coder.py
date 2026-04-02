@@ -2587,7 +2587,7 @@ class Coder:
 
         # Define the coroutine to execute all tool calls for a single server
         async def _exec_server_tools(server, tool_calls_list):
-            if isinstance(server, LocalServer):
+            if server.name == "Local":
                 if hasattr(self, "_execute_local_tool_calls"):
                     return await self._execute_local_tool_calls(tool_calls_list)
                 else:
