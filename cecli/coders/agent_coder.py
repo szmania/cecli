@@ -301,23 +301,8 @@ class AgentCoder(Coder):
                             tasks.append(result)
                         else:
                             tasks.append(asyncio.to_thread(lambda: result))
-                elif self.mcp_tools:
-                    for server_name, server_tools in self.mcp_tools:
-                        if any(
-                            t.get("function", {}).get("name") == norm_tool_name
-                            for t in server_tools
-                        ):
-                            server = self.mcp_manager.get_server(server_name)
-                            if server:
-                                for params in parsed_args_list:
-                                    tasks.append(
-                                        self._execute_mcp_tool(server, norm_tool_name, params)
-                                    )
-                                break
-                    else:
-                        all_results_content.append(f"Error: Unknown tool name '{tool_name}'")
                 else:
-                    all_results_content.append(f"Error: Unknown tool name '{tool_name}'")
+                    all_results_content.append(f"Error: Unknown local tool name '{tool_name}'")
                 if tasks:
                     task_results = await asyncio.gather(*tasks)
                     all_results_content.extend(str(res) for res in task_results)
