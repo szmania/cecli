@@ -48,7 +48,6 @@ from cecli.hooks import HookIntegration
 from cecli.io import ConfirmGroup, InputOutput
 from cecli.linter import Linter
 from cecli.llm import litellm
-from cecli.mcp import LocalServer
 from cecli.models import RETRY_TIMEOUT
 from cecli.reasoning_tags import (
     REASONING_TAG,
