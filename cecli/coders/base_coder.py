@@ -48,6 +48,7 @@ from cecli.hooks import HookIntegration
 from cecli.io import ConfirmGroup, InputOutput
 from cecli.linter import Linter
 from cecli.llm import litellm
+from cecli.mcp import LocalServer
 from cecli.models import RETRY_TIMEOUT
 from cecli.reasoning_tags import (
     REASONING_TAG,
@@ -2565,7 +2566,7 @@ class Coder:
         # Execute tools for each server
         for server, tool_calls in tool_groups.items():
             # Check if this server is an instance of LocalServer (local tools)
-            if server.name == "Local":
+            if isinstance(server, LocalServer):
                 # Local tools - use _execute_local_tools
                 local_responses = await self._execute_local_tools(tool_calls)
                 all_responses[server] = local_responses

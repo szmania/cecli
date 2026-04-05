@@ -295,13 +295,13 @@ class AgentCoder(Coder):
                 if norm_tool_name in ToolRegistry.get_registered_tools():
                     tool_module = ToolRegistry.get_tool(norm_tool_name)
                     for params in parsed_args_list:
-                        result = tool_module.execute(self, **params)
+                        result = tool_module.process_response(self, params)
                         if asyncio.iscoroutine(result):
                             tasks.append(result)
                         else:
                             tasks.append(asyncio.to_thread(lambda: result))
                 else:
-                    all_results_content.append(f"Error: Unknown local tool name '{tool_name}'")
+                    all_results_content.append(f"Error: Unknown tool name '{tool_name}'")
                 if tasks:
                     task_results = await asyncio.gather(*tasks)
                     all_results_content.extend(str(res) for res in task_results)
