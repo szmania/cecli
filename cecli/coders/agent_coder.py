@@ -43,6 +43,7 @@ class AgentCoder(Coder):
     def __init__(self, *args, **kwargs):
         self.recently_removed = {}
         self.tool_usage_history = []
+        self.loaded_custom_tools = []
         self.tool_usage_retries = 20
         self.last_round_tools = []
         self.tool_call_vectors = []
@@ -90,6 +91,7 @@ class AgentCoder(Coder):
         self.agent_config = self._get_agent_config()
         self._setup_agent()
         ToolRegistry.build_registry(agent_config=self.agent_config)
+        self.loaded_custom_tools = ToolRegistry.loaded_custom_tools
         super().__init__(*args, **kwargs)
 
     def _setup_agent(self):
@@ -196,6 +198,9 @@ class AgentCoder(Coder):
 
     def show_announcements(self):
         super().show_announcements()
+        if self.loaded_custom_tools:
+            self.io.tool_output(f"Loaded custom tools: {', '.join(self.loaded_custom_tools)}")
+
         skills = self.skills_manager.find_skills()
         if skills:
             skills_list = []
@@ -290,28 +295,13 @@ class AgentCoder(Coder):
                 if norm_tool_name in ToolRegistry.get_registered_tools():
                     tool_module = ToolRegistry.get_tool(norm_tool_name)
                     for params in parsed_args_list:
-                        result = tool_module.process_response(self, params)
+                        result = tool_module.execute(self, **params)
                         if asyncio.iscoroutine(result):
                             tasks.append(result)
                         else:
                             tasks.append(asyncio.to_thread(lambda: result))
-                elif self.mcp_tools:
-                    for server_name, server_tools in self.mcp_tools:
-                        if any(
-                            t.get("function", {}).get("name") == norm_tool_name
-                            for t in server_tools
-                        ):
-                            server = self.mcp_manager.get_server(server_name)
-                            if server:
-                                for params in parsed_args_list:
-                                    tasks.append(
-                                        self._execute_mcp_tool(server, norm_tool_name, params)
-                                    )
-                                break
-                    else:
-                        all_results_content.append(f"Error: Unknown tool name '{tool_name}'")
                 else:
-                    all_results_content.append(f"Error: Unknown tool name '{tool_name}'")
+                    all_results_content.append(f"Error: Unknown local tool name '{tool_name}'")
                 if tasks:
                     task_results = await asyncio.gather(*tasks)
                     all_results_content.extend(str(res) for res in task_results)

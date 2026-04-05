@@ -48,7 +48,6 @@ from cecli.hooks import HookIntegration
 from cecli.io import ConfirmGroup, InputOutput
 from cecli.linter import Linter
 from cecli.llm import litellm
-from cecli.mcp import LocalServer
 from cecli.models import RETRY_TIMEOUT
 from cecli.reasoning_tags import (
     REASONING_TAG,
@@ -544,7 +543,7 @@ class Coder:
                 max_code_line_length=map_max_line_length,
                 repo_root=self.root,
                 use_memory_cache=repomap_in_memory,
-                use_enhanced_map=False if not self.args or self.args.use_enhanced_map else True,
+                use_enhanced_map=getattr(self.args, "use_enhanced_map", False),
             )
 
         self.summarizer = summarizer or ChatSummary(
@@ -2566,7 +2565,7 @@ class Coder:
         # Execute tools for each server
         for server, tool_calls in tool_groups.items():
             # Check if this server is an instance of LocalServer (local tools)
-            if isinstance(server, LocalServer):
+            if server.name == "Local":
                 # Local tools - use _execute_local_tools
                 local_responses = await self._execute_local_tools(tool_calls)
                 all_responses[server] = local_responses

@@ -6,6 +6,7 @@ this provides centralized tool registration, discovery, and filtering
 based on agent configuration.
 """
 
+import traceback
 from pathlib import Path
 from typing import Dict, List, Optional, Set, Type
 
@@ -19,11 +20,25 @@ class ToolRegistry:
     _tools: Dict[str, Type] = {}  # normalized name -> Tool class
     _essential_tools: Set[str] = {"contextmanager", "replacetext", "finished"}
     _registry: Dict[str, Type] = {}  # cached filtered registry
+    loaded_custom_tools: List[str] = []
 
     @classmethod
     def register(cls, tool_class):
-        """Register a tool class."""
-        name = tool_class.NORM_NAME
+        """Register a tool class using the name from its SCHEMA."""
+        name = None
+        if hasattr(tool_class, "SCHEMA"):
+            try:
+                name = tool_class.SCHEMA.get("function", {}).get("name", "").lower()
+            except Exception:
+                pass
+
+        if not name and hasattr(tool_class, "NORM_NAME"):
+            name = tool_class.NORM_NAME
+
+        if not name:
+            # Unable to determine a name, can't register
+            return
+
         cls._tools[name] = tool_class
 
     @classmethod
@@ -46,13 +61,15 @@ class ToolRegistry:
                          tools_includelist/tools_excludelist keys
 
         Returns:
-            Dictionary mapping normalized tool names to tool classes
+            A dictionary mapping normalized tool names to tool classes.
+            Custom loaded tools are stored in `ToolRegistry.loaded_custom_tools`.
         """
         if agent_config is None:
             agent_config = {}
 
         # Load tools from tool_paths if specified
         tools_paths = agent_config.get("tools_paths", agent_config.get("tool_paths", []))
+        loaded_custom_tools = []
 
         for tool_path in tools_paths:
             path = Path(tool_path)
@@ -65,9 +82,12 @@ class ToolRegistry:
                         # Check if module has a Tool class
                         if hasattr(module, "Tool"):
                             cls.register(module.Tool)
+                            if module.Tool.NORM_NAME:
+                                loaded_custom_tools.append(module.Tool.NORM_NAME)
                     except Exception as e:
                         # Log error but continue with other files
                         print(f"Error loading tool from {py_file}: {e}")
+                        print(traceback.format_exc())
             else:
                 # If it's a file, try to load it directly
                 if path.exists() and path.suffix == ".py":
@@ -75,8 +95,11 @@ class ToolRegistry:
                         module = plugin_manager.load_module(str(path))
                         if hasattr(module, "Tool"):
                             cls.register(module.Tool)
+                            if module.Tool.NORM_NAME:
+                                loaded_custom_tools.append(module.Tool.NORM_NAME)
                     except Exception as e:
                         print(f"Error loading tool from {path}: {e}")
+                        print(traceback.format_exc())
 
         # Get include/exclude lists from config
         tools_includelist = agent_config.get(
@@ -86,28 +109,29 @@ class ToolRegistry:
             "tools_excludelist", agent_config.get("tools_blacklist", [])
         )
 
-        registry = {}
+        # Start with a base set of tools
+        if tools_includelist:
+            # If includelist is provided, start with only those tools
+            working_set = set(tools_includelist)
+        else:
+            # Otherwise, start with all registered tools
+            working_set = set(cls._tools.keys())
 
-        for tool_name, tool_class in cls._tools.items():
-            should_include = True
+        # Add essential tools, they can't be removed by the excludelist
+        working_set.update(cls._essential_tools)
 
-            # Apply include list if specified
-            if tools_includelist:
-                should_include = tool_name in tools_includelist
+        # Remove tools from the excludelist, but keep essential ones
+        if tools_excludelist:
+            for tool_name in tools_excludelist:
+                if tool_name in working_set and tool_name not in cls._essential_tools:
+                    working_set.remove(tool_name)
 
-            # Essential tools are always included
-            if tool_name in cls._essential_tools:
-                should_include = True
-
-            # Apply exclude list (unless essential)
-            if tool_name in tools_excludelist and tool_name not in cls._essential_tools:
-                should_include = False
-
-            if should_include:
-                registry[tool_name] = tool_class
+        # Build the final registry from the working set
+        registry = {name: cls._tools[name] for name in working_set if name in cls._tools}
 
         # Store the built registry in the class attribute
         cls._registry = registry
+        cls.loaded_custom_tools = loaded_custom_tools
         return registry
 
     @classmethod
