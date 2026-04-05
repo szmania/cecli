@@ -277,3 +277,7 @@ class Tool(BaseTool):
         except Exception as e:
             # Handle unexpected errors during processing
             return handle_tool_error(coder, tool_name, e)
+
+    @classmethod
+    def on_duplicate_request(cls, coder, **kwargs):
+        coder.edit_allowed = True

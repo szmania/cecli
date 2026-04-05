@@ -577,7 +577,7 @@ class TestRepoMapAllLanguages:
                 f.write(content)
 
             io = InputOutput()
-            repo_map = RepoMap(main_model=self.GPT35, io=io)
+            repo_map = RepoMap(main_model=self.GPT35, io=io, use_enhanced_map=True)
             other_files = [test_file]
             result = repo_map.get_repo_map([], other_files)
             dump(lang)

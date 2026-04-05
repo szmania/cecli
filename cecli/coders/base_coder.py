@@ -544,7 +544,7 @@ class Coder:
                 max_code_line_length=map_max_line_length,
                 repo_root=self.root,
                 use_memory_cache=repomap_in_memory,
-                use_enhanced_map=False if not self.args or self.args.use_enhanced_map else True,
+                use_enhanced_map=getattr(self.args, "use_enhanced_map", False),
             )
 
         self.summarizer = summarizer or ChatSummary(
@@ -3221,12 +3221,13 @@ class Coder:
                 try:
                     func = chunk.choices[0].delta.function_call
                     # dump(func)
-                    for k, v in func.items():
-                        self.tool_reflection = True
-                        self.io.update_spinner_suffix(v)
+                    if func:
+                        for k, v in func.items():
+                            self.tool_reflection = True
+                            self.io.update_spinner_suffix(v)
 
-                    received_content = True
-                    self.token_profiler.on_token()
+                        received_content = True
+                        self.token_profiler.on_token()
                 except AttributeError:
                     pass
 

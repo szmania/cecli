@@ -81,6 +81,7 @@ class BaseTool(ABC):
                         f"Tool '{tool_name}' has been called with identical parameters recently. "
                         "This request is denied to prevent repeated operations."
                     )
+                    cls.on_duplicate_request(coder, **params)
                     return handle_tool_error(coder, tool_name, ValueError(error_msg))
 
             # Add current invocation to history (keeping only last 3)
@@ -99,3 +100,7 @@ class BaseTool(ABC):
     @classmethod
     def format_output(cls, coder, mcp_server, tool_response):
         print_tool_response(coder=coder, mcp_server=mcp_server, tool_response=tool_response)
+
+    @classmethod
+    def on_duplicate_request(cls, coder, **kwargs):
+        pass

@@ -977,7 +977,7 @@ class Model(ModelSettings):
     ):
         if os.environ.get("CECLI_SANITY_CHECK_TURNS"):
             sanity_check_messages(messages)
-        messages = model_request_parser(self, messages)
+        messages = model_request_parser(self, messages, tools)
         if self.verbose:
             for message in messages:
                 msg_role = message.get("role")
@@ -1120,7 +1120,7 @@ class Model(ModelSettings):
         from cecli.exceptions import LiteLLMExceptions
 
         litellm_ex = LiteLLMExceptions()
-        messages = model_request_parser(self, messages)
+        messages = model_request_parser(self, messages, None)
         retry_delay = 0.125
         if self.verbose:
             dump(messages)

@@ -58,14 +58,14 @@ class TestToolRegistry:
 
     def test_build_registry_with_includelist(self):
         """Test filtering with tools_includelist"""
-        config = {"tools_includelist": ["contextmanager", "replacetext", "finished"]}
+        config = {"tools_includelist": ["contextmanager", "replacetext"]}
         registry = ToolRegistry.build_registry(config)
 
-        # Should only include tools in the includelist
-        assert len(registry) == 3, "Should only include tools from includelist"
+        # Should only include tools from includelist, plus essential tools
+        assert len(registry) == 3, "Should include 2 from list + 1 essential"
         assert "contextmanager" in registry
         assert "replacetext" in registry
-        assert "finished" in registry
+        assert "finished" in registry  # Essential
         assert "command" not in registry, "Should not include tools not in includelist"
 
     def test_build_registry_with_excludelist(self):
@@ -92,13 +92,13 @@ class TestToolRegistry:
     def test_build_registry_combined_filters(self):
         """Test combined filtering with includelist and excludelist"""
         config = {
-            "tools_includelist": ["contextmanager", "replacetext", "finished", "command"],
+            "tools_includelist": ["contextmanager", "replacetext", "command"],
             "tools_excludelist": ["commandinteractive"],
         }
         registry = ToolRegistry.build_registry(config)
 
         # Should respect all filters
-        assert len(registry) == 4, "Should include exactly 4 tools"
+        assert len(registry) == 4, "Should include exactly 4 tools (3 from list + finished)"
         assert "contextmanager" in registry
         assert "replacetext" in registry
         assert "finished" in registry
