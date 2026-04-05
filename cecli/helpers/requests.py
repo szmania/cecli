@@ -125,7 +125,7 @@ def concatenate_user_messages(messages):
     return result
 
 
-def add_continue_for_no_prefill(model, messages):
+def add_continue_for_no_prefill(model, messages, tools):
     """Add a 'Continue' user message for models that don't support assistant prefill.
 
     Args:
@@ -139,20 +139,34 @@ def add_continue_for_no_prefill(model, messages):
     # Check if model doesn't support assistant prefill
     # If not, inject a dummy user message with content "Continue"
     # but only if the last message is not already a user message
+    append_message = False
+
     if not model.info.get("supports_assistant_prefill", False):
         # Only add "Continue" if the last message is not a user message
         if not messages or messages[-1].get("role") != "user":
             # Add a user message with content "Continue" to the messages list
-            messages.append({"role": "user", "content": "Continue"})
+            append_message = True
+
+    if (
+        tools
+        and messages
+        and messages[-1].get("role") == "assistant"
+        and messages[-1].get("prefix", False)
+    ):
+        messages[-1].pop("prefix", None)
+        append_message = True
+
+    if append_message:
+        messages.append({"role": "user", "content": "Continue"})
 
     return messages
 
 
-def model_request_parser(model, messages):
+def model_request_parser(model, messages, tools):
     messages = thought_signature(model, messages)
     messages = remove_empty_tool_calls(messages)
     messages = concatenate_user_messages(messages)
     messages = ensure_alternating_roles(messages)
     messages = add_reasoning_content(messages)
-    messages = add_continue_for_no_prefill(model, messages)
+    messages = add_continue_for_no_prefill(model, messages, tools)
     return messages

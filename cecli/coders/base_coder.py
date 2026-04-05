@@ -3221,12 +3221,13 @@ class Coder:
                 try:
                     func = chunk.choices[0].delta.function_call
                     # dump(func)
-                    for k, v in func.items():
-                        self.tool_reflection = True
-                        self.io.update_spinner_suffix(v)
+                    if func:
+                        for k, v in func.items():
+                            self.tool_reflection = True
+                            self.io.update_spinner_suffix(v)
 
-                    received_content = True
-                    self.token_profiler.on_token()
+                        received_content = True
+                        self.token_profiler.on_token()
                 except AttributeError:
                     pass
 
