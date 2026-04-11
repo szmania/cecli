@@ -88,10 +88,7 @@ class BaseTool(ABC):
             cls._invocations[tool_name].append((current_params_tuple, params))
             if len(cls._invocations[tool_name]) > 3:
                 cls._invocations[tool_name] = cls._invocations[tool_name][-3:]
-        else:
-            # When TRACK_INVOCATIONS is False, clear all invocation history
-            # This indicates the job is making progress, so reset tracking for all tools
-            cls.clear_invocation_cache()
+
         try:
             return cls.execute(coder, **params)
         except Exception as e:

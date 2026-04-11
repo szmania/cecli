@@ -123,6 +123,7 @@ class Tool(BaseTool):
             )
 
             coder.files_edited_by_tools.add(rel_path)
+            cls.clear_invocation_cache()
 
             # 5. Format and return result
             success_message = f"Inserted content at {start_line} in {file_path}"
@@ -134,14 +135,12 @@ class Tool(BaseTool):
             )
 
         except ToolError as e:
-            coder.edit_allowed = False
-            cls.clear_invocation_cache()
             # Handle errors raised by utility functions (expected errors)
+            coder.edit_allowed = False
             return handle_tool_error(coder, tool_name, e, add_traceback=False)
 
         except Exception as e:
             coder.edit_allowed = False
-            cls.clear_invocation_cache()
             return handle_tool_error(coder, tool_name, e)
 
     @classmethod

@@ -262,6 +262,8 @@ class Tool(BaseTool):
                     success_message += "\nFailed edits:\n" + "\n".join(all_failed_edits)
                 change_id_to_return = None  # Multiple change IDs, can't return single one
 
+            cls.clear_invocation_cache()
+
             return format_tool_result(
                 coder,
                 tool_name,
@@ -272,12 +274,10 @@ class Tool(BaseTool):
         except ToolError as e:
             # Handle errors raised by utility functions or explicitly raised here
             coder.edit_allowed = False
-            cls.clear_invocation_cache()
             return handle_tool_error(coder, tool_name, e, add_traceback=False)
         except Exception as e:
             # Handle unexpected errors
             coder.edit_allowed = False
-            cls.clear_invocation_cache()
             return handle_tool_error(coder, tool_name, e)
 
     @classmethod

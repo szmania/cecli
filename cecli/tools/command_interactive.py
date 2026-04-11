@@ -93,6 +93,8 @@ class Tool(BaseTool):
                     " large_file_token_threshold)"
                 )
 
+            cls.clear_invocation_cache()
+
             if exit_status == 0:
                 return (
                     "Interactive command finished successfully (exit code 0)."
