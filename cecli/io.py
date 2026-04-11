@@ -1301,7 +1301,7 @@ class InputOutput:
                 self.user_input(f"{question} - {res}", log_only=False)
             else:
                 # Ring the bell if needed
-                self.notify_user_input_required()
+                self.ring_bell()
                 self.start_spinner("Awaiting Confirmation...", False)
 
                 while True:
