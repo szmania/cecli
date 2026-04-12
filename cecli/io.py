@@ -470,7 +470,9 @@ class InputOutput:
         self.newline = (
             None
             if line_endings in ("platform", "preserve")
-            else "\n" if line_endings == "lf" else "\r\n"
+            else "\n"
+            if line_endings == "lf"
+            else "\r\n"
         )
         self.dry_run = dry_run
 
