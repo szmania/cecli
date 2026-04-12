@@ -1015,7 +1015,8 @@ I will proceed based on the tool results and updated context.""")
                         1
                         if isinstance(self.get_active_model().use_temperature, bool)
                         else float(self.get_active_model().use_temperature)
-                    ) + 0.1,
+                    )
+                    + 0.1,
                     "frequency_penalty": 0.2,
                     "presence_penalty": 0.1,
                 }

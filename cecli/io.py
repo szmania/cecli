@@ -1712,9 +1712,7 @@ class InputOutput:
     def _send_notification(self):
         if self.notifications_command:
             try:
-                result = subprocess.run(
-                    self.notifications_command, shell=True, capture_output=True
-                )
+                result = subprocess.run(self.notifications_command, shell=True, capture_output=True)
                 if result.returncode != 0 and result.stderr:
                     error_msg = result.stderr.decode("utf-8", errors="replace")
                     self.tool_warning(f"Failed to run notifications command: {error_msg}")
