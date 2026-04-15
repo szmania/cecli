@@ -2,6 +2,7 @@
 
 import asyncio
 import base64
+import asyncio
 import hashlib
 import json
 import locale
@@ -1736,6 +1737,7 @@ class Coder:
         Console().show_cursor(True)
 
         self.io.tool_warning("\n\n^C KeyboardInterrupt")
+        self.interrupt_event.set()
 
         self.interrupt_event.set()
         self.last_keyboard_interrupt = time.time()
@@ -2287,7 +2289,7 @@ class Coder:
                     self.io.tool_output(f"Retrying in {retry_delay:.1f} seconds...")
                     await asyncio.sleep(retry_delay)
                     continue
-                except KeyboardInterrupt:
+                except (KeyboardInterrupt, asyncio.CancelledError):
                     interrupted = True
                     break
                 except FinishReasonLength:
@@ -3071,7 +3073,7 @@ class Coder:
                     self.temperature,
                     # This could include any tools, but for now it is just MCP tools
                     tools=tools,
-                    override_kwargs=self.model_kwargs.copy(),
+                    override_kwargs=self.model_kwargs,
                 )
             )
             interrupt_task = asyncio.create_task(self.interrupt_event.wait())
@@ -3112,7 +3114,7 @@ class Coder:
                 self.token_profiler.on_error()
                 self.calculate_and_show_tokens_and_cost(messages, completion)
             raise
-        except KeyboardInterrupt as kbi:
+        except (KeyboardInterrupt, asyncio.CancelledError) as kbi:
             self.keyboard_interrupt()
             raise kbi
         finally:
