@@ -37,6 +37,7 @@ class Tool(BaseTool):
             confirmed = (
                 True
                 if coder.skip_cli_confirmations
+                or getattr(coder, "globally_approved_tool_calls", False)
                 else await coder.io.confirm_ask(
                     "Allow execution of this command?",
                     subject=command_string,
