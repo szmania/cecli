@@ -72,9 +72,13 @@ def process_data(data):
 
 The `evals/` directory contains `evals.json` files for testing skill performance. These evaluations help ensure that skills behave as expected and provide a way to measure their accuracy and effectiveness. These evaluation files can be executed using the `RunEvals` tool in Agent Mode.
 
-### `evals.json` Structure
+`evals.json` files can be in one of two formats:
 
-The `evals.json` file has the following structure:
+### Standard Format
+
+The standard format includes metadata about the skill and a list of evaluation cases.
+
+**Structure:**
 
 ```json
 {
@@ -105,6 +109,49 @@ The `evals.json` file has the following structure:
   - **`expected_output`**: A natural language description of what the ideal response should contain.
   - **`assertions`**: A list of specific, verifiable statements that must be true about the AI's output. These are used for automated checking.
   - **`files`**: A list of file paths to be included in the context when running the evaluation.
+
+### Assertion-Based Format
+
+This format is a direct array of evaluation cases, each with structured assertions. This is useful for more granular, automated testing.
+
+**Structure:**
+
+```json
+[
+  {
+    "id": "billing-charge-error",
+    "description": "Clear billing question about a charge",
+    "input": "I was charged $99 but I only signed up for the $49 plan.",
+    "assertions": [
+      { "type": "exact", "value": "BILLING" }
+    ]
+  },
+  {
+    "id": "technical-api-error",
+    "description": "API authentication failure is TECHNICAL",
+    "input": "I keep getting a 403 error when I try to authenticate.",
+    "assertions": [
+      { "type": "exact", "value": "TECHNICAL" }
+    ]
+  },
+  {
+    "id": "no-extra-text",
+    "description": "Output should only be the label — nothing else",
+    "input": "Where can I find my invoices?",
+    "assertions": [
+      { "type": "contains", "value": "BILLING" },
+      { "type": "max_length", "value": 10 }
+    ]
+  }
+]
+```
+
+- **`id`**: A unique string identifier for the test case.
+- **`description`**: A brief explanation of the test case's purpose.
+- **`input`**: The input prompt to send to the AI.
+- **`assertions`**: An array of assertion objects for automated validation.
+  - **`type`**: The type of assertion (e.g., `exact`, `contains`, `max_length`).
+  - **`value`**: The value to check against.
 
 ## Skill Configuration
 
