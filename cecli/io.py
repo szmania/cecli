@@ -385,6 +385,7 @@ class InputOutput:
         self.verbose = verbose
         self.profile_start_time = None
         self.profile_last_time = None
+        self.is_processing_prompt = False
 
         # Variables used to interface with base_coder
         self.coder = None
@@ -814,9 +815,11 @@ class InputOutput:
         abs_read_only_stubs_fnames=None,
         edit_format=None,
     ):
-        self.rule()
+        self.is_processing_prompt = True
+        try:
+            self.rule()
 
-        rel_fnames = list(rel_fnames)
+            rel_fnames = list(rel_fnames)
         show = ""
         if rel_fnames:
             rel_read_only_fnames = [
@@ -1073,8 +1076,10 @@ class InputOutput:
                 inp = line
                 break
 
-        self.user_input(inp)
-        return inp
+            self.user_input(inp)
+            return inp
+        finally:
+            self.is_processing_prompt = False
 
     async def stop_input_task(self):
         if self.input_task:
@@ -1717,9 +1722,13 @@ class InputOutput:
         return None  # Unknown system
 
     def _send_notification(self):
+        if self.is_processing_prompt:
+            return
         if self.notifications_command:
             try:
-                result = subprocess.run(self.notifications_command, shell=True, capture_output=True)
+                result = subprocess.run(
+                    self.notifications_command, shell=True, capture_output=True
+                )
                 if result.returncode != 0 and result.stderr:
                     error_msg = result.stderr.decode("utf-8", errors="replace")
                     self.tool_warning(f"Failed to run notifications command: {error_msg}")
@@ -1730,7 +1739,7 @@ class InputOutput:
 
     def notify_user_input_required(self):
         """Send a notification that user input is required."""
-        if self.notifications:
+        if self.notifications and not self.is_processing_prompt:
             self._send_notification()
 
     def ring_bell(self):
