@@ -1331,8 +1331,6 @@ async def main_async(argv=None, input=None, output=None, force_git_root=None, re
             kwargs = dict(io=io, from_coder=coder)
             kwargs.update(switch.kwargs)
 
-            if "show_announcements" in kwargs:
-                del kwargs["show_announcements"]
             kwargs["num_cache_warming_pings"] = 0
             kwargs["args"] = coder.args
 
@@ -1349,6 +1347,8 @@ async def main_async(argv=None, input=None, output=None, force_git_root=None, re
 
             if switch.kwargs.get("show_announcements") is False:
                 coder.suppress_announcements_for_next_prompt = True
+            else:
+                coder.show_announcements()
 
         except SystemExit:
             sys.settrace(None)
