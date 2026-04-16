@@ -2751,7 +2751,31 @@ class Coder:
             return False
 
         # 5. Execute tools
-        tool_responses_by_server = await self._execute_tool_groups(tool_groups)
+        tool_execution_task = asyncio.create_task(self._execute_tool_groups(tool_groups))
+        interrupt_task = asyncio.create_task(self.interrupt_event.wait())
+
+        tool_responses_by_server = {}
+        try:
+            done, pending = await asyncio.wait(
+                {tool_execution_task, interrupt_task},
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+
+            if interrupt_task in done:
+                tool_execution_task.cancel()
+                try:
+                    await tool_execution_task
+                except asyncio.CancelledError:
+                    pass
+                self.io.tool_warning("Tool execution interrupted.")
+                return False
+
+            if tool_execution_task in done:
+                tool_responses_by_server = tool_execution_task.result()
+
+        except asyncio.CancelledError:
+            self.io.tool_warning("Tool execution cancelled.")
+            return False
 
         # 6. Add responses to conversation (re-prefixing if necessary)
         tool_responses = []
