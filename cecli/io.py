@@ -9,6 +9,7 @@ import shutil
 import signal
 import subprocess
 import sys
+import threading
 import time
 import webbrowser
 from collections import defaultdict
@@ -1307,9 +1308,7 @@ class InputOutput:
                 res = group.preference
                 self.user_input(f"{question} - {res}", log_only=False)
             else:
-                # Ring the bell if needed
                 self.notify_user_input_required()
-                self.ring_bell()
                 self.start_spinner("Awaiting Confirmation...", False)
 
                 while True:
@@ -1388,8 +1387,7 @@ class InputOutput:
     def prompt_ask(self, question, default="", subject=None):
         self.num_user_asks += 1
 
-        # Ring the bell if needed
-        self.ring_bell()
+        self.notify_user_input_required()
 
         if subject:
             self.tool_output()
@@ -1682,6 +1680,7 @@ class InputOutput:
         """Mark that the LLM has started processing, so we should ring the bell on next input"""
         self.bell_on_next_input = True
 
+
     def get_default_notification_command(self):
         """Return a default notification command based on the operating system."""
         import platform
@@ -1731,7 +1730,10 @@ class InputOutput:
     def notify_user_input_required(self):
         """Send a notification that user input is required."""
         if self.notifications:
-            self._send_notification()
+            # Run in a separate thread to avoid blocking the event loop
+            thread = threading.Thread(target=self._send_notification)
+            thread.daemon = True
+            thread.start()
 
     def ring_bell(self):
         """Ring the terminal bell if needed and clear the flag"""

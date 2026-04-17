@@ -47,6 +47,7 @@ class TUI(App):
         """Initialize the cecli TUI app."""
         super().__init__()
         self.worker = coder_worker
+        self.io = self.worker.coder.io
         self.output_queue = output_queue
         self.input_queue = input_queue
         self.args = args  # Store args for _get_config
