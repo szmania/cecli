@@ -1343,9 +1343,10 @@ async def main_async(argv=None, input=None, output=None, force_git_root=None, re
             for tag in [MessageTag.SYSTEM, MessageTag.EXAMPLES, MessageTag.STATIC]:
                 ConversationService.get_manager(coder).clear_tag(tag)
 
+            show_announcements = kwargs.pop("show_announcements", True)
             coder = await Coder.create(**kwargs)
 
-            if switch.kwargs.get("show_announcements") is False:
+            if not show_announcements:
                 coder.suppress_announcements_for_next_prompt = True
             else:
                 coder.show_announcements()
