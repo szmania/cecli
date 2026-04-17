@@ -1305,9 +1305,7 @@ class InputOutput:
                 res = group.preference
                 self.user_input(f"{question} - {res}", log_only=False)
             else:
-                # Ring the bell if needed
                 self.notify_user_input_required()
-                self.ring_bell()
                 self.start_spinner("Awaiting Confirmation...", False)
 
                 while True:
@@ -1386,8 +1384,7 @@ class InputOutput:
     def prompt_ask(self, question, default="", subject=None):
         self.num_user_asks += 1
 
-        # Ring the bell if needed
-        self.ring_bell()
+        self.notify_user_input_required()
 
         if subject:
             self.tool_output()
