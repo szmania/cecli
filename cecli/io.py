@@ -9,6 +9,7 @@ import shutil
 import signal
 import subprocess
 import sys
+import threading
 import time
 import webbrowser
 from collections import defaultdict
@@ -1726,7 +1727,10 @@ class InputOutput:
     def notify_user_input_required(self):
         """Send a notification that user input is required."""
         if self.notifications:
-            self._send_notification()
+            # Run in a separate thread to avoid blocking the event loop
+            thread = threading.Thread(target=self._send_notification)
+            thread.daemon = True
+            thread.start()
 
     def ring_bell(self):
         """Ring the terminal bell if needed and clear the flag"""
