@@ -1682,16 +1682,14 @@ class InputOutput:
         """Async version of _send_notification for TUI mode."""
         if self.notifications_command:
             try:
+                # Use DEVNULL to avoid blocking on pipe reads
                 proc = await asyncio.create_subprocess_shell(
                     self.notifications_command,
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE,
+                    stdout=asyncio.subprocess.DEVNULL,
+                    stderr=asyncio.subprocess.DEVNULL,
                 )
-                stdout, stderr = await proc.communicate()
-
-                if proc.returncode != 0 and stderr:
-                    error_msg = stderr.decode("utf-8", errors="replace")
-                    self.tool_warning(f"Failed to run notifications command: {error_msg}")
+                # Do not wait for the process to complete.
+                # This allows the notification to be non-blocking.
             except Exception as e:
                 self.tool_warning(f"Failed to run notifications command: {e}")
         else:
@@ -1736,10 +1734,13 @@ class InputOutput:
     def _send_notification(self):
         if self.notifications_command:
             try:
-                result = subprocess.run(self.notifications_command, shell=True, capture_output=True)
-                if result.returncode != 0 and result.stderr:
-                    error_msg = result.stderr.decode("utf-8", errors="replace")
-                    self.tool_warning(f"Failed to run notifications command: {error_msg}")
+                # Use Popen for non-blocking execution in standard CLI mode
+                subprocess.Popen(
+                    self.notifications_command,
+                    shell=True,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
             except Exception as e:
                 self.tool_warning(f"Failed to run notifications command: {e}")
         else:
