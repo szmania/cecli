@@ -224,7 +224,8 @@ class StatusBar(Widget, can_focus=True):
         self.mode = "confirm"
         self._rebuild_content()
         self.focus()
-        self.app.io.notify_user_input_required()
+        if hasattr(self.app, "io"):
+            self.app.io.notify_user_input_required()
 
     def hide(self) -> None:
         """Hide the status bar."""
