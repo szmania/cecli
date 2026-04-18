@@ -9,6 +9,7 @@ from cecli.tools.utils.base_tool import BaseTool
 
 class Tool(BaseTool):
     NORM_NAME = "command"
+    TRACK_INVOCATIONS = False
     SCHEMA = {
         "type": "function",
         "function": {

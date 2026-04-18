@@ -25,6 +25,7 @@ from cecli.helpers.skills import SkillsManager
 from cecli.hooks import HookIntegration
 from cecli.llm import litellm
 from cecli.mcp import LocalServer, McpServerManager
+from cecli.tools.utils.base_tool import BaseTool
 from cecli.tools.utils.registry import ToolRegistry
 from cecli.utils import copy_tool_call, tool_call_to_dict
 
@@ -1217,6 +1218,7 @@ I will proceed based on the tool results and updated context.""")
         inp = await super().preproc_user_input(inp)
         inp = self.wrap_user_input(inp)
 
+        BaseTool.clear_invocation_cache()
         self.agent_finished = False
         self.turn_count = 0
         return inp
