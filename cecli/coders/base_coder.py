@@ -921,10 +921,10 @@ class Coder:
                             file_stub = RepoMap.get_file_stub(fname, self.io)
 
                             # Add message about showing definitions instead of full content
-                            self.io.tool_output(
-                                f"⚠️ '{relative_fname}' is very large ({file_tokens} tokens). "
-                                "Use /context-management to toggle truncation off if needed."
-                            )
+                            # self.io.tool_output(
+                            #    f"⚠️ '{relative_fname}' is very large ({file_tokens} tokens). "
+                            #    "Use /context-management to toggle truncation off if needed."
+                            # )
 
                             # Add a message in the content itself so the model knows it's truncated
                             truncation_note = (
@@ -989,10 +989,10 @@ class Coder:
                         file_stub = RepoMap.get_file_stub(fname, self.io)
 
                         # Add message about showing definitions instead of full content
-                        self.io.tool_output(
-                            f"⚠️ '{relative_fname}' is very large ({file_tokens} tokens). "
-                            "Use /context-management to toggle truncation off if needed."
-                        )
+                        # self.io.tool_output(
+                        #    f"⚠️ '{relative_fname}' is very large ({file_tokens} tokens). "
+                        #    "Use /context-management to toggle truncation off if needed."
+                        # )
 
                         # Add a message in the content itself so the model knows it's truncated
                         truncation_note = (
