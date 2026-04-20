@@ -103,7 +103,7 @@ class CoderWorker:
                     # Skip summarization to avoid blocking LLM calls during mode switch
                     kwargs["summarize_from_coder"] = False
 
-                    show_announcements = kwargs.pop("show_announcements", True)
+                    kwargs.pop("show_announcements", True)
 
                     new_coder = await Coder.create(**kwargs)
                     new_coder.args = self.coder.args
@@ -113,11 +113,6 @@ class CoderWorker:
 
                     # Notify TUI of mode change
                     self.coder = new_coder
-
-                    if show_announcements:
-                        self.coder.show_announcements()
-                    else:
-                        new_coder.suppress_announcements_for_next_prompt = True
                     edit_format = getattr(self.coder, "edit_format", "code") or "code"
                     self.output_queue.put(
                         {

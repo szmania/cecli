@@ -497,11 +497,19 @@ class TUI(App):
             self.action_quit()
         elif msg_type == "mode_change":
             # Update footer with new chat mode
-            container = footer = self.query_one(InputContainer)
+            container = self.query_one(InputContainer)
             container.update_mode(msg.get("mode", "code"))
 
             footer = self.query_one(MainFooter)
             footer.update_mode(msg.get("mode", "code"))
+
+            # Clear output and show announcements for the new mode
+            output_container = self.query_one("#output", OutputContainer)
+            output_container.clear_output()
+            if self.tui_config["banner"]:
+                output_container.add_output(self.BANNER, dim=False)
+
+            self.worker.coder.show_announcements()
 
     def add_output(self, text, task_id=None):
         """Add output to the output container."""
