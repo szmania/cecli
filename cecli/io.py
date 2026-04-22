@@ -1748,8 +1748,17 @@ class InputOutput:
 
     def notify_user_input_required(self):
         """Send a notification that user input is required."""
-        if self.notifications:
-            # Run in a separate thread to avoid blocking the event loop
+        if not self.notifications:
+            return
+
+        coder = self.get_coder()
+        tui_app = coder.tui if coder and hasattr(coder, "tui") else None
+
+        if tui_app:
+            # In TUI mode, run the async version in a worker
+            tui_app.run_worker(self._send_notification_async(), exclusive=True)
+        else:
+            # In non-TUI mode, run the synchronous version in a thread
             thread = threading.Thread(target=self._send_notification)
             thread.daemon = True
             thread.start()
