@@ -1679,6 +1679,27 @@ class InputOutput:
         self.bell_on_next_input = True
 
 
+    async def _send_notification_async(self):
+        """Async version of _send_notification for TUI mode."""
+        if self.notifications_command:
+            try:
+                proc = await asyncio.create_subprocess_shell(
+                    self.notifications_command,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                )
+                stdout, stderr = await proc.communicate()
+
+                if proc.returncode != 0 and stderr:
+                    error_msg = stderr.decode("utf-8", errors="replace")
+                    self.tool_warning(f"Failed to run notifications command: {error_msg}")
+            except Exception as e:
+                self.tool_warning(f"Failed to run notifications command: {e}")
+        else:
+            # Ringing the bell is synchronous, but should be quick.
+            # It's better to do it this way than trying to make it async.
+            print("\a", end="", flush=True)
+
     def get_default_notification_command(self):
         """Return a default notification command based on the operating system."""
         import platform
