@@ -51,6 +51,7 @@ jobs:
           pytest \
           pytest-asyncio \
           pytest-mock \
+          tree-sitter-languages \
           -r requirements/requirements.in \
           -r requirements/requirements-help.in \
           -r requirements/requirements-playwright.in \
