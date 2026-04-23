@@ -1686,6 +1686,26 @@ class InputOutput:
         """Mark that the LLM has started processing, so we should ring the bell on next input"""
         self.bell_on_next_input = True
 
+    async def _send_notification_async(self):
+        """Async version of _send_notification for TUI mode."""
+        if self.notifications_command:
+            try:
+                proc = await asyncio.create_subprocess_shell(
+                    self.notifications_command,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                )
+                stdout, stderr = await proc.communicate()
+
+                if proc.returncode != 0 and stderr:
+                    error_msg = stderr.decode("utf-8", errors="replace")
+                    self.tool_warning(f"Failed to run notifications command: {error_msg}")
+            except Exception as e:
+                self.tool_warning(f"Failed to run notifications command: {e}")
+        else:
+            # Ringing the bell is synchronous, but should be quick.
+            # It's better to do it this way than trying to make it async.
+            print("\a", end="", flush=True)
 
     def get_default_notification_command(self):
         """Return a default notification command based on the operating system."""
@@ -1726,9 +1746,7 @@ class InputOutput:
             return
         if self.notifications_command:
             try:
-                result = subprocess.run(
-                    self.notifications_command, shell=True, capture_output=True
-                )
+                result = subprocess.run(self.notifications_command, shell=True, capture_output=True)
                 if result.returncode != 0 and result.stderr:
                     error_msg = result.stderr.decode("utf-8", errors="replace")
                     self.tool_warning(f"Failed to run notifications command: {error_msg}")
@@ -1739,10 +1757,18 @@ class InputOutput:
 
     def notify_user_input_required(self):
         """Send a notification that user input is required."""
+        if not self.notifications:
+            return
         if self.is_processing_prompt:
             return
-        if self.notifications:
-            # Run in a separate thread to avoid blocking the event loop
+        coder = self.get_coder()
+        tui_app = coder.tui if coder and hasattr(coder, "tui") else None
+
+        if tui_app:
+            # In TUI mode, run the async version in a worker
+            tui_app.run_worker(self._send_notification_async(), exclusive=True)
+        else:
+            # In non-TUI mode, run the synchronous version in a thread
             thread = threading.Thread(target=self._send_notification)
             thread.daemon = True
             thread.start()
