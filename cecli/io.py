@@ -9,6 +9,7 @@ import shutil
 import signal
 import subprocess
 import sys
+import threading
 import time
 import webbrowser
 from collections import defaultdict
@@ -1313,9 +1314,7 @@ class InputOutput:
                 res = group.preference
                 self.user_input(f"{question} - {res}", log_only=False)
             else:
-                # Ring the bell if needed
                 self.notify_user_input_required()
-                self.ring_bell()
                 self.start_spinner("Awaiting Confirmation...", False)
 
                 while True:
@@ -1394,8 +1393,7 @@ class InputOutput:
     def prompt_ask(self, question, default="", subject=None):
         self.num_user_asks += 1
 
-        # Ring the bell if needed
-        self.ring_bell()
+        self.notify_user_input_required()
 
         if subject:
             self.tool_output()
@@ -1688,6 +1686,28 @@ class InputOutput:
         """Mark that the LLM has started processing, so we should ring the bell on next input"""
         self.bell_on_next_input = True
 
+
+    async def _send_notification_async(self):
+        """Async version of _send_notification for TUI mode."""
+        if self.notifications_command:
+            try:
+                proc = await asyncio.create_subprocess_shell(
+                    self.notifications_command,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                )
+                stdout, stderr = await proc.communicate()
+
+                if proc.returncode != 0 and stderr:
+                    error_msg = stderr.decode("utf-8", errors="replace")
+                    self.tool_warning(f"Failed to run notifications command: {error_msg}")
+            except Exception as e:
+                self.tool_warning(f"Failed to run notifications command: {e}")
+        else:
+            # Ringing the bell is synchronous, but should be quick.
+            # It's better to do it this way than trying to make it async.
+            print("\a", end="", flush=True)
+
     def get_default_notification_command(self):
         """Return a default notification command based on the operating system."""
         import platform
@@ -1740,14 +1760,39 @@ class InputOutput:
         """Send a notification that user input is required."""
         if self.is_processing_prompt:
             return
-        if self.notifications:
-            self._send_notification()
+        if not self.notifications:
+            return
+
+        coder = self.get_coder()
+        tui_app = coder.tui if coder and hasattr(coder, "tui") else None
+
+        if tui_app:
+            # In TUI mode, run the async version in a worker
+            tui_app.run_worker(self._send_notification_async(), exclusive=True)
+        else:
+            # In non-TUI mode, run the synchronous version in a thread
+            thread = threading.Thread(target=self._send_notification)
+            thread.daemon = True
+            thread.start()
 
     def ring_bell(self):
         """Ring the terminal bell if needed and clear the flag"""
-        if self.bell_on_next_input and self.notifications:
-            self._send_notification()
-            self.bell_on_next_input = False
+        if not self.bell_on_next_input or not self.notifications:
+            return
+
+        coder = self.get_coder()
+        tui_app = coder.tui() if coder and hasattr(coder, "tui") and coder.tui else None
+
+        if tui_app:
+            # In TUI mode, run the async version in a worker
+            tui_app.run_worker(self._send_notification_async(), exclusive=True)
+        else:
+            # In non-TUI mode, run the synchronous version in a thread
+            thread = threading.Thread(target=self._send_notification)
+            thread.daemon = True
+            thread.start()
+
+        self.bell_on_next_input = False
 
     def toggle_multiline_mode(self):
         """Toggle between normal and multiline input modes"""
