@@ -98,12 +98,12 @@ class CoderWorker:
                     await self.coder.auto_save_session(force=True)
                     kwargs = dict(io=self.coder.io, from_coder=self.coder)
                     kwargs.update(switch.kwargs)
-                    if "show_announcements" in kwargs:
-                        del kwargs["show_announcements"]
                     kwargs["num_cache_warming_pings"] = 0
                     kwargs["args"] = self.coder.args
                     # Skip summarization to avoid blocking LLM calls during mode switch
                     kwargs["summarize_from_coder"] = False
+
+                    show_announcements = kwargs.pop("show_announcements", True)
 
                     new_coder = await Coder.create(**kwargs)
                     new_coder.args = self.coder.args
@@ -111,11 +111,13 @@ class CoderWorker:
                     for tag in [MessageTag.SYSTEM, MessageTag.EXAMPLES, MessageTag.STATIC]:
                         ConversationService.get_manager(new_coder).clear_tag(tag)
 
-                    if switch.kwargs.get("show_announcements") is False:
-                        new_coder.suppress_announcements_for_next_prompt = True
-
                     # Notify TUI of mode change
                     self.coder = new_coder
+
+                    if show_announcements:
+                        self.coder.show_announcements()
+                    else:
+                        new_coder.suppress_announcements_for_next_prompt = True
                     edit_format = getattr(self.coder, "edit_format", "code") or "code"
                     self.output_queue.put(
                         {
