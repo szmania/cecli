@@ -1765,9 +1765,22 @@ class InputOutput:
 
     def ring_bell(self):
         """Ring the terminal bell if needed and clear the flag"""
-        if self.bell_on_next_input and self.notifications:
-            self._send_notification()
-            self.bell_on_next_input = False
+        if not self.bell_on_next_input or not self.notifications:
+            return
+
+        coder = self.get_coder()
+        tui_app = coder.tui() if coder and hasattr(coder, "tui") and coder.tui else None
+
+        if tui_app:
+            # In TUI mode, run the async version in a worker
+            tui_app.run_worker(self._send_notification_async(), exclusive=True)
+        else:
+            # In non-TUI mode, run the synchronous version in a thread
+            thread = threading.Thread(target=self._send_notification)
+            thread.daemon = True
+            thread.start()
+
+        self.bell_on_next_input = False
 
     def toggle_multiline_mode(self):
         """Toggle between normal and multiline input modes"""
