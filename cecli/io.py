@@ -1698,11 +1698,19 @@ class InputOutput:
                 )
                 stdout, stderr = await proc.communicate()
 
-                if proc.returncode != 0 and stderr:
-                    error_msg = stderr.decode("utf-8", errors="replace")
-                    self.tool_warning(f"Failed to run notifications command: {error_msg}")
+                if proc.returncode != 0:
+                    error_msg = ""
+                    if stderr:
+                        error_msg = stderr.decode("utf-8", errors="replace").strip()
+                    if not error_msg and stdout:
+                        error_msg = stdout.decode("utf-8", errors="replace").strip()
+                    
+                    if error_msg:
+                        self.tool_warning(f"Failed to run notifications command: {error_msg}")
+                    else:
+                        self.tool_warning(f"Notifications command failed with exit code {proc.returncode}")
             except Exception as e:
-                self.tool_warning(f"Failed to run notifications command: {e}")
+                self.tool_warning(f"Failed to run notifications command: {str(e)}")
         else:
             # Ringing the bell is synchronous, but should be quick.
             # It's better to do it this way than trying to make it async.
@@ -1732,13 +1740,9 @@ class InputOutput:
                         return f"zenity --notification --text='{NOTIFICATION_MESSAGE}'"
             return None  # No known notification tool found
         elif system == "Windows":
-            # PowerShell notification
-            return (
-                "powershell -command"
-                " \"[System.Reflection.Assembly]::LoadWithPartialName('System.Windows.Forms');"
-                f" [System.Windows.Forms.MessageBox]::Show('{NOTIFICATION_MESSAGE}',"
-                " 'cecli')\""
-            )
+            # The previous PowerShell MessageBox command was blocking and not suitable for
+            # a background notification. Returning None falls back to the terminal bell.
+            return None
 
         return None  # Unknown system
 
@@ -1748,11 +1752,19 @@ class InputOutput:
         if self.notifications_command:
             try:
                 result = subprocess.run(self.notifications_command, shell=True, capture_output=True)
-                if result.returncode != 0 and result.stderr:
-                    error_msg = result.stderr.decode("utf-8", errors="replace")
-                    self.tool_warning(f"Failed to run notifications command: {error_msg}")
+                if result.returncode != 0:
+                    error_msg = ""
+                    if result.stderr:
+                        error_msg = result.stderr.decode("utf-8", errors="replace").strip()
+                    if not error_msg and result.stdout:
+                        error_msg = result.stdout.decode("utf-8", errors="replace").strip()
+                    
+                    if error_msg:
+                        self.tool_warning(f"Failed to run notifications command: {error_msg}")
+                    else:
+                        self.tool_warning(f"Notifications command failed with exit code {result.returncode}")
             except Exception as e:
-                self.tool_warning(f"Failed to run notifications command: {e}")
+                self.tool_warning(f"Failed to run notifications command: {str(e)}")
         else:
             print("\a", end="", flush=True)  # Ring the bell
 
