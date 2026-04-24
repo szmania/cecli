@@ -1732,13 +1732,9 @@ class InputOutput:
                         return f"zenity --notification --text='{NOTIFICATION_MESSAGE}'"
             return None  # No known notification tool found
         elif system == "Windows":
-            # PowerShell notification
-            return (
-                "powershell -command"
-                " \"[System.Reflection.Assembly]::LoadWithPartialName('System.Windows.Forms');"
-                f" [System.Windows.Forms.MessageBox]::Show('{NOTIFICATION_MESSAGE}',"
-                " 'cecli')\""
-            )
+            # The previous PowerShell MessageBox command was blocking and not suitable for
+            # a background notification. Returning None falls back to the terminal bell.
+            return None
 
         return None  # Unknown system
 
