@@ -2,7 +2,6 @@
 
 import asyncio
 import base64
-import asyncio
 import hashlib
 import json
 import locale
@@ -2825,6 +2824,7 @@ class Coder:
 
     def _print_tool_call_info(self, server_tool_calls):
         """Print information about an MCP tool call."""
+        self.io.ring_bell()
         # self.io.tool_output("Preparing to run MCP tools", bold=False)
 
         for server, tool_calls in server_tool_calls.items():
@@ -3124,7 +3124,7 @@ class Coder:
                     self.temperature,
                     # This could include any tools, but for now it is just MCP tools
                     tools=tools,
-                    override_kwargs=self.model_kwargs,
+                    override_kwargs=self.model_kwargs.copy(),
                     interrupt_event=self.interrupt_event,
                 )
             )

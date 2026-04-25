@@ -301,7 +301,9 @@ class AgentCoder(Coder):
                 else:
                     all_results_content.append(f"Error: Unknown tool name '{tool_name}'")
                 if tasks:
-                    gather_task = asyncio.create_task(asyncio.gather(*tasks, return_exceptions=True))
+                    gather_task = asyncio.create_task(
+                        asyncio.gather(*tasks, return_exceptions=True)
+                    )
                     interrupt_task = asyncio.create_task(self.interrupt_event.wait())
 
                     done, pending = await asyncio.wait(

@@ -20,26 +20,50 @@ class RemoveMcpCommand(BaseCommand):
             )
 
         server_names = args.strip().split()
+        import asyncio
+
         results = []
+
         for server_name in server_names:
-            was_disconnected = await coder.mcp_manager.disconnect_server(server_name)
+            coder.interrupt_event.clear()
+
+            disconnect_task = asyncio.create_task(coder.mcp_manager.disconnect_server(server_name))
+            interrupt_task = asyncio.create_task(coder.interrupt_event.wait())
+
+            done, pending = await asyncio.wait(
+                {disconnect_task, interrupt_task},
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+
+            if interrupt_task in done:
+                disconnect_task.cancel()
+                try:
+                    await disconnect_task
+                except asyncio.CancelledError:
+                    pass
+
+                io.tool_warning(f"MCP disconnection interrupted: {server_name}")
+                results.append(f"Interrupted: {server_name}")
+                continue
+
+            was_disconnected = disconnect_task.result()
+
             if was_disconnected:
                 results.append(f"Removed server: {server_name}")
             else:
                 results.append(f"Unable to remove server: {server_name}")
 
-        try:
-            return format_command_result(io, cls.NORM_NAME, "\n".join(results))
-        finally:
-            from . import SwitchCoderSignal
+        io.tool_output("\n".join(results))
 
-            raise SwitchCoderSignal(
-                edit_format=coder.edit_format,
-                summarize_from_coder=False,
-                from_coder=coder,
-                show_announcements=True,
-                mcp_manager=coder.mcp_manager,
-            )
+        from . import SwitchCoderSignal
+
+        raise SwitchCoderSignal(
+            edit_format=coder.edit_format,
+            summarize_from_coder=False,
+            from_coder=coder,
+            show_announcements=True,
+            mcp_manager=coder.mcp_manager,
+        )
 
     @classmethod
     def get_completions(cls, io, coder, args) -> List[str]:

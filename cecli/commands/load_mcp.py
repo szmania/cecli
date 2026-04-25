@@ -20,30 +20,61 @@ class LoadMcpCommand(BaseCommand):
             )
 
         server_names = args.strip().split()
+        import asyncio
+
         results = []
+        servers_to_load = []
         for server_name in server_names:
             server = coder.mcp_manager.get_server(server_name)
             if server is None:
+                io.tool_error(f"MCP server {server_name} does not exist.")
                 results.append(f"MCP server {server_name} does not exist.")
+            else:
+                servers_to_load.append(server)
+
+        if not servers_to_load and results:
+            return format_command_result(io, cls.NORM_NAME, "", "\n".join(results))
+
+        for server in servers_to_load:
+            server_name = server.name
+            coder.interrupt_event.clear()
+
+            connect_task = asyncio.create_task(coder.mcp_manager.connect_server(server_name))
+            interrupt_task = asyncio.create_task(coder.interrupt_event.wait())
+
+            done, pending = await asyncio.wait(
+                {connect_task, interrupt_task},
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+
+            if interrupt_task in done:
+                connect_task.cancel()
+                try:
+                    await connect_task
+                except asyncio.CancelledError:
+                    pass
+
+                io.tool_warning(f"MCP connection interrupted: {server_name}")
+                results.append(f"Interrupted: {server_name}")
                 continue
 
-            did_connect = await coder.mcp_manager.connect_server(server.name)
+            did_connect = connect_task.result()
+
             if did_connect:
                 results.append(f"Loaded server: {server_name}")
             else:
                 results.append(f"Unable to load server: {server_name}")
 
-        try:
-            return format_command_result(io, cls.NORM_NAME, "\n".join(results))
-        finally:
-            from . import SwitchCoderSignal
+        io.tool_output("\n".join(results))
 
-            raise SwitchCoderSignal(
-                edit_format=coder.edit_format,
-                summarize_from_coder=False,
-                from_coder=coder,
-                show_announcements=True,
-            )
+        from . import SwitchCoderSignal
+
+        raise SwitchCoderSignal(
+            edit_format=coder.edit_format,
+            summarize_from_coder=False,
+            from_coder=coder,
+            show_announcements=True,
+        )
 
     @classmethod
     def get_completions(cls, io, coder, args) -> List[str]:
