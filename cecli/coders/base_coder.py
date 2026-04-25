@@ -2285,7 +2285,20 @@ class Coder:
                         self.io.tool_error(err_msg)
 
                     self.io.tool_output(f"Retrying in {retry_delay:.1f} seconds...")
-                    await asyncio.sleep(retry_delay)
+
+                    sleep_task = asyncio.create_task(asyncio.sleep(retry_delay))
+                    interrupt_task = asyncio.create_task(self.interrupt_event.wait())
+
+                    done, pending = await asyncio.wait(
+                        {sleep_task, interrupt_task},
+                        return_when=asyncio.FIRST_COMPLETED,
+                    )
+
+                    if interrupt_task in done:
+                        sleep_task.cancel()
+                        interrupted = True
+                        break
+
                     continue
                 except (KeyboardInterrupt, asyncio.CancelledError):
                     interrupted = True
