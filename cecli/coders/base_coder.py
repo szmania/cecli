@@ -3130,6 +3130,7 @@ class Coder:
                     # This could include any tools, but for now it is just MCP tools
                     tools=tools,
                     override_kwargs=self.model_kwargs,
+                    interrupt_event=self.interrupt_event,
                 )
             )
             interrupt_task = asyncio.create_task(self.interrupt_event.wait())
