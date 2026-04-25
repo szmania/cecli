@@ -1,3 +1,4 @@
+import json
 import os
 
 from cecli.helpers.hashline import hashline, strip_hashline
@@ -8,6 +9,7 @@ from cecli.tools.utils.helpers import (
     is_provided,
     resolve_paths,
 )
+from cecli.tools.utils.output import color_markers, tool_footer, tool_header
 
 
 class Tool(BaseTool):
@@ -23,7 +25,7 @@ class Tool(BaseTool):
                 " used for start_text and end_text to represent the first and last lines of"
                 " the file respectively. Never use hashlines as the start_text and end_text"
                 " values. These values must be lines from the content of the file."
-                " They should not contain newlines."
+                " They can contain up to 3 lines but newlines should generally be avoided."
                 " Avoid using generic keywords."
                 " Do not use the same pattern for the start_text and end_text."
                 " It is usually best to use function names and other block identifiers as "
@@ -88,7 +90,7 @@ class Tool(BaseTool):
         try:
             # 1. Validate show parameter
             if not isinstance(show, list):
-                raise ToolError("show parameter must be an array")
+                show = [show] if isinstance(show, dict) else show
 
             if len(show) == 0:
                 raise ToolError("show array cannot be empty")
@@ -114,11 +116,8 @@ class Tool(BaseTool):
                         " 'end_text'."
                     )
 
-                if "\n" in start_text or "\n" in end_text:
-                    raise ToolError(
-                        "Patterns must not contain newlines characters. They must match a single"
-                        " line."
-                    )
+                if start_text.count("\n") > 4 or end_text.count("\n") > 4:
+                    raise ToolError("Patterns must not contain more than 5 lines.")
                 start_text = strip_hashline(start_text).strip()
                 end_text = strip_hashline(end_text).strip()
 
@@ -151,12 +150,26 @@ class Tool(BaseTool):
                     if start_text == "@000":
                         start_indices = [0]
                     else:
-                        start_indices = [i for i, line in enumerate(lines) if start_text in line]
+                        start_pattern_lines = start_text.split("\n")
+                        start_indices = []
+                        for i in range(len(lines) - len(start_pattern_lines) + 1):
+                            if all(
+                                p_line in lines[i + j]
+                                for j, p_line in enumerate(start_pattern_lines)
+                            ):
+                                start_indices.append(i)
 
                     if end_text == "000@":
                         end_indices = [num_lines - 1]
                     else:
-                        end_indices = [i for i, line in enumerate(lines) if end_text in line]
+                        end_pattern_lines = end_text.split("\n")
+                        end_indices = []
+                        for i in range(len(lines) - len(end_pattern_lines) + 1):
+                            if all(
+                                p_line in lines[i + j] for j, p_line in enumerate(end_pattern_lines)
+                            ):
+                                # For multiline end patterns, we want the index of the LAST line of the match
+                                end_indices.append(i + len(end_pattern_lines) - 1)
 
                     if len(start_indices) > 5:
                         raise ToolError(
@@ -268,7 +281,7 @@ class Tool(BaseTool):
                     "Do not call ShowContext again until you edit the file."
                 )
             else:
-                coder.io.tool_output(f"Successfully retrieved context for {len(show)} file(s)")
+                coder.io.tool_output(f"✅ Successfully retrieved context for {len(show)} file(s)")
                 return f"Successfully retrieved most recent contents for {len(show)} file(s)"
 
         except ToolError as e:
@@ -277,6 +290,38 @@ class Tool(BaseTool):
         except Exception as e:
             # Handle unexpected errors during processing
             return handle_tool_error(coder, tool_name, e)
+
+    @classmethod
+    def format_output(cls, coder, mcp_server, tool_response):
+        """Format output for ShowContext tool."""
+        color_start, color_end = color_markers(coder)
+
+        try:
+            params = json.loads(tool_response.function.arguments)
+        except json.JSONDecodeError:
+            coder.io.tool_error("Invalid Tool JSON")
+            return
+
+        tool_header(coder=coder, mcp_server=mcp_server, tool_response=tool_response)
+
+        show_ops = params.get("show", [])
+        if show_ops:
+            coder.io.tool_output("")
+            for i, show_op in enumerate(show_ops):
+                file_path = show_op.get("file_path", "")
+                start_text = strip_hashline(show_op.get("start_text", "")).strip()
+                end_text = strip_hashline(show_op.get("end_text", "")).strip()
+                padding = show_op.get("padding", 5)
+
+                # Format as "show: • file_path • start_text • end_text • padding"
+                formatted_query = (
+                    f"{color_start}range_{i + 1}:{color_end} {file_path} • {start_text} •"
+                    f" {end_text} • {padding}"
+                )
+                coder.io.tool_output(formatted_query)
+            coder.io.tool_output("")
+
+        tool_footer(coder=coder, tool_response=tool_response)
 
     @classmethod
     def on_duplicate_request(cls, coder, **kwargs):

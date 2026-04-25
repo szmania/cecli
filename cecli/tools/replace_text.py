@@ -87,8 +87,6 @@ class Tool(BaseTool):
             raise ToolError(
                 "Please call `ShowContext` first to make sure edits are appropriately scoped"
             )
-        else:
-            coder.edit_allowed = False
 
         tool_name = "ReplaceText"
         try:
@@ -131,7 +129,7 @@ class Tool(BaseTool):
 
                     for edit_index, edit in file_edits:
                         try:
-                            edit_replace_text = edit.get("replace_text")
+                            edit_replace_text = strip_hashline(edit.get("replace_text"))
                             edit_start_line = edit.get("start_line")
                             edit_end_line = edit.get("end_line")
 
@@ -264,6 +262,8 @@ class Tool(BaseTool):
                     success_message += "\nFailed edits:\n" + "\n".join(all_failed_edits)
                 change_id_to_return = None  # Multiple change IDs, can't return single one
 
+            cls.clear_invocation_cache()
+
             return format_tool_result(
                 coder,
                 tool_name,
@@ -273,9 +273,11 @@ class Tool(BaseTool):
 
         except ToolError as e:
             # Handle errors raised by utility functions or explicitly raised here
+            coder.edit_allowed = False
             return handle_tool_error(coder, tool_name, e, add_traceback=False)
         except Exception as e:
             # Handle unexpected errors
+            coder.edit_allowed = False
             return handle_tool_error(coder, tool_name, e)
 
     @classmethod
@@ -308,7 +310,7 @@ class Tool(BaseTool):
 
             for edit_index, edit in file_edits:
                 # Show diff for this edit using hashline diff
-                replace_text = edit.get("replace_text", "")
+                replace_text = strip_hashline(edit.get("replace_text", ""))
                 start_line = edit.get("start_line")
                 end_line = edit.get("end_line")
 

@@ -19,40 +19,56 @@ class LoadMcpCommand(BaseCommand):
                 io, cls.NORM_NAME, "No MCP servers found, nothing to load."
             )
 
-        server_name = args.strip()
-        server = coder.mcp_manager.get_server(server_name)
-        if server is None:
-            return format_command_result(
-                io, cls.NORM_NAME, "", f"MCP server {server_name} does not exist."
+        server_names = args.strip().split()
+        import asyncio
+
+        results = []
+        servers_to_load = []
+        for server_name in server_names:
+            server = coder.mcp_manager.get_server(server_name)
+            if server is None:
+                io.tool_error(f"MCP server {server_name} does not exist.")
+                results.append(f"MCP server {server_name} does not exist.")
+            else:
+                servers_to_load.append(server)
+
+        if not servers_to_load and results:
+            return format_command_result(io, cls.NORM_NAME, "", "\n".join(results))
+
+        for server in servers_to_load:
+            server_name = server.name
+            coder.interrupt_event.clear()
+
+            connect_task = asyncio.create_task(coder.mcp_manager.connect_server(server_name))
+            interrupt_task = asyncio.create_task(coder.interrupt_event.wait())
+
+            done, pending = await asyncio.wait(
+                {connect_task, interrupt_task},
+                return_when=asyncio.FIRST_COMPLETED,
             )
 
-        import asyncio
-        coder.interrupt_event.clear()
-        connect_task = asyncio.create_task(coder.mcp_manager.connect_server(server.name))
-        interrupt_task = asyncio.create_task(coder.interrupt_event.wait())
+            if interrupt_task in done:
+                connect_task.cancel()
+                try:
+                    await connect_task
+                except asyncio.CancelledError:
+                    pass
 
-        done, pending = await asyncio.wait(
-            {connect_task, interrupt_task},
-            return_when=asyncio.FIRST_COMPLETED,
-        )
+                io.tool_warning(f"MCP connection interrupted: {server_name}")
+                results.append(f"Interrupted: {server_name}")
+                continue
 
-        if interrupt_task in done:
-            connect_task.cancel()
-            try:
-                await connect_task
-            except asyncio.CancelledError:
-                pass
-            io.tool_warning("MCP connection interrupted.")
-            return
+            did_connect = connect_task.result()
 
-        did_connect = connect_task.result()
+            if did_connect:
+                results.append(f"Loaded server: {server_name}")
+            else:
+                results.append(f"Unable to load server: {server_name}")
 
-        if not did_connect:
-            return format_command_result(io, cls.NORM_NAME, "", f"Unable to load server: {server_name}")
-
-        io.tool_output(f"Loaded server: {server_name}")
+        io.tool_output("\n".join(results))
 
         from . import SwitchCoderSignal
+
         raise SwitchCoderSignal(
             edit_format=coder.edit_format,
             summarize_from_coder=False,
@@ -81,9 +97,9 @@ class LoadMcpCommand(BaseCommand):
         """Get help text for the load-mcp command."""
         help_text = super().get_help()
         help_text += "\nUsage:\n"
-        help_text += "  /load-mcp <mcp-name>  # Load a mcp by name\n"
+        help_text += "  /load-mcp <mcp-name>...  # Load one or more mcps by name\n"
         help_text += "\nExamples:\n"
         help_text += "  /load-mcp context7  # Load the context7 mcp\n"
-        help_text += "  /load-mcp github  # Load the github mcp\n"
-        help_text += "\nThis command loads a MCP server by name.\n"
+        help_text += "  /load-mcp github context7  # Load both github and context7 mcps\n"
+        help_text += "\nThis command loads one or more MCP servers by name.\n"
         return help_text

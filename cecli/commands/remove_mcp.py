@@ -19,36 +19,44 @@ class RemoveMcpCommand(BaseCommand):
                 io, cls.NORM_NAME, "No MCP servers connected, nothing to remove."
             )
 
-        server_name = args.strip()
+        server_names = args.strip().split()
         import asyncio
-        coder.interrupt_event.clear()
-        disconnect_task = asyncio.create_task(coder.mcp_manager.disconnect_server(server_name))
-        interrupt_task = asyncio.create_task(coder.interrupt_event.wait())
 
-        done, pending = await asyncio.wait(
-            {disconnect_task, interrupt_task},
-            return_when=asyncio.FIRST_COMPLETED,
-        )
+        results = []
 
-        if interrupt_task in done:
-            disconnect_task.cancel()
-            try:
-                await disconnect_task
-            except asyncio.CancelledError:
-                pass
-            io.tool_warning("MCP disconnection interrupted.")
-            return
+        for server_name in server_names:
+            coder.interrupt_event.clear()
 
-        was_disconnected = disconnect_task.result()
+            disconnect_task = asyncio.create_task(coder.mcp_manager.disconnect_server(server_name))
+            interrupt_task = asyncio.create_task(coder.interrupt_event.wait())
 
-        if not was_disconnected:
-            return format_command_result(
-                io, cls.NORM_NAME, "", f"Unable to remove server: {server_name}"
+            done, pending = await asyncio.wait(
+                {disconnect_task, interrupt_task},
+                return_when=asyncio.FIRST_COMPLETED,
             )
 
-        io.tool_output(f"Removed server: {server_name}")
+            if interrupt_task in done:
+                disconnect_task.cancel()
+                try:
+                    await disconnect_task
+                except asyncio.CancelledError:
+                    pass
+
+                io.tool_warning(f"MCP disconnection interrupted: {server_name}")
+                results.append(f"Interrupted: {server_name}")
+                continue
+
+            was_disconnected = disconnect_task.result()
+
+            if was_disconnected:
+                results.append(f"Removed server: {server_name}")
+            else:
+                results.append(f"Unable to remove server: {server_name}")
+
+        io.tool_output("\n".join(results))
 
         from . import SwitchCoderSignal
+
         raise SwitchCoderSignal(
             edit_format=coder.edit_format,
             summarize_from_coder=False,
@@ -74,9 +82,8 @@ class RemoveMcpCommand(BaseCommand):
         """Get help text for the remove-mcp command."""
         help_text = super().get_help()
         help_text += "\nUsage:\n"
-        help_text += "  /remove-mcp <mcp-name>  # Remove a mcp by name\n"
+        help_text += "  /remove-mcp <mcp-name>...  # Remove one or more mcps by name\n"
         help_text += "\nExamples:\n"
         help_text += "  /remove-mcp context7  # Remove the context7 mcp\n"
-        help_text += "  /remove-mcp github  # Remove the github mcp\n"
-        help_text += "\nThis command removes a MCP server by name.\n"
-        return help_text
+        help_text += "  /remove-mcp github context7  # Remove both github and context7 mcps\n"
+        help_text += "\nThis command removes one or more MCP servers by name.\n"

@@ -25,6 +25,7 @@ from cecli.helpers.skills import SkillsManager
 from cecli.hooks import HookIntegration
 from cecli.llm import litellm
 from cecli.mcp import LocalServer, McpServerManager
+from cecli.tools.utils.base_tool import BaseTool
 from cecli.tools.utils.registry import ToolRegistry
 from cecli.utils import copy_tool_call, tool_call_to_dict
 
@@ -52,12 +53,9 @@ class AgentCoder(Coder):
         self.read_tools = {
             "command",
             "commandinteractive",
-            "viewfilesatglob",
-            "viewfilesmatching",
+            "exploresymbols",
             "ls",
-            "viewfileswithsymbol",
             "grep",
-            "listchanges",
             "showcontext",
             "thinking",
             "updatetodolist",
@@ -95,7 +93,7 @@ class AgentCoder(Coder):
         super().__init__(*args, **kwargs)
 
     def _setup_agent(self):
-        os.makedirs(".cecli/workspace", exist_ok=True)
+        os.makedirs(".cecli/temp", exist_ok=True)
 
     def _get_agent_config(self):
         """
@@ -303,7 +301,9 @@ class AgentCoder(Coder):
                 else:
                     all_results_content.append(f"Error: Unknown tool name '{tool_name}'")
                 if tasks:
-                    gather_task = asyncio.create_task(asyncio.gather(*tasks, return_exceptions=True))
+                    gather_task = asyncio.create_task(
+                        asyncio.gather(*tasks, return_exceptions=True)
+                    )
                     interrupt_task = asyncio.create_task(self.interrupt_event.wait())
 
                     done, pending = await asyncio.wait(
@@ -350,7 +350,7 @@ class AgentCoder(Coder):
                 {"role": "tool", "tool_call_id": tool_call.id, "content": result_message}
             )
 
-        if self.auto_lint and used_write_tool and not self.edit_allowed:
+        if self.auto_lint and used_write_tool:
             edited = list(self.files_edited_by_tools)
             lint_errors = self.lint_edited(edited, show_output=False)
             self.lint_outcome = not lint_errors
@@ -1031,37 +1031,44 @@ I will proceed based on the tool results and updated context.""")
         repetition_warning = None
 
         if repetitive_tools:
+            default_temp = (
+                float(self.get_active_model().use_temperature)
+                if isinstance(self.get_active_model().use_temperature, (int, float, str))
+                else 1
+            )
+            default_fp = 0
+
             if not self.model_kwargs:
                 self.model_kwargs = {
-                    "temperature": (
-                        1
-                        if isinstance(self.get_active_model().use_temperature, bool)
-                        else float(self.get_active_model().use_temperature)
-                    ) + 0.1,
-                    "frequency_penalty": 0.2,
-                    "presence_penalty": 0.1,
+                    "temperature": default_temp + 2**-5,
+                    "frequency_penalty": default_fp + 2**-5,
+                    # "presence_penalty": 0.1,
                 }
             else:
-                temperature = nested.getter(self.model_kwargs, "temperature")
-                freq_penalty = nested.getter(self.model_kwargs, "frequency_penalty")
-                if temperature and freq_penalty:
-                    self.model_kwargs["temperature"] = min(temperature + 0.1, 2)
-                    self.model_kwargs["frequency_penalty"] = min(freq_penalty + 0.1, 1)
+                temperature = nested.getter(self.model_kwargs, "temperature", default_temp)
+                freq_penalty = nested.getter(self.model_kwargs, "frequency_penalty", default_fp)
+
+                self.model_kwargs["temperature"] = temperature + 2**-5
+                self.model_kwargs["frequency_penalty"] = freq_penalty + 2**-5
 
                 if random.random() < 0.2:
-                    self.model_kwargs["temperature"] = min(
-                        (
-                            1
-                            if isinstance(self.get_active_model().use_temperature, bool)
-                            else float(self.get_active_model().use_temperature)
-                        ),
-                        max(temperature - 0.15, 1),
+                    self.model_kwargs["temperature"] = max(
+                        default_temp,
+                        temperature - 2**-4,
                     )
-                    self.model_kwargs["frequency_penalty"] = min(0, max(freq_penalty - 0.15, 0))
+                    self.model_kwargs["frequency_penalty"] = max(
+                        default_fp,
+                        freq_penalty - 2**-4,
+                    )
 
             self.model_kwargs["temperature"] = max(
-                0, min(nested.getter(self.model_kwargs, "temperature", 1), 1)
+                0, min(nested.getter(self.model_kwargs, "temperature", default_temp), 1)
             )
+
+            self.model_kwargs["frequency_penalty"] = max(
+                0, min(nested.getter(self.model_kwargs, "frequency_penalty", default_fp), 1)
+            )
+
             # One twentieth of the time, just straight reset the randomness
             if random.random() < 0.05:
                 self.model_kwargs = {}
@@ -1175,7 +1182,7 @@ I will proceed based on the tool results and updated context.""")
 
         Parameters:
         - file_path: Path to the file to add
-        - explicit: Whether this was an explicit view command (vs. implicit through ViewFilesMatching)
+        - explicit: Whether this was an explicit view command (vs. implicit through other tools)
         """
         abs_path = self.abs_root_path(file_path)
         rel_path = self.get_rel_fname(abs_path)
@@ -1220,7 +1227,7 @@ I will proceed based on the tool results and updated context.""")
 
         Override parent's method to disable implicit file mention handling in agent mode.
         Files should only be added via explicit tool commands
-        (`View`, `ViewFilesAtGlob`, `ViewFilesMatching`, `ViewFilesWithSymbol`).
+        (`ContextManager`).
         """
         pass
 
@@ -1232,6 +1239,7 @@ I will proceed based on the tool results and updated context.""")
         inp = await super().preproc_user_input(inp)
         inp = self.wrap_user_input(inp)
 
+        BaseTool.clear_invocation_cache()
         self.agent_finished = False
         self.turn_count = 0
         return inp

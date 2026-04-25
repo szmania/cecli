@@ -1,6 +1,4 @@
-import traceback
-
-from cecli.helpers.hashline import apply_hashline_operation
+from cecli.helpers.hashline import apply_hashline_operation, strip_hashline
 from cecli.tools.utils.base_tool import BaseTool
 from cecli.tools.utils.helpers import (
     ToolError,
@@ -73,8 +71,6 @@ class Tool(BaseTool):
             raise ToolError(
                 "Please call `ShowContext` first to make sure edits are appropriately scoped"
             )
-        else:
-            coder.edit_allowed = False
 
         tool_name = "InsertText"
         try:
@@ -88,7 +84,7 @@ class Tool(BaseTool):
                     start_line_hash=start_line,
                     end_line_hash=start_line,  # For insert, end_line is same as start_line
                     operation="insert",
-                    text=content,
+                    text=strip_hashline(content),
                 )
             except Exception as e:
                 coder.edit_allowed = True
@@ -127,6 +123,7 @@ class Tool(BaseTool):
             )
 
             coder.files_edited_by_tools.add(rel_path)
+            cls.clear_invocation_cache()
 
             # 5. Format and return result
             success_message = f"Inserted content at {start_line} in {file_path}"
@@ -139,13 +136,12 @@ class Tool(BaseTool):
 
         except ToolError as e:
             # Handle errors raised by utility functions (expected errors)
+            coder.edit_allowed = False
             return handle_tool_error(coder, tool_name, e, add_traceback=False)
 
         except Exception as e:
-            coder.io.tool_error(
-                f"Error in InsertText: {str(e)}\n{traceback.format_exc()}"
-            )  # Add traceback
-            return f"Error: {str(e)}"
+            coder.edit_allowed = False
+            return handle_tool_error(coder, tool_name, e)
 
     @classmethod
     def format_output(cls, coder, mcp_server, tool_response):
