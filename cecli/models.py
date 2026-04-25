@@ -974,6 +974,7 @@ class Model(ModelSettings):
         min_wait=0,
         max_wait=2,
         override_kwargs={},
+        interrupt_event=None,
     ):
         if os.environ.get("CECLI_SANITY_CHECK_TURNS"):
             sanity_check_messages(messages)
@@ -1113,7 +1114,16 @@ class Model(ModelSettings):
                         return hash_object, self.model_error_response()
 
                 print(f"Retrying in {retry_delay:.1f} seconds...")
-                await asyncio.sleep(retry_delay)
+                if interrupt_event:
+                    try:
+                        await asyncio.wait_for(interrupt_event.wait(), timeout=retry_delay)
+                        # if we get here, the event was set
+                        raise KeyboardInterrupt("Interrupted during retry sleep")
+                    except asyncio.TimeoutError:
+                        # sleep finished without interruption
+                        pass
+                else:
+                    await asyncio.sleep(retry_delay)
                 continue
 
     async def simple_send_with_retries(self, messages, max_tokens=None):
