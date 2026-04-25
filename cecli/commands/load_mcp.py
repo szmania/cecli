@@ -26,27 +26,39 @@ class LoadMcpCommand(BaseCommand):
                 io, cls.NORM_NAME, "", f"MCP server {server_name} does not exist."
             )
 
-        did_connect = await coder.mcp_manager.connect_server(server.name)
+        import asyncio
+        coder.interrupt_event.clear()
+        connect_task = asyncio.create_task(coder.mcp_manager.connect_server(server.name))
+        interrupt_task = asyncio.create_task(coder.interrupt_event.wait())
+
+        done, pending = await asyncio.wait(
+            {connect_task, interrupt_task},
+            return_when=asyncio.FIRST_COMPLETED,
+        )
+
+        if interrupt_task in done:
+            connect_task.cancel()
+            try:
+                await connect_task
+            except asyncio.CancelledError:
+                pass
+            io.tool_warning("MCP connection interrupted.")
+            return
+
+        did_connect = connect_task.result()
 
         if not did_connect:
-            return format_command_result(io, cls.NORM_NAME, f"Unable to load server: {server_name}")
+            return format_command_result(io, cls.NORM_NAME, "", f"Unable to load server: {server_name}")
 
-        try:
-            if did_connect:
-                return format_command_result(io, cls.NORM_NAME, f"Loaded server: {server_name}")
-            else:
-                return format_command_result(
-                    io, cls.NORM_NAME, "", f"Unable to Load server: {server_name}"
-                )
-        finally:
-            from . import SwitchCoderSignal
+        io.tool_output(f"Loaded server: {server_name}")
 
-            raise SwitchCoderSignal(
-                edit_format=coder.edit_format,
-                summarize_from_coder=False,
-                from_coder=coder,
-                show_announcements=True,
-            )
+        from . import SwitchCoderSignal
+        raise SwitchCoderSignal(
+            edit_format=coder.edit_format,
+            summarize_from_coder=False,
+            from_coder=coder,
+            show_announcements=True,
+        )
 
     @classmethod
     def get_completions(cls, io, coder, args) -> List[str]:
