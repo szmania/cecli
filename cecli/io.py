@@ -1686,7 +1686,6 @@ class InputOutput:
         """Mark that the LLM has started processing, so we should ring the bell on next input"""
         self.bell_on_next_input = True
 
-
     async def _send_notification_async(self):
         """Async version of _send_notification for TUI mode."""
         if self.notifications_command:
