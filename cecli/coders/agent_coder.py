@@ -301,27 +301,25 @@ class AgentCoder(Coder):
                 else:
                     all_results_content.append(f"Error: Unknown tool name '{tool_name}'")
                 if tasks:
-                    gather_task = asyncio.create_task(
-                        asyncio.gather(*tasks, return_exceptions=True)
-                    )
+                    gather_future = asyncio.gather(*tasks, return_exceptions=True)
                     interrupt_task = asyncio.create_task(self.interrupt_event.wait())
 
                     done, pending = await asyncio.wait(
-                        {gather_task, interrupt_task},
+                        {gather_future, interrupt_task},
                         return_when=asyncio.FIRST_COMPLETED,
                     )
 
                     if interrupt_task in done:
-                        gather_task.cancel()
+                        gather_future.cancel()
                         try:
-                            await gather_task
+                            await gather_future
                         except asyncio.CancelledError:
                             pass
                         self.io.tool_warning("Tool execution interrupted.")
                         # Append a message indicating interruption
                         all_results_content.append("Tool execution interrupted by user.")
                     else:
-                        task_results = gather_task.result()
+                        task_results = gather_future.result()
                         for res in task_results:
                             if isinstance(res, Exception):
                                 all_results_content.append(f"Error in tool execution: {res}")
