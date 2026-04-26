@@ -156,7 +156,11 @@ class SessionManager:
             connected_mcps = [server.name for server in self.coder.mcp_manager.connected_servers]
 
         hook_manager = HookManager()
-        enabled_hooks = [hook.name for hook in hook_manager.get_hooks()]
+        all_hooks_by_type = hook_manager.get_all_hooks()
+        enabled_hooks = []
+        for hook_type in all_hooks_by_type:
+            for hook in hook_manager.get_hooks(hook_type):
+                enabled_hooks.append(hook.name)
 
         skills_data = None
         if hasattr(self.coder, "skills_manager") and self.coder.skills_manager:
@@ -349,8 +353,10 @@ class SessionManager:
             hook_manager = HookManager()
             saved_hooks = session_data.get("hooks", [])
             # Disable all hooks first
-            for hook in hook_manager.get_hooks():
-                hook_manager.disable_hook(hook.name)
+            all_hooks_by_type = hook_manager.get_all_hooks()
+            for hook_type in all_hooks_by_type:
+                for hook in hook_manager.get_hooks(hook_type):
+                    hook_manager.disable_hook(hook.name)
             # Enable saved hooks
             for hook_name in saved_hooks:
                 hook_manager.enable_hook(hook_name)
