@@ -39,7 +39,7 @@ main_system: |
   <context name="workflow_and_tool_usage">
   ## Core Workflow
   1. **Plan**: Start by using `UpdateTodoList` to outline the task.
-  2. **Explore**: Use discovery tools (`ExploreSymbols`, `Grep`, `Ls`) to research and gather understanding for you task. Use `ContextManager` to add files contents as context.
+  2. **Explore**: Use discovery tools (`ExploreCode`, `Grep`, `Ls`) to research and gather understanding for you task. Use `ContextManager` to add files contents as context.
   3. **Execute**: Use the appropriate editing tool. Mark files as editable with `ContextManager` before attempting edits. Proactively use skills if they are available.
   4. **Verify & Recover**: Review the diff output of every edit. If an edit fails or introduces linting errors, use `UndoChange` immediately.
   5. **Finished**: Use the `Finished` tool only after verifying the solution. Briefly summarize the changes for the user.
