@@ -23,6 +23,7 @@ import asyncio
 import json
 import os
 import re
+import shutil
 import threading
 import time
 import traceback
@@ -1511,6 +1512,36 @@ async def graceful_exit(coder=None, exit_code=0):
 
         if coder.mcp_manager and coder.mcp_manager.is_connected:
             await coder.mcp_manager.disconnect_all()
+    # Cleanup old agent directories
+    try:
+        git_root = get_git_root()
+        if git_root:
+            agents_dir = Path(git_root) / ".cecli" / "agents"
+        else:
+            agents_dir = Path(".cecli") / "agents"
+
+        if agents_dir.exists():
+            now = time.time()
+            week_seconds = 7 * 24 * 60 * 60
+
+            for agent_folder in agents_dir.iterdir():
+                if agent_folder.is_dir():
+                    try:
+                        mtime = agent_folder.stat().st_mtime
+                        if (now - mtime) > week_seconds:
+                            shutil.rmtree(agent_folder, ignore_errors=True)
+                        else:
+                            # Remove empty sub-folders in remaining folders
+                            for sub_folder in agent_folder.iterdir():
+                                if sub_folder.is_dir():
+                                    try:
+                                        sub_folder.rmdir()
+                                    except OSError:
+                                        pass
+                    except (OSError, PermissionError):
+                        pass
+    except Exception:
+        pass
 
     return exit_code
 
