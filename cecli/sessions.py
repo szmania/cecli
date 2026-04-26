@@ -7,6 +7,7 @@ from typing import Dict, List, Optional
 
 from cecli import models
 from cecli.helpers.conversation import ConversationService, MessageTag
+from cecli.hooks.manager import HookManager
 
 
 class SessionManager:
@@ -88,7 +89,7 @@ class SessionManager:
 
         return sessions
 
-    def load_session(self, session_identifier: str) -> bool:
+    async def load_session(self, session_identifier: str) -> bool:
         """Load a saved session by name or file path."""
         if not session_identifier:
             self.io.tool_error("Please provide a session name or file path.")
@@ -112,7 +113,17 @@ class SessionManager:
             return False
 
         # Apply session data
-        return self._apply_session_data(session_data, session_file)
+        applied = await self._apply_session_data(session_data, session_file)
+        if applied:
+            from cecli.commands import SwitchCoderSignal
+
+            raise SwitchCoderSignal(
+                edit_format=self.coder.edit_format,
+                from_coder=self.coder,
+                summarize_from_coder=False,
+                show_announcements=True,
+            )
+        return applied
 
     def _build_session_data(self, session_name) -> Dict:
         """Build session data dictionary from current coder state."""
@@ -140,6 +151,20 @@ class SessionManager:
             self.io.tool_warning(f"Could not read todo list file: {e}")
 
         # Get CUR and DONE messages from ConversationManager
+        connected_mcps = []
+        if hasattr(self.coder, "mcp_manager") and self.coder.mcp_manager:
+            connected_mcps = [server.name for server in self.coder.mcp_manager.connected_servers]
+
+        hook_manager = HookManager()
+        enabled_hooks = [hook.name for hook in hook_manager.get_hooks()]
+
+        skills_data = None
+        if hasattr(self.coder, "skills_manager") and self.coder.skills_manager:
+            skills_data = {
+                "include": self.coder.skills_manager.include_list,
+                "exclude": self.coder.skills_manager.exclude_list,
+            }
+
         return {
             "version": 1,
             "session_name": session_name,
@@ -168,6 +193,9 @@ class SessionManager:
                 "auto_test": self.coder.auto_test,
             },
             "todo_list": todo_content,
+            "mcps": connected_mcps,
+            "hooks": enabled_hooks,
+            "skills": skills_data,
         }
 
     def _find_session_file(self, session_identifier: str) -> Optional[Path]:
@@ -194,7 +222,7 @@ class SessionManager:
         self.io.tool_output("Use /list-sessions to see available sessions.")
         return None
 
-    def _apply_session_data(self, session_data: Dict, session_file: Path) -> bool:
+    async def _apply_session_data(self, session_data: Dict, session_file: Path) -> bool:
         """Apply session data to current coder state."""
         try:
             # Clear current state
@@ -302,6 +330,40 @@ class SessionManager:
                 + len(self.coder.abs_read_only_stubs_fnames)
             )
             self.io.tool_output(f"Loaded {num_messages} messages and {num_files} files")
+
+            # Load MCPs
+            saved_mcps = session_data.get("mcps", [])
+            if hasattr(self.coder, "mcp_manager") and self.coder.mcp_manager:
+                current_mcps = {server.name for server in self.coder.mcp_manager.connected_servers}
+                saved_mcps_set = set(saved_mcps)
+
+                to_disconnect = current_mcps - saved_mcps_set
+                for mcp_name in to_disconnect:
+                    await self.coder.mcp_manager.disconnect_server(mcp_name)
+
+                to_connect = saved_mcps_set - current_mcps
+                for mcp_name in to_connect:
+                    await self.coder.mcp_manager.connect_server(mcp_name)
+
+            # Load hooks
+            hook_manager = HookManager()
+            saved_hooks = session_data.get("hooks", [])
+            # Disable all hooks first
+            for hook in hook_manager.get_hooks():
+                hook_manager.disable_hook(hook.name)
+            # Enable saved hooks
+            for hook_name in saved_hooks:
+                hook_manager.enable_hook(hook_name)
+
+            # Load skills
+            skills_data = session_data.get("skills")
+            if (
+                skills_data
+                and hasattr(self.coder, "skills_manager")
+                and self.coder.skills_manager
+            ):
+                self.coder.skills_manager.include_list = skills_data.get("include", [])
+                self.coder.skills_manager.exclude_list = skills_data.get("exclude", [])
 
             return True
 
