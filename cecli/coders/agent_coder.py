@@ -53,7 +53,7 @@ class AgentCoder(Coder):
         self.read_tools = {
             "command",
             "commandinteractive",
-            "exploresymbols",
+            "explorecode",
             "ls",
             "grep",
             "showcontext",
