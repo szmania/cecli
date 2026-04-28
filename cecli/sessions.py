@@ -209,7 +209,7 @@ class SessionManager:
             "todo_list": todo_content,
             "mcps": connected_mcps,
             "skills": skills_data,
-            "agent_config": agent_config_data,
+            "tools": agent_config_data,
         }
 
     def _find_session_file(self, session_identifier: str) -> Optional[Path]:
@@ -374,8 +374,8 @@ class SessionManager:
                     skills_data.get("skills_excludelist", [])
                 )
 
-            # Load agent_config for tools
-            agent_config_data = session_data.get("agent_config")
+            # Load tools config
+            agent_config_data = session_data.get("tools")
             if agent_config_data and hasattr(self.coder, "agent_config"):
                 self.coder.agent_config.update(agent_config_data)
                 from cecli.tools.utils.registry import ToolRegistry
