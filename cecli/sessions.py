@@ -162,7 +162,7 @@ class SessionManager:
         skills_data = None
         if hasattr(self.coder, "skills_manager") and self.coder.skills_manager:
             skills_data = {
-                "skills_paths": self.coder.skills_manager.directory_paths,
+                "skills_paths": [str(p) for p in self.coder.skills_manager.directory_paths],
                 "skills_includelist": list(self.coder.skills_manager.include_list)
                 if self.coder.skills_manager.include_list is not None
                 else [],
