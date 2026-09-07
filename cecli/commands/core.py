@@ -133,6 +133,22 @@ class Commands:
 
         return command_queue.clear_queue(self._active_coder())
 
+    def clone(self):
+        """Create a clone of this Commands instance with updated parameters."""
+        return Commands(
+            self.io,
+            None,
+            voice_language=self.voice_language,
+            voice_input_device=self.voice_input_device,
+            voice_format=self.voice_format,
+            verify_ssl=self.verify_ssl,
+            args=self.args,
+            parser=self.parser,
+            verbose=self.verbose,
+            editor=self.editor,
+            original_read_only_fnames=self.original_read_only_fnames,
+        )
+
     def _load_custom_commands(self, custom_commands):
         """
         Load custom commands from plugin paths.
@@ -216,6 +232,46 @@ class Commands:
         commands = [f"/{cmd}" for cmd in registry_commands]
         return sorted(commands)
 
+    def matching_commands(self, inp):
+        words = inp.strip().split()
+        if not words:
+            return
+        first_word = words[0]
+        rest_inp = inp[len(words[0]) :].strip()
+        all_commands = self.get_commands()
+        matching_commands = [cmd for cmd in all_commands if cmd.startswith(first_word)]
+        return matching_commands, first_word, rest_inp
+
+    async def run(self, inp, coder=None, **kwargs):
+        if inp.startswith("/"):
+            words = inp.strip().split()
+            cmd_name = words[0][1:]
+            rest_inp = inp[len(words[0]) :].strip()
+            return await self.execute(cmd_name, rest_inp, coder=coder, **kwargs)
+
+        if inp.startswith("!!!"):
+            return await self.execute(
+                "run", inp[3:], coder=coder, background=True, suppress_add=True
+            )
+        if inp.startswith("!!"):
+            return await self.execute("run", inp[2:], coder=coder, suppress_add=True)
+        if inp.startswith("!"):
+            return await self.execute("run", inp[1:], coder=coder)
+        res = self.matching_commands(inp)
+        if res is None:
+            return
+        matching_commands, first_word, rest_inp = res
+        if len(matching_commands) == 1:
+            command = matching_commands[0][1:]
+            return await self.execute(command, rest_inp, coder=coder, **kwargs)
+        elif first_word in matching_commands:
+            command = first_word[1:]
+            return await self.execute(command, rest_inp, coder=coder, **kwargs)
+        elif len(matching_commands) > 1:
+            self.io.tool_error(f"Ambiguous command: {', '.join(matching_commands)}")
+        else:
+            self.io.tool_error(f"Invalid command: {first_word}")
+
     async def execute(self, cmd_name, args, coder=None, **kwargs):
         from cecli.repo import ANY_GIT_ERROR
 
@@ -261,8 +317,8 @@ class Commands:
                 self.coder.tui().refresh()
             # NEW: Queue processing integration
             if (
-                self.coder.prompt_queue
+                getattr(self.coder, "prompt_queue", None)
                 and cmd_name not in self._MANAGEMENT_COMMANDS
-                and not self.coder._processing_queue
+                and not getattr(self.coder, "_processing_queue", False)
             ):
                 await self.coder._drain_prompt_queue(kwargs.get("preproc", True))
