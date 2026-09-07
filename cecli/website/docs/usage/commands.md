@@ -78,6 +78,7 @@ The prompt queue management feature (`CLI-33`) adds three new commands for manag
 | Command | Description |
 |---------|-------------|
 | **/queue** | Queue a prompt for processing after current tasks complete |
+| **/insert-queue** | Insert a prompt at a specific position in the queue |
 | **/list-queue** | List all prompts currently in the queue |
 | **/remove-queue** | Remove a prompt from the queue by index, or '*' to clear all |
 
@@ -125,6 +126,30 @@ The prompt queue management feature (`CLI-33`) adds three new commands for manag
 - `NORM_NAME = "list-queue"`
 - `DESCRIPTION = "List all prompts currently in the queue"`
 - `execute()`: Accesses queue, formats output with timestamps and truncated text, handles empty queue
+- `get_help()`: Returns usage and examples
+
+#### `/insert-queue` Command
+
+**Usage:** `/insert-queue <prompt text>`, `/insert-queue <index> <prompt text>`
+
+**Description:** Inserts a prompt at a specific position in the queue. When called without an index, the prompt is added at the front of the queue.
+
+**Arguments:**
+- `index`: Optional. Position at which to insert the prompt
+- `prompt text`: Required. The prompt text to insert
+
+**Returns:** Confirmation message with the queue position number
+
+**Examples:**
+```bash
+/insert-queue "add tests for login"
+/insert-queue 3 "refactor database layer"
+```
+
+**Implementation Details:**
+- `NORM_NAME = "insert-queue"`
+- `DESCRIPTION = "Insert a prompt at a specific position in the queue"`
+- `execute()`: Validates input, calls `coder.commands._insert_prompt()`, returns position confirmation
 - `get_help()`: Returns usage and examples
 
 #### `/remove-queue` Command
