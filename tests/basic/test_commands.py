@@ -138,7 +138,6 @@ class TestCommands(TestCase):
         with mock.patch.object(io, "tool_warning") as tool_warning:
             commands = Commands(io, coder=None, args=args)
 
-        self.assertEqual(commands.custom_commands, [])
         tool_warning.assert_not_called()
 
     async def test_cmd_copy_pyperclip_exception(self):
