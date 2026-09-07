@@ -136,7 +136,7 @@ class TestCommands(TestCase):
         args = SimpleNamespace(command_paths=None)
 
         with mock.patch.object(io, "tool_warning") as tool_warning:
-            commands = Commands(io, coder=None, args=args)
+            Commands(io, coder=None, args=args)
 
         tool_warning.assert_not_called()
 
