@@ -1817,6 +1817,7 @@ def parse_retry_config(retries_input):
       retry_on_unavailable: True
       retry_on_forbidden: False
       retry_on_empty: False
+      retry_on_unauthorized: False
     """
     config = dict()
     if isinstance(retries_input, str):
@@ -1841,6 +1842,7 @@ def parse_retry_config(retries_input):
         "retry_timeout": float(_get("retry_timeout", 30)),
         "retry_backoff_factor": float(_get("retry_backoff_factor", 1.5)),
         "retry_on_unavailable": bool(_get("retry_on_unavailable", True)),
+        "retry_on_unauthorized":  bool(_get("retry_on_unauthorized", False)),
         "retry_on_forbidden": bool(_get("retry_on_forbidden", False)),
         "retry_on_empty": bool(_get("retry_on_empty", False)),
     }
