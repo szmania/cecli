@@ -134,6 +134,7 @@ class ModelSettings:
     retry_backoff_factor: float = 1.5
     retry_on_unavailable: bool = True
     retry_on_forbidden: bool = False
+    retry_on_unauthorized: bool = False
     retry_timeout: float = 30
     request_timeout: int = request_timeout
     debug: bool = False
@@ -1454,17 +1455,22 @@ class Model(ModelSettings):
         retry_delay = 0.125
 
         if self.retries:
-            retry_config = dict()
-            try:
-                retry_config = json.loads(self.retries)
-            except (json.JSONDecodeError, TypeError, ValueError):
-                retry_config = dict()
-                pass
+            # Accept both a JSON/YAML string and an already-parsed dict.
+            if isinstance(self.retries, dict):
+                retry_config = self.retries
+            else:
+                try:
+                    retry_config = json.loads(self.retries)
+                except (json.JSONDecodeError, TypeError, ValueError):
+                    retry_config = dict()
 
             self.retry_on_unavailable = bool(
                 nested.getter(retry_config, "retry-on-unavailable", True)
             )
             self.retry_on_forbidden = bool(nested.getter(retry_config, "retry-on-forbidden", False))
+            self.retry_on_unauthorized = bool(
+                nested.getter(retry_config, "retry-on-unauthorized", False)
+            )
             self.retry_backoff_factor = float(
                 nested.getter(retry_config, "retry-backoff-factor", 1.5)
             )
@@ -1501,6 +1507,16 @@ class Model(ModelSettings):
                     should_retry = should_retry or self.retry_on_unavailable
                 elif ex_info.name == "PermissionDeniedError":
                     should_retry = should_retry or self.retry_on_forbidden
+
+                # Opt-in retry for 401/403 auth failures (retry-on-unauthorized).
+                # HTTP 401/403 map to AuthenticationError/PermissionDeniedError,
+                # both default to retry=False so behavior is unchanged unless enabled.
+                status_code = getattr(err, "status_code", None)
+                if (
+                    ex_info.name in ("AuthenticationError", "PermissionDeniedError")
+                    and status_code in (401, 403)
+                ):
+                    should_retry = should_retry or self.retry_on_unauthorized
 
                 custom_retry_delay = self._extract_retry_delay(err)
                 if custom_retry_delay is not None:
