@@ -568,7 +568,10 @@ class Model(ModelSettings):
         self._apply_reasoning_defaults()
         self.get_weak_model(weak_model)
         self.get_agent_model(agent_model)
-        self.retries = retries
+        # Keep a `retries:` block from model settings unless an explicit value
+        # was passed (main.py passes retries=None when --retries is unset).
+        if retries is not None:
+            self.retries = retries
         self.debug = debug
 
         if editor_model is False:
@@ -1497,10 +1500,13 @@ class Model(ModelSettings):
                 # HTTP 401/403 map to AuthenticationError/PermissionDeniedError,
                 # both default to retry=False so behavior is unchanged unless enabled.
                 status_code = getattr(err, "status_code", None)
-                if (
+                code = getattr(err, "code", None)
+                is_auth_error = (
                     ex_info.name in ("AuthenticationError", "PermissionDeniedError")
-                    and status_code in (401, 403)
-                ):
+                    or status_code in (401, 403, "401", "403")
+                    or str(code) in ("401", "403")
+                )
+                if is_auth_error:
                     should_retry = should_retry or self.retry_on_unauthorized
 
                 custom_retry_delay = self._extract_retry_delay(err)
@@ -1622,6 +1628,18 @@ class Model(ModelSettings):
                     should_retry = should_retry or retry_on_unavailable
                 elif ex_info.name == "PermissionDeniedError":
                     should_retry = should_retry or retry_on_forbidden
+
+                # Opt-in retry for auth failures (retry-on-unauthorized);
+                # see send_completion for why the name check comes first.
+                status_code = getattr(err, "status_code", None)
+                code = getattr(err, "code", None)
+                is_auth_error = (
+                    ex_info.name in ("AuthenticationError", "PermissionDeniedError")
+                    or status_code in (401, 403, "401", "403")
+                    or str(code) in ("401", "403")
+                )
+                if is_auth_error:
+                    should_retry = should_retry or retry_config["retry_on_unauthorized"]
 
                 custom_retry_delay = self._extract_retry_delay(err)
                 if custom_retry_delay is not None:
