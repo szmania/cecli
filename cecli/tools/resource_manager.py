@@ -35,18 +35,12 @@ class Tool(BaseTool):
                     "add": {
                         "type": "array",
                         "items": {"type": "string"},
-                        "description": (
-                            "List of file paths to add to context. Limit to at most 2 at a time. "
-                            "Command output aliases (command_key::) are rejected; use paging instead."
-                        ),
+                        "description": "List of file paths to add to context.",
                     },
                     "read_only": {
                         "type": "array",
                         "items": {"type": "string"},
-                        "description": (
-                            "List of file paths to add as read-only. Limit to at most 2 at a time. "
-                            "Command output aliases (command_key::) are rejected; use paging instead."
-                        ),
+                        "description": "List of file paths to add as read-only.",
                     },
                     "create": {
                         "type": "array",
@@ -98,9 +92,9 @@ class Tool(BaseTool):
                     "paging": {
                         "type": "array",
                         "description": (
-                            "View 1-3 saved command output pages without adding files to context. "
+                            "View 1-3 saved command output pages. "
                             'Format: [{"target": "<command key>", "page": 1}]. '
-                            "Pages are numbered from 1."
+                            "Pages are 1-indexed."
                         ),
                         "items": {
                             "type": "object",
@@ -453,9 +447,8 @@ class Tool(BaseTool):
     def _create(cls, coder, file_path):
         """Create a new file on the file system and make it editable in the coder's context."""
         try:
-            abs_path = coder.abs_root_path(file_path)
+            abs_path = coder.abs_root_path(os.path.expanduser(file_path))
 
-            # Check if file already exists
             if os.path.exists(abs_path):
                 coder.io.tool_output(f"⚠ File '{file_path}' already exists", type="tool-result")
                 return f"File already exists: {file_path}"
@@ -494,7 +487,7 @@ class Tool(BaseTool):
                 filename = parts[1]
                 rel_path = coder.local_agent_folder(f"{command_key}/{filename}")
                 return coder.abs_root_path(rel_path)
-        return coder.abs_root_path(file_path)
+        return coder.abs_root_path(os.path.expanduser(file_path))
 
     @classmethod
     def _load_skill(cls, coder, skill_name):

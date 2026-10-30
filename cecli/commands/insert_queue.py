@@ -4,6 +4,7 @@ from typing import List
 
 from cecli.commands.utils.base_command import BaseCommand
 from cecli.commands.utils.helpers import format_command_result
+from cecli.helpers import command_queue
 
 
 class InsertQueueCommand(BaseCommand):
@@ -57,8 +58,9 @@ class InsertQueueCommand(BaseCommand):
 
         # Happy path: insert the prompt
         try:
-            item = coder.commands._insert_prompt(prompt_text, index)
+            item = command_queue.insert_prompt(coder, prompt_text, index)
             io.tool_output(f"Prompt inserted at position {index + 1} (id: {item['id']})")
+
             return f"Successfully executed {cls.NORM_NAME}."
         except ValueError as e:
             return format_command_result(io, cls.NORM_NAME, "", error=str(e))
@@ -67,8 +69,20 @@ class InsertQueueCommand(BaseCommand):
 
     @classmethod
     def get_completions(cls, io, coder, args) -> List[str]:
-        """Get completion options for insert-queue command."""
-        return []
+        """Get completion options for insert-queue command.
+
+        Args are "<index> <prompt text>"; once the index token and a space
+        are present, mirror the nested prompt's completions (e.g. a nested
+        slash command delegates to the original command's completions).
+        """
+        text = args or ""
+        first_space = text.find(" ")
+        if first_space == -1:
+            # Still typing the index; suggest valid positions.
+            if not coder.commands:
+                return []
+            return [str(i) for i in range(1, command_queue.get_queue_length(coder) + 2)]
+        return command_queue.nested_command_completions(coder, text[first_space + 1 :])
 
     @classmethod
     def get_help(cls) -> str:
@@ -82,5 +96,5 @@ class InsertQueueCommand(BaseCommand):
         help_text += "\nExamples:\n"
         help_text += "  /insert-queue 1 Review the changes in src/main.py\n"
         help_text += "  /insert-queue 3 Write unit tests for the new feature\n"
-        help_text += "\nSee also: /queue, /list-queue, /remove-queue\n"
+        help_text += "\nSee also: /queue, /list-queue, /remove-queue, /run-queue\n"
         return help_text

@@ -4,6 +4,7 @@ from typing import List
 
 from cecli.commands.utils.base_command import BaseCommand
 from cecli.commands.utils.helpers import format_command_result
+from cecli.helpers import command_queue
 
 
 class QueueCommand(BaseCommand):
@@ -55,9 +56,10 @@ class QueueCommand(BaseCommand):
 
         # Happy path: enqueue the prompt
         try:
-            item = coder.commands._enqueue_prompt(prompt_text)
-            position = len(coder.commands.prompt_queue)
+            item = command_queue.enqueue_prompt(coder, prompt_text)
+            position = command_queue.get_queue_length(coder)
             io.tool_output(f"Prompt queued at position {position} (id: {item['id']})")
+
             return f"Successfully executed {cls.NORM_NAME}."
         except ValueError as e:
             return format_command_result(io, cls.NORM_NAME, "", error=str(e))
@@ -66,8 +68,12 @@ class QueueCommand(BaseCommand):
 
     @classmethod
     def get_completions(cls, io, coder, args) -> List[str]:
-        """Get completion options for queue command."""
-        return []
+        """Get completion options for queue command.
+
+        When the queued prompt starts with a slash command, mirror the
+        original command's completions (e.g. /queue /add <tab> offers files).
+        """
+        return command_queue.nested_command_completions(coder, args)
 
     @classmethod
     def get_help(cls) -> str:
@@ -85,5 +91,5 @@ class QueueCommand(BaseCommand):
         help_text += "\nExamples:\n"
         help_text += "  /queue Review the changes in src/main.py\n"
         help_text += "  /queue Write unit tests for the new feature\n"
-        help_text += "\nSee also: /list-queue, /remove-queue\n"
+        help_text += "\nSee also: /insert-queue, /list-queue, /remove-queue, /run-queue\n"
         return help_text

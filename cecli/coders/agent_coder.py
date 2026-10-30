@@ -1,7 +1,6 @@
 import asyncio
 import base64
 import json
-import locale
 import logging
 import os
 import platform
@@ -65,10 +64,8 @@ class AgentCoder(Coder):
         self.read_tools = {
             "command",
             "explorecode",
-            "ls",
             "readfile",
             "grep",
-            "thinking",
             "updatetodolist",
             "searchfacts",
         }
@@ -236,6 +233,7 @@ class AgentCoder(Coder):
             config,
             ["tools_excludelist", "tools_blacklist"],
             [
+                "create",
                 "gitbranch",
                 "gitdiff",
                 "gitlog",
@@ -243,6 +241,7 @@ class AgentCoder(Coder):
                 "gitshow",
                 "gitstatus",
                 "searchfacts",
+                "searchdocs",
                 "replacefacts",
             ],
         )
@@ -294,6 +293,12 @@ class AgentCoder(Coder):
                 self.allowed_context_blocks.remove(context_block)
             except KeyError:
                 pass
+
+        if config.get("creator_mode") or config.get("allow_external_paths"):
+            if "searchdocs" in config["tools_excludelist"]:
+                config["tools_excludelist"].remove("searchdocs")
+            if "creator_requirements" not in config["exclude_context_blocks"]:
+                config["include_context_blocks"].add("creator_requirements")
 
         if "skills" in self.allowed_context_blocks:
             config["skills_paths"] = nested.getter(config, "skills_paths", [])
@@ -348,6 +353,10 @@ class AgentCoder(Coder):
             verbose = getattr(self.args, "verbose", False) if self.args else False
             self.mcp_manager = McpServerManager([], self.io, verbose)
 
+        await self._initialize_local_server()
+        await self._connect_configured_servers()
+
+    async def _initialize_local_server(self):
         server_name = "Local"
         server = self.mcp_manager.get_server(server_name)
 
@@ -368,6 +377,35 @@ class AgentCoder(Coder):
             await self.mcp_manager.add_server(local_server, connect=True)
         else:
             await self.mcp_manager.connect_server(server_name)
+
+    async def _connect_configured_servers(self):
+        """Open connections for servers named in this agent's ``servers`` allowlist.
+
+        ``McpServerManager.spawn_child`` only mirrors servers the parent already
+        had connected, so a workflow's declarative ``servers:`` list would never
+        open a connection for servers that are disabled by default (or whose
+        parent connection failed).
+        """
+        included = getattr(self, "registered_servers", {}).get("included") or set()
+
+        for name in sorted(included):
+            if name == "local":
+                continue
+
+            server = self.mcp_manager.get_server(name)
+            if server is None:
+                self.io.tool_warning(
+                    f"MCP server '{name}' is required by this agent but is not configured"
+                )
+                continue
+
+            if server.is_connected:
+                continue
+
+            if not await self.mcp_manager.connect_server(server.name):
+                self.io.tool_warning(
+                    f"Failed to connect MCP server '{server.name}' required by this agent"
+                )
 
     async def _execute_mcp_tool(self, server, tool_name, params):
         """Helper to execute a single MCP tool call, created from legacy format."""
@@ -464,6 +502,7 @@ class AgentCoder(Coder):
                 "servers",
                 "sub_agents",
                 "orchestration",
+                "creator_requirements",
             ]
             for block_type in block_types:
                 if block_type in self.allowed_context_blocks:
@@ -492,6 +531,8 @@ class AgentCoder(Coder):
             content = self.get_context_symbol_outline()
         elif block_name == "context_summary":
             content = self.get_context_summary()
+        elif block_name == "creator_requirements":
+            content = self.get_creator_requirements_context()
         elif block_name == "todo_list":
             content = self.get_todo_list()
         elif block_name == "skills":
@@ -763,7 +804,7 @@ class AgentCoder(Coder):
         try:
             current_date = datetime.now().strftime("%Y-%m-%d")
             platform_info = platform.platform()
-            language = self.chat_language or locale.getlocale()[0] or "en-US"
+            language = self.get_user_language() or "English"
             result = '<context name="environment_info" from="agent">\n'
             result += "## Environment Information\n\n"
             result += f"- Working directory: {self.root}\n"
@@ -842,6 +883,7 @@ class AgentCoder(Coder):
         for tool_call in tool_calls_list:
             tool_name = tool_call.function.name
             result_message = ""
+            self.io.tool_call_event(tool_call.id, "in_progress")
             try:
                 if responses.unprefix_tool_name(tool_name)[1].lower() in self.write_tools:
                     used_write_tool = True
@@ -1598,6 +1640,41 @@ Todo list does not exist. Please update it with the `UpdateTodoList` tool.</cont
             self.io.tool_error(f"Error generating todo list context: {str(e)}")
             return None
 
+    def get_creator_requirements_context(self):
+        """List importable packages for creator-written tools and commands.
+
+        Only emitted for creator-mode agents. Lists top-level modules from the
+        Python environment that is actually running cecli, regardless of the
+        project's requirements files.
+        """
+        from cecli.helpers.creator import requirements
+
+        if not self.use_enhanced_context:
+            return None
+
+        config = getattr(self, "agent_config", {}) or {}
+        if not (config.get("creator_mode") or config.get("allow_external_paths")):
+            return None
+
+        discovery = requirements.packages_context()
+        if not discovery:
+            return None
+
+        environment, packages = discovery
+
+        result = '<context name="creator_requirements" from="agent">\n'
+        result += "## Available Python Packages\n\n"
+        result += (
+            f"Top-level modules installed in the {environment} environment running cecli "
+            "are importable by custom tools and custom commands. Distribution names may "
+            "differ from import names:\n\n"
+        )
+        for start in range(0, len(packages), 8):
+            result += "- " + ", ".join(packages[start : start + 8]) + "\n"
+        result += "</context>"
+
+        return result
+
     def get_skills_context(self):
         """
         Generate a context block for available skills.
@@ -1798,6 +1875,7 @@ Todo list does not exist. Please update it with the `UpdateTodoList` tool.</cont
                 info
                 for info in children
                 if not info.independent
+                and not info.detached
                 and info.status not in (SubAgentStatus.FINISHED, SubAgentStatus.ERROR)
             ]
 
@@ -1810,6 +1888,7 @@ Todo list does not exist. Please update it with the `UpdateTodoList` tool.</cont
             for info in service.sub_agents.values():
                 if (
                     info.independent
+                    and not info.detached
                     and str(info.coder.uuid) != originator_uuid
                     and info.status not in (SubAgentStatus.ERROR,)
                     and info.coder.uuid not in dependent_uuids

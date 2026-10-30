@@ -225,6 +225,10 @@ class Tool(BaseTool):
 
         sender_name = agent_service.get_agent_name(sender_coder) or "primary"
         sender_uuid = str(sender_coder.uuid)
+        target_uuid = info.coder.uuid if isinstance(info, SubAgentInfo) else info.uuid
+        sender_coder.io.subagent_event(
+            str(target_uuid), "message", sender_uuid=sender_uuid, text=message
+        )
         message = (
             f"<context name='message' from='{sender_name} ({sender_uuid})'>\n"
             f"{message}\n\n"

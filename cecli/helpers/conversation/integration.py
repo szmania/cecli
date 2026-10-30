@@ -780,6 +780,9 @@ class ConversationChunks:
         ConversationService.get_manager(coder).reset()
         if coder:
             ConversationService.get_files(coder).reset()
+        ConversationService.get_manager(coder).reset()
+        if coder:
+            ConversationService.get_files(coder).reset()
 
     def add_static_context_blocks(self) -> None:
         """
@@ -809,6 +812,10 @@ class ConversationChunks:
                 block = coder.get_cached_context_block("directory_structure")
                 if block:
                     message_blocks["directory_structure"] = block
+            if "creator_requirements" in coder.allowed_context_blocks:
+                block = coder.get_cached_context_block("creator_requirements")
+                if block:
+                    message_blocks["creator_requirements"] = block
             if "sub_agents" in coder.allowed_context_blocks:
                 block = coder._generate_context_block("sub_agents")
                 if block:
@@ -1074,6 +1081,24 @@ class ConversationChunks:
             ],  # Inject on change in normal message sequence
             hash_key=("sub_agent_states", str(time.monotonic_ns())),
         )
+
+    def retrieve_creator_docs(self, coder, query, n_results=8) -> list:
+        """Retrieve documentation chunks, degrading to keyword search if needed."""
+        try:
+            from cecli.help import Help, keyword_retrieve
+
+            try:
+                help_instance = Help(coder=coder)
+                docs = help_instance.retrieve(query, n_results=n_results)
+            except Exception:
+                docs = []
+
+            if docs:
+                return docs
+
+            return keyword_retrieve(query, n_results=n_results)
+        except Exception:
+            return []
 
     def defer_removal(self, file_path: str):
         self._deferred_removals.add(file_path)

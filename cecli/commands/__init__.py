@@ -25,6 +25,7 @@ from .context_management import ContextManagementCommand
 from .copy import CopyCommand
 from .copy_context import CopyContextCommand
 from .core import Commands
+from .creator import CreatorCommand
 from .diff import DiffCommand
 from .drop import DropCommand
 from .editor import EditCommand, EditorCommand
@@ -73,6 +74,7 @@ from .report import ReportCommand
 from .reset import ResetCommand
 from .rules import RulesCommand
 from .run import RunCommand
+from .run_queue import RunQueueCommand
 from .save import SaveCommand
 from .save_session import SaveSessionCommand
 from .search_memory import SearchMemoryCommand
@@ -99,6 +101,7 @@ from .utils.registry import CommandRegistry
 from .voice import VoiceCommand
 from .weak_model import WeakModelCommand
 from .web import WebCommand
+from .workflows import WorkflowCommand
 from .workspace import WorkspaceCommand
 
 # Register commands
@@ -119,6 +122,7 @@ CommandRegistry.register(ContextCommand)
 CommandRegistry.register(ContextManagementCommand)
 CommandRegistry.register(CopyCommand)
 CommandRegistry.register(CopyContextCommand)
+CommandRegistry.register(CreatorCommand)
 CommandRegistry.register(DiffCommand)
 CommandRegistry.register(DropCommand)
 CommandRegistry.register(EditCommand)
@@ -168,6 +172,7 @@ CommandRegistry.register(ReportCommand)
 CommandRegistry.register(ResetCommand)
 CommandRegistry.register(RulesCommand)
 CommandRegistry.register(RunCommand)
+CommandRegistry.register(RunQueueCommand)
 CommandRegistry.register(SaveCommand)
 CommandRegistry.register(SaveSessionCommand)
 CommandRegistry.register(SearchMemoryCommand)
@@ -182,6 +187,7 @@ CommandRegistry.register(UndoCommand)
 CommandRegistry.register(VoiceCommand)
 CommandRegistry.register(WeakModelCommand)
 CommandRegistry.register(WebCommand)
+CommandRegistry.register(WorkflowCommand)
 CommandRegistry.register(WorkspaceCommand)
 
 
@@ -207,6 +213,7 @@ __all__ = [
     "ContextManagementCommand",
     "CopyCommand",
     "CopyContextCommand",
+    "CreatorCommand",
     "DiffCommand",
     "DropCommand",
     "EditCommand",
@@ -263,6 +270,7 @@ __all__ = [
     "ResetCommand",
     "RulesCommand",
     "RunCommand",
+    "RunQueueCommand",
     "SaveCommand",
     "SaveSessionCommand",
     "SearchMemoryCommand",
@@ -279,5 +287,6 @@ __all__ = [
     "VoiceCommand",
     "WeakModelCommand",
     "WebCommand",
+    "WorkflowCommand",
     "WorkspaceCommand",
 ]

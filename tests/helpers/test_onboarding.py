@@ -62,6 +62,14 @@ def test_get_models_for_provider_openai():
     assert "openai/gpt-4o" in models
 
 
+def test_get_models_for_provider_filters_by_mode():
+    every_model = get_models_for_provider("gemini")
+    chat_models = get_models_for_provider("gemini", modes=("chat",))
+
+    assert chat_models
+    assert set(chat_models) < set(every_model)  # image generation models are left out
+
+
 def test_get_models_for_provider_anthropic_prefixed():
     models = get_models_for_provider("anthropic")
 

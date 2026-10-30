@@ -42,7 +42,11 @@ from cecli.helpers import command_parser, command_queue, coroutines, nested, res
 from cecli.helpers.conversation import ConversationService, MessageTag
 from cecli.helpers.file_system import FileSystemService
 from cecli.helpers.io_proxy import IOProxy
-from cecli.helpers.loop_detect import LoopDetectedError, LoopDetector
+from cecli.helpers.loop_detect import (
+    LoopDetectedError,
+    LoopDetector,
+    LoopThresholdTracker,
+)
 from cecli.helpers.memory_control import trim_memory
 from cecli.helpers.observations.service import ObservationService
 from cecli.helpers.profiler import TokenProfiler
@@ -66,7 +70,7 @@ from cecli.report import update_error_prefix
 from cecli.run_cmd import run_cmd_async
 from cecli.tools.utils.output import print_tool_response
 from cecli.tools.utils.registry import ToolRegistry
-from cecli.utils import copy_tool_call, format_tokens, is_image_file
+from cecli.utils import copy_tool_call, format_tokens, is_image_file, safe_relpath
 
 from ..dump import dump  # noqa: F401
 from ..prompts.utils.registry import PromptObject, PromptRegistry
@@ -291,8 +295,8 @@ class Coder(metaclass=UsageMeta):
     commit_language = None
     file_watcher = None
     mcp_manager = None
-    run_one_completed = True
     compact_context_completed = True
+    _drain_queue_after_command = False
     suppress_announcements_for_next_prompt = False
     tool_reflection = False
     last_user_message = ""
@@ -405,6 +409,18 @@ class Coder(metaclass=UsageMeta):
                 # Preserve TUI ref in all child coders
                 if from_coder.tui:
                     res.tui = from_coder.tui
+
+                # The scheduler is an active service owned by the primary
+                # coder: a switch runs inside the same event loop, so carry it
+                # over (and rebind its coder) instead of leaking a ticking
+                # zombie onto the retired coder. Recreations that keep the
+                # uuid are switches/reloads; sub-agents spawn with a fresh
+                # uuid, and a stopped scheduler (reload) is never handed on.
+                scheduler = getattr(from_coder, "scheduler", None)
+                if scheduler is not None and scheduler.running and res.uuid == from_coder.uuid:
+                    from_coder.scheduler = None
+                    res.scheduler = scheduler
+                    scheduler.coder = res
 
                 # Sub-agents get a dedicated, independent MCP manager so they
                 # can rebuild a custom tool list (their own LocalServer tools /
@@ -672,6 +688,8 @@ class Coder(metaclass=UsageMeta):
         self._queue_counter = 0
         self._queue_lock = threading.Lock()
         self._processing_queue = False
+        self._active_queue_prompt = None
+        self._drain_queue_after_command = False
 
         self.data_cache = {
             "repo": {"last_key": "", "read_only_count": None},
@@ -868,6 +886,13 @@ class Coder(metaclass=UsageMeta):
             pass
 
         self.custom = customizations
+
+        # Owns the loop-detection settings and how much repetition is currently
+        # allowed; handed to every stream's detectors.
+        self.repetition_penalties = LoopThresholdTracker(
+            config=nested.getter(self.custom, "repetition_penalties", None)
+        )
+
         self.file_diffs = nested.getter(self.args, "file_diffs", True)
 
         if nested.getter(self.custom, "prompt_map.all", None):
@@ -984,12 +1009,12 @@ class Coder(metaclass=UsageMeta):
             settings_items.append(f"reasoning {reasoning_effort}")
 
         # Prompt cache
-        if self.add_cache_headers or main_model.caches_by_default:
-            settings_items.append("prompt cache")
+        # if self.add_cache_headers or main_model.caches_by_default:
+        #   settings_items.append("prompt cache")
 
         # Infinite output
-        if main_model.info.get("supports_assistant_prefill") and self.verbose:
-            settings_items.append("infinite output")
+        # if main_model.info.get("supports_assistant_prefill") and self.verbose:
+        #    settings_items.append("infinite output")
 
         # Copy/paste mode
         if self.copy_paste_mode:
@@ -1019,10 +1044,6 @@ class Coder(metaclass=UsageMeta):
                 refresh = self.repo_map.refresh
                 env_items.append(f"map ({map_tokens} tokens, {refresh} refresh)")
                 repo_map_tokens = map_tokens
-            else:
-                env_items.append("repo-map disabled")
-        else:
-            env_items.append("repo-map disabled")
 
         sections["Environment"] = {"items": env_items}
         # --- CAPABILITIES ---
@@ -1062,7 +1083,7 @@ class Coder(metaclass=UsageMeta):
             if mcp_servers:
                 capabilities["Servers"] = mcp_servers
 
-        if capabilities:
+        if capabilities and not getattr(self.args, "tui", False):
             # sections["Extensions"] = {"subsections": capabilities}
             sections["Environment"]["subsections"] = capabilities
 
@@ -1615,6 +1636,10 @@ class Coder(metaclass=UsageMeta):
         async for chunk in self.send_message(user_message):
             yield chunk
 
+        # Stream-driven interfaces bypass run_one(), so drain the queue here
+        # to keep queued prompts processing after the request completes.
+        await self.process_prompt_queue()
+
     def init_before_message(self):
         self.coder_edited_files = set()
         self.reflected_message = None
@@ -1934,14 +1959,12 @@ class Coder(metaclass=UsageMeta):
                     await self.compact_context_if_needed()
                     self.compact_context_completed = True
 
-            self.run_one_completed = False
             await self.run_one(user_message, preproc)
             self.show_undo_hint()
         except asyncio.CancelledError:
             # Don't show undo hint if cancelled
             raise
         finally:
-            self.run_one_completed = True
             self.compact_context_completed = True
             self.io.stop_spinner()
             # Trim memory in the background so it doesn't stall the event loop
@@ -2001,9 +2024,6 @@ class Coder(metaclass=UsageMeta):
             try:
                 return await self.commands.run(inp, coder=self, **run_kwargs)
             finally:
-                # Dispatch can return early (unknown/ambiguous command) or
-                # raise without ever running a command; the gate must still be
-                # reopened or the input/output loops park forever.
                 self.commands.cmd_running_event.set()
 
         await self.check_for_file_mentions(inp)
@@ -2013,6 +2033,67 @@ class Coder(metaclass=UsageMeta):
 
     def wrap_user_input(self, inp):
         return inp
+
+    async def process_prompt_queue(self, preproc=True):
+        """Drain the coder's prompt queue in FIFO order.
+
+        Re-entrant calls return immediately. Each item is activated before it
+        runs so an interrupt can put it back at the front of the queue, and
+        failures are isolated so one prompt does not abort the rest.
+        """
+        if self._processing_queue:
+            return
+
+        def warn_paused():
+            remaining = command_queue.get_queue_length(self)
+            self.io.tool_warning(
+                f"Queue processing interrupted. {remaining} prompt(s) remain"
+                " queued; use /run-queue to resume."
+            )
+
+        from cecli.helpers.agents.service import AgentService
+
+        self._processing_queue = True
+        try:
+            while True:
+                item = command_queue.dequeue_for_processing(self)
+                if item is None:
+                    break
+
+                self.io.tool_output(f"Processing queued prompt (id: {item['id']})...")
+                try:
+                    await self.generate(item["text"], preproc)
+                    interrupt_event = getattr(self, "interrupt_event", None)
+                    if interrupt_event is not None and interrupt_event.is_set() is True:
+                        command_queue.requeue_active_prompt(self)
+                        warn_paused()
+                        break
+                except (asyncio.CancelledError, KeyboardInterrupt):
+                    command_queue.requeue_active_prompt(self)
+                    warn_paused()
+                    raise
+                except SwitchCoderSignal as switch:
+                    if not getattr(self, "parent_uuid", ""):
+                        raise
+
+                    service = AgentService.get_instance(self)
+                    info = service.sub_agents.get(self.uuid)
+                    if info is None:
+                        raise
+
+                    await service.switch_sub_agent_coder(info, switch, preproc)
+                    return
+                except SystemExit:
+                    raise
+                except Exception as e:
+                    command_queue.clear_active_prompt(self)
+                    self.io.tool_error(f"Error processing queued prompt (id: {item['id']}): {e}")
+                    continue
+
+                command_queue.clear_active_prompt(self)
+        finally:
+            self._drain_queue_after_command = False
+            command_queue.finish_processing(self)
 
     async def run_one(self, user_message, preproc):
         self.init_before_message()
@@ -2029,6 +2110,9 @@ class Coder(metaclass=UsageMeta):
         if self.commands.is_command(user_message) and not self.commands.is_test_command(
             user_message
         ):
+            if self._processing_queue or self._drain_queue_after_command:
+                self._drain_queue_after_command = False
+                await self.process_prompt_queue(preproc)
             return
 
         if not self.commands.is_command(user_message):
@@ -2100,19 +2184,10 @@ class Coder(metaclass=UsageMeta):
 
             await self.auto_save_session(force=True)
 
-        # Move to the next queued prompt (CLI-33) only after the current message
-        # has fully completed, so the queue drains within run_one() instead of
+        # Drain any queued prompts (CLI-33) only after the current message has
+        # fully completed, so the queue is processed within run_one() instead of
         # being watched by the generation loops.
-        if self.prompt_queue and not self._processing_queue:
-            self._processing_queue = True
-            try:
-                item = command_queue.dequeue_prompt(self)
-            finally:
-                self._processing_queue = False
-
-            if item is not None:
-                self.io.tool_output(f"Processing queued prompt (id: {item['id']})...")
-                await self.run_one(item["text"], preproc)
+        await self.process_prompt_queue(preproc)
 
         if not await HookIntegration.call_end_hooks(self):
             self.io.tool_warning("Execution stopped by end hook")
@@ -2222,13 +2297,13 @@ class Coder(metaclass=UsageMeta):
         is_min_size = all_tokens >= self.context_compaction_max_tokens
 
         # Condition 2: Percentage check (is chat history a significant part of the context?)
-        is_worth_by_percentage = all_tokens > 0 and (compactable_tokens / all_tokens) >= 0.20
+        is_worth_by_percentage = all_tokens > 0 and (compactable_tokens / all_tokens) >= 0.15
 
         # Condition 3: Absolute savings check (would compacting save enough tokens to fit?)
         tokens_over_limit = all_tokens - (self.context_compaction_max_tokens or all_tokens)
         potential_savings = compactable_tokens * 0.90
         is_worth_by_absolute_savings = (
-            tokens_over_limit > 0 and potential_savings >= tokens_over_limit
+            tokens_over_limit > 0 and potential_savings >= (tokens_over_limit * 0.50)
         )
 
         if not force:
@@ -2240,6 +2315,31 @@ class Coder(metaclass=UsageMeta):
                     "Skipping compaction: Not enough chat history to make a difference. Use /drop to remove files."
                 )
                 return
+
+        # Compaction can only shrink the conversation buckets counted above.
+        # If the fixed context (files added to the chat, repo map, system
+        # prompt, rules, tool schemas) already meets the limit on its own,
+        # summarizing cannot bring the context under the limit. Bail out with
+        # guidance instead of churning every turn, which is what a large file
+        # added to the chat otherwise causes.
+        non_compactable_tokens = all_tokens - compactable_tokens
+
+        if (
+            self.context_compaction_max_tokens
+            and non_compactable_tokens >= self.context_compaction_max_tokens
+        ):
+            if getattr(self, "_compaction_noop_warning_time", 0) + 300 < time.time():
+                self._compaction_noop_warning_time = time.time()
+                self.io.tool_warning(
+                    "Compaction cannot reduce the context: the fixed context (files in the"
+                    f" chat, repo map, prompts) is already ~{non_compactable_tokens:,}"
+                    f" tokens, at or above the ~{self.context_compaction_max_tokens:,} token"
+                    " compaction limit."
+                )
+                self.io.tool_output("- Use /drop to remove unneeded files from the chat")
+                self.io.tool_output("- Use /clear to clear the chat history")
+
+            return
 
         message_tokens = done_tokens + cur_tokens
         file_tokens = diff_tokens + file_context_tokens
@@ -2556,7 +2656,7 @@ class Coder(metaclass=UsageMeta):
             language = user_lang
         else:
             # Default if no specific lang detected
-            language = "the same language they are using"
+            language = "the user's most recently used language"
 
         if self.fence[0] == "`" * 4:
             quad_backtick_reminder = (
@@ -2680,7 +2780,7 @@ class Coder(metaclass=UsageMeta):
     async def check_tokens(self, messages):
         """Check if the messages will fit within the model's token limits."""
         input_tokens = self.get_active_model().token_count(messages)
-        max_input_tokens = self.get_active_model().info.get("max_input_tokens") or 0
+        max_input_tokens = self.get_active_model().info.get("max_input_tokens") or 256000
 
         if max_input_tokens and input_tokens >= max_input_tokens:
             if (
@@ -2691,7 +2791,7 @@ class Coder(metaclass=UsageMeta):
                     f"Estimated chat context of {input_tokens:,} tokens exceeds the"
                     f" {max_input_tokens:,} token limit. Attempting to compact..."
                 )
-                await self.compact_context_if_needed(force=True)
+                await self.compact_context_if_needed()
 
                 # After compaction, re-format messages and re-check tokens
                 messages = self.format_messages()
@@ -2828,7 +2928,7 @@ class Coder(metaclass=UsageMeta):
                 except EmptyResponseError:
                     self.io.tool_warning(self.empty_llm_tool_warning())
 
-                    retry_config = models._parse_retry_config(self.get_active_model().retries)
+                    retry_config = models.parse_retry_config(self.get_active_model().retries)
                     retry_on_empty = retry_config["retry_on_empty"]
 
                     if not retry_on_empty:
@@ -2855,11 +2955,9 @@ class Coder(metaclass=UsageMeta):
                         exhausted = True
                         break
 
-                    retry_config = models._parse_retry_config(self.get_active_model().retries)
+                    retry_config = models.parse_retry_config(self.get_active_model().retries)
 
-                    should_retry = ex_info.retry
-                    if ex_info.name == "ServiceUnavailableError":
-                        should_retry = should_retry or retry_config["retry_on_unavailable"]
+                    should_retry, _ = models.parse_model_error(retry_config, err)
 
                     if should_retry:
                         retry_delay *= retry_config["retry_backoff_factor"]
@@ -3187,7 +3285,8 @@ class Coder(metaclass=UsageMeta):
                 tool_name_from_schema = nested.getter(tool, "function.name")
                 if (
                     tool_name_from_schema
-                    and tool_name_from_schema.lower() == unprefixed_tool_name.lower()
+                    and responses.sanitize_tool_name(tool_name_from_schema).lower()
+                    == responses.sanitize_tool_name(unprefixed_tool_name).lower()
                 ):
                     # Find the McpServer instance that will be used for communication
                     for server in self.mcp_manager:
@@ -3248,6 +3347,7 @@ class Coder(metaclass=UsageMeta):
                     continue
 
                 tool_id_set.add(tool_call.id)
+                self.io.tool_call_event(tool_call.id, "in_progress")
 
                 try:
                     # Arguments can be a stream of JSON objects.
@@ -3409,6 +3509,10 @@ class Coder(metaclass=UsageMeta):
         # with a "missing required parameter" error.
         arguments = responses.coerce_tool_structure(arguments)
 
+        # Providers require a provider-safe tool name, so the name coming back
+        # from the model may not be the name the MCP server advertises.
+        name = responses.original_tool_name(name)
+
         return await session.call_tool(name=name, arguments=arguments)
 
     async def process_tool_calls(self, tool_call_response):
@@ -3450,6 +3554,11 @@ class Coder(metaclass=UsageMeta):
         for server, server_responses in tool_responses_by_server.items():
             for tool_response in server_responses:
                 tool_responses.append(tool_response)
+                self.io.tool_call_event(
+                    tool_response["tool_call_id"],
+                    "completed",
+                    result=tool_response.get("content"),
+                )
 
                 ConversationService.get_manager(self).add_message(
                     message_dict=tool_response,
@@ -3467,6 +3576,12 @@ class Coder(metaclass=UsageMeta):
 
         for server, tool_calls in server_tool_calls.items():
             for tool_call in tool_calls:
+                self.io.tool_call_event(
+                    tool_call.id,
+                    "pending",
+                    name=tool_call.function.name,
+                    arguments=tool_call.function.arguments,
+                )
                 try:
                     if ToolRegistry.get_tool(tool_call.function.name.lower()):
                         ToolRegistry.get_tool(tool_call.function.name.lower()).format_output(
@@ -3498,6 +3613,7 @@ class Coder(metaclass=UsageMeta):
 
     def get_tool_list(self):
         """Get a flattened list of all MCP tools with server prefixes, filtered by registered_servers."""
+        responses.register_tool_names(self.mcp_tools)
         tool_list = []
         if self.mcp_tools:
             for server_name, server_tools in self.mcp_tools:
@@ -3980,7 +4096,7 @@ class Coder(metaclass=UsageMeta):
         if (
             not len(self.partial_response_content)
             and not len(self.partial_response_tool_calls)
-            and not len(self.partial_response_reasoning_content)
+            and not _is_meaningful_reasoning(self.partial_response_reasoning_content)
         ):
             self.empty_response = True
             return
@@ -4009,8 +4125,8 @@ class Coder(metaclass=UsageMeta):
     async def show_send_output_stream(self, completion):
         received_content = False
         chunk_index = 0
-        content_detector = LoopDetector()
-        tool_detector = LoopDetector()
+        content_detector = LoopDetector(self.repetition_penalties)
+        tool_detector = LoopDetector(self.repetition_penalties)
         loop_detected = False
 
         stream = coroutines.interruptible_async_generator(completion, self.interrupt_event)
@@ -4110,7 +4226,8 @@ class Coder(metaclass=UsageMeta):
 
                             text += reasoning_content
                             self.got_reasoning_content = True
-                            received_content = True
+                            if _is_meaningful_reasoning(reasoning_content):
+                                received_content = True
 
                         self.token_profiler.on_token()
                         self.io.update_spinner_suffix(reasoning_content)
@@ -4148,6 +4265,7 @@ class Coder(metaclass=UsageMeta):
         except LoopDetectedError as e:
             self._output_loop_detected = True
             self._output_loop_message = str(e)
+            self.repetition_penalties.record_loop(e.level)
             loop_detected = True
 
         if loop_detected:
@@ -4179,6 +4297,10 @@ class Coder(metaclass=UsageMeta):
             content_to_show = self.live_incremental_response(False)
             self.stream_wrapper(content_to_show, final=False)
 
+        # The stream ran to completion without tripping the detector, so bleed the
+        # relaxations back toward the configured limits.
+        self.repetition_penalties.record_clean_turn()
+
         # The Part Doing the Heavy Lifting Now
         self.consolidate_chunks()
 
@@ -4186,7 +4308,14 @@ class Coder(metaclass=UsageMeta):
             self.io.tool_warning("Execution stopped by on message hook")
             return
 
-        if not received_content and len(self.partial_response_tool_calls) == 0:
+        # Treat the response as empty when nothing was received, or when the
+        # only thing received was reasoning made entirely of non-alphanumeric
+        # characters (e.g. moonshotai/kimi-k3 returning "!!!!").
+        if (
+            not received_content
+            and len(self.partial_response_tool_calls) == 0
+            and not _is_meaningful_reasoning(self.partial_response_reasoning_content)
+        ):
             self.empty_response = True
             return
 
@@ -4317,7 +4446,7 @@ class Coder(metaclass=UsageMeta):
         if self._output_loop_detected:
             # A repeating output loop was caught while streaming; turn it into an
             # assistant message so the model can adjust and drop any tool calls.
-            marker = "\n\n[SYSTEM CANCEL: OUTPUT LOOP DETECTED]\n"
+            marker = f"\n\n{LoopDetector.INTERJECTION}\n"
             self.partial_response_content += marker
             self.partial_response_tool_calls = []
             self.partial_response_function_call = dict()
@@ -4779,7 +4908,7 @@ class Coder(metaclass=UsageMeta):
         if self.tui and self.tui():
             self.tui().update_cost(self.usage_report.replace("\n", " "))
         else:
-            self.io.tool_output(self.usage_report)
+            self.io.tool_output(self.usage_report, type="usage-report")
             self.io.rule()
 
         self.message_cost = 0.0
@@ -4871,7 +5000,7 @@ class Coder(metaclass=UsageMeta):
             return
 
         if not Path(full_path).exists():
-            rel_path = os.path.relpath(full_path)
+            rel_path = safe_relpath(full_path)
             if not await self.io.confirm_ask(f"Create new file? ({rel_path})", subject=path):
                 self.io.tool_output(f"Skipping edits to {path}")
                 return
@@ -5375,3 +5504,15 @@ def _first_usage_tokens(usage: object, paths: list[str], default: int = 0) -> in
         if value is not None:
             return value
     return default
+
+
+def _is_meaningful_reasoning(text):
+    """Return True if reasoning text contains at least one alphanumeric character.
+
+    Some providers (e.g. moonshotai/kimi-k3) occasionally return completions
+    with empty ``content`` and a ``reasoning_content`` made entirely of
+    punctuation (e.g. ``"!!!!"``). Those responses are effectively empty, so
+    the empty-response detector only lets reasoning count as response
+    content when it holds at least one alphanumeric character.
+    """
+    return bool(text) and any(ch.isalnum() for ch in text)

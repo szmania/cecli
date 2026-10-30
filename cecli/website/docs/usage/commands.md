@@ -20,6 +20,7 @@ Cecli supports commands from within the chat, which all start with `/`.
 | **/context** | Enter context mode to see surrounding code context. If no prompt provided, switches to context mode. |
 | **/copy** | Copy the last assistant message to the clipboard |
 | **/copy-context** | Copy the current chat context as markdown, suitable to paste into a web UI |
+| **/creator** | Start creator mode to add skills, MCP servers, hooks, tools, commands, workflows, or settings |
 | **/diff** | Display the diff of changes since the last message |
 | **/drop** | Remove files from the chat session to free up context space |
 | **/edit** | Alias for /editor: Open an editor to write a prompt |
@@ -61,19 +62,7 @@ Cecli supports commands from within the chat, which all start with `/`.
 
 ## Prompt Queue Management
 
-| Command | Description |
-| :--- | :--- |
-| **/queue** | Queue a prompt for processing after current tasks complete |
-| **/list-queue** | List all prompts currently in the queue |
-| **/remove-queue** | Remove a prompt from the queue by index, or '*' to clear all |
-
-{: .tip }
-
-## Prompt Queue Management Commands
-
-The prompt queue management feature (`CLI-33`) adds three new commands for managing a first-in-first-out (FIFO) queue of prompts.
-
-### Queue Commands
+The prompt queue is a first-in-first-out (FIFO) queue of prompts attached to the active agent. Queued prompts run after the current response finishes. Starting a new prompt also drains the queue after that prompt completes; use `/run-queue` to start it explicitly.
 
 | Command | Description |
 |---------|-------------|
@@ -81,12 +70,15 @@ The prompt queue management feature (`CLI-33`) adds three new commands for manag
 | **/insert-queue** | Insert a prompt at a specific position in the queue |
 | **/list-queue** | List all prompts currently in the queue |
 | **/remove-queue** | Remove a prompt from the queue by index, or '*' to clear all |
+| **/run-queue** | Process queued prompts immediately |
 
-#### `/queue` Command
+If a response is interrupted (for example with Ctrl+C), the in-flight prompt is put back at the front of the queue. Use `/run-queue` to resume processing.
+
+### `/queue` Command
 
 **Usage:** `/queue <prompt text>`
 
-**Description:** Adds a prompt to the queue for processing after the current command completes.
+**Description:** Adds a prompt to the queue for processing after the current response completes.
 
 **Examples:**
 ```bash
@@ -94,16 +86,39 @@ The prompt queue management feature (`CLI-33`) adds three new commands for manag
 /queue "add unit tests for user service"
 ```
 
-#### `/insert-queue` Command
+### `/insert-queue` Command
 
-**Usage:** `/insert-queue <prompt text>`, `/insert-queue <index> <prompt text>`
+**Usage:** `/insert-queue <index> <prompt text>`
 
-**Description:** Inserts a prompt at a specific position in the queue. When called without an index, the prompt is added at the front of the queue.
+**Description:** Inserts a prompt at a specific 1-based position in the queue. Existing items shift down, and the index is clamped to the queue bounds.
 
 **Examples:**
 ```bash
-/insert-queue "add tests for login"
+/insert-queue 1 "add tests for login"
 /insert-queue 3 "refactor database layer"
+```
+
+### `/list-queue` Command
+
+**Usage:** `/list-queue`
+
+**Description:** Lists all queued prompts with their position and queue time.
+
+### `/remove-queue` Command
+
+**Usage:** `/remove-queue <index>`, `/remove-queue *`
+
+**Description:** Removes the prompt at the given 1-based position, or clears the entire queue when `*` is used.
+
+### `/run-queue` Command
+
+**Usage:** `/run-queue`
+
+**Description:** Processes every queued prompt immediately, in FIFO order. This is mainly useful to resume a queue that was paused by an interruption.
+
+**Examples:**
+```bash
+/run-queue
 ```
 
 

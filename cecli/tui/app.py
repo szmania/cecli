@@ -2,6 +2,7 @@
 
 import concurrent.futures
 import json
+import logging
 import platform
 import queue
 import time
@@ -14,7 +15,9 @@ from rich.color import ColorSystem
 from rich.style import Style
 from textual import events
 from textual.app import App, ComposeResult
+from textual.containers import Horizontal, Vertical
 from textual.theme import Theme
+from textual.widgets import Static
 
 from cecli import __version__
 from cecli.decoding import safe_open
@@ -28,6 +31,7 @@ from cecli.io import CommandCompletionException
 from .widgets import (
     CompletionBar,
     FileList,
+    FloatingPanels,
     InputArea,
     InputContainer,
     KeyHints,
@@ -40,6 +44,8 @@ from .widgets.output import CostUpdate
 IS_WINDOWS = False
 if platform.system() == "Windows":
     IS_WINDOWS = True
+
+logger = logging.getLogger(__name__)
 
 
 class TUI(App):
@@ -117,7 +123,7 @@ class TUI(App):
             patch_textual_strip_render_with_cache()
 
         self.bind(
-            self._encode_keys(self.get_keys_for("newline")),
+            self._get_binding_keys("newline"),
             "noop",
             description="New Line",
             show=True,
@@ -208,6 +214,13 @@ class TUI(App):
             show=True,
         )
 
+        self.bind(
+            self._encode_keys(self.get_keys_for("panels")),
+            "toggle_floating_panels",
+            description="Toggle Panels",
+            show=False,
+        )
+
         self.register_theme(BASE_THEME)
         self.theme = "cecli"
 
@@ -291,6 +304,7 @@ class TUI(App):
             "history": "alt+shift+h",
             "voice": "ctrl+r",
             "paste": "alt+v",
+            "panels": "alt+p",
             "focus": "ctrl+f",
             "cancel": "ctrl+c",
             "clear": "ctrl+l",
@@ -362,13 +376,21 @@ class TUI(App):
         # Git info loaded in on_mount to avoid blocking startup
         yield OutputContainer(id="output")
         yield StatusBar(id="status-bar")
-        yield InputContainer(
-            InputArea(history_file=history_file, id="input"),
-            FileList(id="file-list", classes="empty"),
-            id="input-container",
-            coder_mode=coder_mode,
-        )
-        yield KeyHints(id="key-hints")
+        with Horizontal(id="input-row"):
+            with Vertical(id="input-column"):
+                yield InputContainer(
+                    InputArea(history_file=history_file, id="input"),
+                    FileList(id="file-list", classes="empty"),
+                    id="input-container",
+                    coder_mode=coder_mode,
+                )
+                yield KeyHints(id="key-hints")
+            with Vertical(id="extensions-column"):
+                yield FloatingPanels(id="floating-panels")
+                yield Static(
+                    f"{self.get_keys_for('panels')} to toggle",
+                    id="extensions-hint",
+                )
         yield MainFooter(
             model_name=model_name,
             project_name=project_name,
@@ -547,13 +569,49 @@ class TUI(App):
                     footer.update_git("No Repo")
 
     def check_output_queue(self):
-        """Process messages from coder worker."""
+        """Drain and process messages from the coder worker."""
+        messages = []
         try:
             while True:
-                msg = self.output_queue.get_nowait()
-                self.handle_output_message(msg)
+                messages.append(self.output_queue.get_nowait())
         except queue.Empty:
             pass
+
+        for msg in self._coalesce_stream_chunks(messages):
+            self.handle_output_message(msg)
+
+    @staticmethod
+    def _coalesce_stream_chunks(messages: list) -> list:
+        """Merge contiguous stream chunks belonging to the same container.
+
+        Coalescing a tick's worth of chunks avoids scheduling a worker per
+        chunk while preserving the original message order.
+        """
+        coalesced = []
+        pending = None
+
+        for msg in messages:
+            if msg.get("type") == "stream_chunk":
+                if pending is not None and pending.get("coder_uuid") == msg.get("coder_uuid"):
+                    pending["text"] += msg["text"]
+                    continue
+
+                if pending is not None:
+                    coalesced.append(pending)
+
+                pending = dict(msg)
+                continue
+
+            if pending is not None:
+                coalesced.append(pending)
+                pending = None
+
+            coalesced.append(msg)
+
+        if pending is not None:
+            coalesced.append(pending)
+
+        return coalesced
 
     def handle_output_message(self, msg):
         msg_type = msg["type"]
@@ -925,6 +983,12 @@ class TUI(App):
             self._handle_spawn_agent_command(user_input, stripped)
             return
 
+        # Intercept /creator to spawn the creator sub-agent immediately, even
+        # while the primary coder is generating.
+        if stripped == "/creator" or stripped.startswith("/creator "):
+            self._handle_creator_command(user_input, stripped)
+            return
+
         # Intercept /workspace <ws:name> to open an already-registered workspace
         # sub-agent immediately, mirroring /spawn-agent.
         if stripped == "/workspace" or stripped.startswith("/workspace "):
@@ -1157,6 +1221,29 @@ class TUI(App):
 
         self.worker.loop.call_soon_threadsafe(lambda: self.worker.loop.create_task(_run_spawn()))
 
+    def _handle_creator_command(self, user_input: str, stripped: str) -> None:
+        """Dispatch /creator immediately without a full generation cycle."""
+        from cecli.commands.creator import CreatorCommand
+
+        parts = stripped.split(maxsplit=1)
+        creator_args = parts[1].strip() if len(parts) > 1 else ""
+
+        input_area = self.query_one("#input", InputArea)
+        input_area.value = ""
+
+        input_area.save_to_history(user_input)
+        self.add_user_message(user_input)
+
+        coder = self.worker.coder
+        if self.worker.loop is None:
+            self.show_error("Worker loop not available. Cannot spawn creator sub-agent.")
+            return
+
+        async def _run_creator():
+            await CreatorCommand.execute(coder.io, coder, creator_args)
+
+        self.worker.loop.call_soon_threadsafe(lambda: self.worker.loop.create_task(_run_creator()))
+
     def _handle_workspace_command(self, user_input: str, stripped: str) -> None:
         """Dispatch /workspace <ws:name> immediately without a full generation cycle.
 
@@ -1269,6 +1356,13 @@ class TUI(App):
 
         # Delay exit to allow status bar to render
         self.set_timer(0.3, self._do_quit)
+
+    def action_toggle_floating_panels(self):
+        """Show or hide the floating status panels."""
+        try:
+            self.query_one(FloatingPanels).toggle_visible()
+        except Exception:
+            pass
 
     def action_noop(self):
         pass
@@ -1641,6 +1735,13 @@ class TUI(App):
 
         return self.query_one("#output", OutputContainer)
 
+    def _get_binding_keys(self, type):
+        """Return all accepted key forms for use in a Textual binding string."""
+        keys = self.get_keys_for(type)
+        encoded = self._encode_keys(keys)
+
+        return keys if encoded == keys else f"{keys},{encoded}"
+
     def _encode_keys(self, key):
         key = key.replace("shift+enter", "ctrl+j")
 
@@ -1653,8 +1754,11 @@ class TUI(App):
 
     def is_key_for(self, type, key):
         allowed_keys = self.tui_config["key_bindings"][type].split(",")
-        if key in allowed_keys:
-            return True
+        normalized_key = self._decode_keys(key)
+
+        for allowed_key in allowed_keys:
+            if normalized_key == self._decode_keys(allowed_key):
+                return True
 
         return False
 
@@ -1928,9 +2032,18 @@ class TUI(App):
                 else:
                     # Use standard command completions (no file fallback)
                     try:
-                        cmd_completions = commands.get_completions(
-                            cmd_name, args=arg_prefix, coder=active_coder
-                        )
+                        if cmd_name in commands.FULL_ARGS_COMPLETION_COMMANDS:
+                            # Nested-host commands receive the FULL text after
+                            # the command name so inner slash-command argument
+                            # completion works (e.g. "/queue /add <tab>").
+                            nested_text = text[len(cmd_name) :].lstrip()
+                            cmd_completions = commands.get_completions(
+                                cmd_name, args=nested_text, coder=active_coder
+                            )
+                        else:
+                            cmd_completions = commands.get_completions(
+                                cmd_name, args=arg_prefix, coder=active_coder
+                            )
                         if cmd_completions:
                             exempt_from_substring_matching = {
                                 "/model",
@@ -1964,27 +2077,22 @@ class TUI(App):
         """Calculate the new text after applying completion."""
         if current_text.startswith("/"):
             parts = current_text.rsplit(maxsplit=1)
+            commands = self.worker.coder.commands
+            host = current_text.split(maxsplit=1)[0]
+            is_nested_host = host in getattr(commands, "FULL_ARGS_COMPLETION_COMMANDS", ())
 
-            # Check if we have a command with trailing space
-            # This is when we want to insert argument completions after the space
+            if is_nested_host and current_text.endswith(" "):
+                return current_text + completion
             if len(parts) == 1 and current_text.endswith(" "):
-                # Command with trailing space, insert completion after space
                 return current_text + completion
             elif len(parts) == 1:
-                # Replace entire command (command name completion)
-                # Only add space if command takes arguments
-                commands = self.worker.coder.commands
                 try:
                     cmd_completions = commands.get_completions(completion)
                     has_completions = cmd_completions is not None
                 except Exception as e:
-                    # Check if it's a CommandCompletionException
                     if isinstance(e, CommandCompletionException):
-                        # For CommandCompletionException, treat it as having completions
-                        # so we add a space after the command
                         has_completions = True
                     else:
-                        # For other exceptions, assume no completions
                         has_completions = False
 
                 if has_completions:
@@ -1992,7 +2100,9 @@ class TUI(App):
                 else:
                     return completion
             else:
-                # Replace argument
+                if is_nested_host:
+                    prefix = current_text[: current_text.rfind(parts[-1])]
+                    return prefix + completion
                 return parts[0] + " " + completion
         elif "@" in current_text:
             # Replace from @ onwards with the symbol
